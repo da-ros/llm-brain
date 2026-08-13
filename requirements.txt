@@ -1,0 +1,38 @@
+# Pin exact versions before implementation to avoid dependency hell.
+# These are starting points for the MVP; lock them per objective as modules land.
+
+# --- API / backend ---
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+
+# --- Orchestration / RAG ---
+langchain
+langchain-community
+
+# --- Data stores ---
+pymongo
+chromadb
+
+# --- LLM (model-agnostic: local proxy + cloud via OpenRouter/OpenAI-compatible) ---
+llama-cpp-python
+openai
+httpx
+
+# --- ETL / One-Tap Memory Distillation ---
+pytesseract
+pypdf
+beautifulsoup4
+lxml
+Pillow
+
+# --- Testing / quality ---
+pytest
+pytest-asyncio
+httpx
+ruff
+
+# --- Load testing (alpha validation) ---
+locust

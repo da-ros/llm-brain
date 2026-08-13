@@ -1,0 +1,65 @@
+schema: spec-driven
+
+context: |
+  Project: "AI-Augmented Digital Brain" (llm-brain) — MSc Software thesis MVP.
+  Goal: a single-tenant personal LLM/OS emulating a Brain-LLM symbiosis for infinite
+  memory, personal knowledge management (PKM), advanced reasoning and decision support.
+
+  Authors: Pedro David Rodas Mantilla, Giovanny Daniel Jacome Cajamarca.
+  Tutor: Ing. Rodolfo Bojorque, PhD. Institution: UPS.
+
+  Scope is an MVP (~120h per student, ~8 weeks) covering 9 objectives/modules:
+    1. Architecture & repo (C4 docs, MCP diagram, OSS stack, CI).
+    2. One-Tap Memory Distillation: Python ETL (Tesseract OCR, PDF/HTML/EML parsers)
+       -> subject-predicate-object JSON triples + normalized metadata; >=100 items.
+    3. Hybrid store + RAG: MongoDB Atlas (docs) + Chroma/Pinecone (embeddings) linked by
+       unique ID; LangChain Top-k semantic retrieval.
+    4. LLM cloud fine-tune (LoRA) + on-device proxy (GGUF-Q4 via ollama, Docker).
+    5. Symbiotic Learning Loop: MCP agents Ingestor / Razonador (Reasoner) / Evaluador,
+       manual incremental fine-tuning batches.
+    6. Decision-Support Simulator: deterministic what-if, 3-5 scenarios w/ explicit
+       traceable assumptions.
+    7. Life Analytics: React + Chart.js dashboard, >=2 interactive correlations.
+    8. Privacy & Scam Shield: phishing/scam detection via heuristics + embedding similarity.
+    9. Alpha validation: pytest, FastAPI+Mongo integration, KPIs (mean latency, RAG Top-3
+       precision), video demo.
+
+  Tech stack (OSS, ~$0 budget):
+    - Backend: Python 3.13, FastAPI, LangChain, llama-cpp-python.
+    - Frontend: React + Chart.js.
+    - Data: MongoDB Atlas M0, Chroma (local Docker) or Pinecone Starter.
+    - LLM: MODEL-AGNOSTIC. Prefer open-source models (e.g. Qwen/DeepSeek/GLM family) or
+      cloud via OpenRouter; selectable through config/env, not hardcoded.
+    - Infra: Docker Compose, ollama on-device proxy, GitHub Actions CI, Railway/Fly.io.
+    - Fine-tuning: LoRA on Google Colab (free/Pro) or AWS Bedrock free tier.
+
+  Constraints & non-goals (out of MVP scope): multi-user/social sharing, multilingual UI,
+  voice assistants, live audio/video, AES-at-rest, HTTPS/GDPR/OAuth, zero-knowledge cloud,
+  real-time auto-retraining, HA/sharding/millions of docs, Monte Carlo/stochastic sims,
+  supervised full-scale fraud models, external audits/ISO certs.
+
+  Conventions: conventional commits; GitHub Flow (main + feature branches); pin OSS
+  versions in requirements.txt; keep a Markdown experiment log for every fine-tune
+  (dataset, hyperparams, metrics); English UI, Spanish document support.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

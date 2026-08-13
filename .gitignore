@@ -1,0 +1,58 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Node / React ---
+node_modules/
+dist/
+build/
+.next/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Models / data / vectors (large, not versioned) ---
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.ckpt
+models/
+data/raw/
+data/staging/
+data/processed/
+chroma/
+.chroma/
+*.sqlite3
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- OS / editor cruft (this volume creates AppleDouble files) ---
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# --- IDE (keep OpenSpec-generated .cursor commands/skills) ---
+.idea/
+*.swp
