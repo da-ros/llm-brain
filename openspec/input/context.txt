@@ -112,7 +112,26 @@ Modelo de negocio: suscripciones **Free** y **Premium**.
 | Mobile | React Native (con ollama en dispositivo) |
 | Infra | Docker Compose (local), AWS ECS Fargate (prod) |
 | CI/CD | GitHub Actions |
+| Seguridad | Snyk (dependency scan + SAST en CI) |
 | Encriptación | Fernet (datos), TLS (conexión — AWS managed) |
+
+## Seguridad — Shift Left + Shift Right
+
+```
+DESARROLLO                                          PRODUCCIÓN
+◄───────────────────────────────────┼───────────────────────────────────►
+                                    │
+        SHIFT LEFT                 │              SHIFT RIGHT
+   (prevenir en CI)                │    (detectar en runtime)
+                                    │
+   • ruff (linting)                 │   • Health checks
+   • pytest (tests)                 │   • Rate limiting logs
+   • snyk test (deps)              │   • Anomaly detection
+   • snyk code test (SAST)         │   • Monitoring (futuro)
+```
+
+- **Shift Left**: Snyk en GitHub Actions — scan de dependencias y análisis estático en cada push/PR
+- **Shift Right**: Monitoreo y logging en producción (módulos posteriores)
 
 ## Contexto académico
 

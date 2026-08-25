@@ -26,8 +26,11 @@
 - [ ] B.3 Add `.gitignore` patterns, `CONTRIBUTING.md`, document conventional commits in `README`
 - [ ] B.4 Add `Dockerfile` + `docker-compose.yml` (local dev environment)
       — Services: API backend, MongoDB, Chroma, ollama
-- [ ] B.5 Add `.github/workflows/ci.yml` running `ruff` lint + `pytest` on push/PR
+- [ ] B.5 Add `.github/workflows/ci.yml` running `ruff` lint + `pytest` + Snyk on push/PR
+      — CI pipeline includes: ruff (lint), pytest (tests), snyk test (dependency scan),
+      snyk code test (SAST). This is the **Shift Left** security gate.
 - [ ] B.6 Add `ruff` configuration in `pyproject.toml`
+- [ ] B.7 Document security strategy: Shift Left (Snyk in CI) + future Shift Right (monitoring in prod)
 
 ## C. Configuration & Provider Layer
 

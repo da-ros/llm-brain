@@ -100,6 +100,38 @@ requires only a config change, not code changes.
 
 **Rationale:** Matches "autenticación básica" scope. Simple to test and demonstrate.
 
+### Security Strategy: Shift Left + Shift Right
+
+```
+DESARROLLO                                          PRODUCCIÓN
+◄───────────────────────────────────┼───────────────────────────────────►
+                                    │
+        SHIFT LEFT                 │              SHIFT RIGHT
+   (prevenir en CI)                │    (detectar en runtime)
+                                    │
+   • ruff (linting)                 │   • Health checks
+   • pytest (tests)                 │   • Rate limiting logs
+   • snyk test (deps)              │   • Anomaly detection
+   • snyk code test (SAST)         │   • Monitoring (futuro)
+   • Secret scanning               │
+```
+
+**Shift Left (MVP — implemented now):**
+- `snyk test --file=requirements.txt` — scans dependencies for known vulnerabilities
+- `snyk code test` — static application security testing (SAST) on Python code
+- Both run in GitHub Actions CI on every push/PR
+- Snyk free tier: 200 tests/month, sufficient for MVP
+
+**Shift Right (future modules):**
+- Centralized logging (CloudWatch or similar)
+- Rate limiting monitoring via API Gateway metrics
+- Anomaly detection on LLM usage patterns
+- Alerting on suspicious access patterns
+
+**Rationale:** Security is a thesis concern (Objetivo 8 — Privacy & Scam Shield). Shift Left
+catches vulnerabilities early at zero cost (Snyk free tier). Shift Right will be implemented
+in later modules when production monitoring is needed.
+
 ### Data Encryption
 
 - **TLS**: managed by AWS API Gateway (production). Local uses plain HTTP.
