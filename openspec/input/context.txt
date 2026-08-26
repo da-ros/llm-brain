@@ -1,0 +1,142 @@
+# Context — llm-brain (AI-Augmented Digital Brain)
+
+## Qué es
+
+Plataforma multi-tenant que permite a clientes (web y móvil) interactuar con un backend y LLMs
+para gestión personal de conocimiento: cargar documentos (recetas médicas, facturas, fotos) y
+recibir sugerencias inteligentes (comprar medicina, organizar gastos) basadas en RAG.
+
+Modelo de negocio: suscripciones **Free** y **Premium**.
+
+## Clientes
+
+| Cliente | Tecnología | Tier | Funcionalidad |
+|---------|------------|------|---------------|
+| **Web App** | React + Chart.js | Premium | Charts de gastos, enfermedades, visualización de datos |
+| **Mobile App** | React Native | Free / Premium | Consultas LLM, carga de archivos |
+
+### Mobile — Free vs Premium
+
+| Tier | LLM | Contexto | Archivos |
+|------|-----|----------|----------|
+| **Free** | ollama local (cuantizado en el dispositivo) | No | No |
+| **Premium** | LLM cloud (fine-tuned) + RAG | Sí | Sí (imágenes + PDFs) |
+
+## Arquitectura General
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      CLIENTES                           │
+│  ┌──────────────┐     ┌──────────────┐                 │
+│  │   Web App    │     │ Mobile App   │                 │
+│  │  (Premium)   │     │ (Free/Prem)  │                 │
+│  │  React+Chart │     │ React Native │                 │
+│  └──────┬───────┘     └──────┬───────┘                 │
+│         │  local: directo    │                          │
+│         │  prod: via API GW  │                          │
+│         └─────────┬──────────┘                          │
+│                   ▼                                     │
+│         ┌──────────────────┐                            │
+│         │   API Gateway    │  AWS API Gateway (prod)    │
+│         │   (solo prod)    │  Directo (local dev)       │
+│         └────────┬─────────┘                            │
+│                  │                                      │
+│    ┌─────────────┼─────────────────┐                    │
+│    ▼             ▼                 ▼                    │
+│ ┌──────────┐ ┌──────────┐  ┌──────────────────┐        │
+│ │API Backend│ │Fine-Tune │  │ LLM Local        │        │
+│ │(principal)│ │Service   │  │ (Mobile only)    │        │
+│ │           │ │(worker   │  │ ollama + cuantiz │        │
+│ │           │ │separado) │  │ FREE tier        │        │
+│ └─────┬─────┘ └─────┬────┘  └──────────────────┘        │
+│       │              │                                  │
+│       ▼              │                                  │
+│ ┌──────────┐         │                                  │
+│ │LLM Tool  │◀────────┘  (fine-tuning usa RAG)          │
+│ │Layer     │                                            │
+│ │RAG+Vector│                                            │
+│ │Store     │                                            │
+│ └─────┬────┘                                            │
+│       │                                                  │
+│       ▼                                                  │
+│ ┌──────────┐                                            │
+│ │LLM Cloud │  OpenRouter / OpenAI-compat                │
+│ │(Premium) │  fine-tuned + contexto RAG                 │
+│ └──────────┘                                            │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Capas clave
+
+| Capa | Responsabilidad |
+|------|-----------------|
+| **API Gateway** | Rate limiting, routing, HTTPS (solo producción — AWS API Gateway managed) |
+| **API Backend** | Auth, orchestración, endpoints REST, suscripciones |
+| **Fine-Tuning Service** | Worker separado, schedule periódico, entrena LoRA con datos del cliente |
+| **LLM Tool Layer** | RAG + Vector Store (encriptado) — soporte que el LLM cloud usa para contexto |
+| **LLM Local** | ollama en el dispositivo mobile — free tier, cuantizado, sin contexto |
+| **LLM Cloud** | OpenRouter / OpenAI-compat — premium, fine-tuned, con RAG |
+
+## Datos del usuario
+
+- **Tipos**: imágenes (fotos) y PDFs (recetas, facturas)
+- **Procesamiento**: ETL extrae texto (OCR para imágenes, parser para PDFs) → JSON triples → Vector Store
+- **Encriptación**: datos en RAG encriptados a nivel de aplicación (Fernet o similar)
+- **TLS**: manejado por AWS API Gateway (certificado managed, sin costo adicional)
+
+## Despliegue
+
+| Entorno | Infraestructura | Propósito |
+|---------|-----------------|-----------|
+| **Local** | Docker Compose | Desarrollo y pruebas. Clientes → backend directo (sin API GW) |
+| **Producción** | AWS ECS Fargate | Escalado, disponibilidad, load. API Gateway para routing |
+
+### Decisiones de infraestructura
+
+- **Docker** para todos los servicios (consistencia local ↔ prod)
+- **ECS Fargate** para producción (serverless containers, sin managing EC2)
+- **Fine-Tuning Service** como ECS task separado (escala independiente, alto procesamiento)
+- **API Gateway**: AWS API Gateway en prod; sin API GW en local (directo al backend)
+
+## Stack tecnológico
+
+| Capa | Tecnología |
+|------|------------|
+| Backend API | Python 3.13, FastAPI |
+| Fine-Tuning | Python, llama-cpp-python, LoRA |
+| RAG | LangChain, Chroma/Pinecone |
+| Document Store | MongoDB Atlas |
+| LLM Local | ollama (cuantizado GGUF-Q4) |
+| LLM Cloud | OpenRouter / OpenAI-compat |
+| Web | React + Chart.js |
+| Mobile | React Native (con ollama en dispositivo) |
+| Infra | Docker Compose (local), AWS ECS Fargate (prod) |
+| CI/CD | GitHub Actions |
+| Seguridad | Snyk (dependency scan + SAST en CI) |
+| Encriptación | Fernet (datos), TLS (conexión — AWS managed) |
+
+## Seguridad — Shift Left + Shift Right
+
+```
+DESARROLLO                                          PRODUCCIÓN
+◄───────────────────────────────────┼───────────────────────────────────►
+                                    │
+        SHIFT LEFT                 │              SHIFT RIGHT
+   (prevenir en CI)                │    (detectar en runtime)
+                                    │
+   • ruff (linting)                 │   • Health checks
+   • pytest (tests)                 │   • Rate limiting logs
+   • snyk test (deps)              │   • Anomaly detection
+   • snyk code test (SAST)         │   • Monitoring (futuro)
+```
+
+- **Shift Left**: Snyk en GitHub Actions — scan de dependencias y análisis estático en cada push/PR
+- **Shift Right**: Monitoreo y logging en producción (módulos posteriores)
+
+## Contexto académico
+
+- **Maestría en Software con mención en Arquitectura** (cuarto nivel)
+- La arquitectura es la parte fuerte de la defensa
+- La implementación es importante pero no es el foco de la defensa (tercer nivel)
+- Presupuesto target: ~$0 (OSS + free tiers)
+- MVP funcional, no producción
