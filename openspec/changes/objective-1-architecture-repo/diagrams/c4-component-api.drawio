@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-08-27T00:00:00.000Z" agent="Claude" version="24.0.0">
+  <diagram id="c4-component-api" name="Level 3 - API Backend Components">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="C4 Level 3 — API Backend (FastAPI) Components" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=16;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="400" y="10" width="450" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Container Boundary: API Backend -->
+        <mxCell id="boundary" value="API Backend — FastAPI (Python 3.13)" style="shape=mxgraph.c4.c4_container;fillColor=none;strokeColor=#d6b656;fontSize=14;fontStyle=1;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="60" width="1000" height="700" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Auth Module -->
+        <mxCell id="auth" value="🔐 Auth Module&#xa;JWT + bcrypt&#xa;&#xa;• login()&#xa;• register()&#xa;• verify_token()&#xa;• get_current_user()" style="shape=mxgraph.c4.c4_component;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="120" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Config Module -->
+        <mxCell id="config" value="⚙️ Config Module&#xa;pydantic-settings&#xa;&#xa;• get_settings()&#xa;• LLM_PROVIDER&#xa;• API_KEY (enc)&#xa;• SUBSCRIPTION_TIER" style="shape=mxgraph.c4.c4_component;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="120" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: LLM Provider Layer -->
+        <mxCell id="llmprovider" value="🤖 LLM Provider Layer&#xa;Protocol: LLMProvider&#xa;&#xa;• LocalProvider (llama.rn)&#xa;• BedrockProvider (AWS)&#xa;• resolve_provider(tier)" style="shape=mxgraph.c4.c4_component;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="120" width="200" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: REST Endpoints -->
+        <mxCell id="endpoints" value="📡 REST Endpoints&#xa;FastAPI Router&#xa;&#xa;• /health&#xa;• /api/chat&#xa;• /api/upload&#xa;• /api/subscribe&#xa;• /api/finetune" style="shape=mxgraph.c4.c4_component;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="340" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Subscription Manager -->
+        <mxCell id="subscription" value="💳 Subscription Manager&#xa;&#xa;• FREE: on-device LLM&#xa;• PREMIUM: cloud LLM + RAG&#xa;• check_tier(user)&#xa;• enforce_limits()" style="shape=mxgraph.c4.c4_component;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="340" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Orchestration Engine -->
+        <mxCell id="orchestrator" value="🔄 Orchestration Engine&#xa;&#xa;• process_query()&#xa;• route_to_provider()&#xa;• handle_rag_context()&#xa;• manage_conversation()" style="shape=mxgraph.c4.c4_component;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="340" width="200" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: File Processor -->
+        <mxCell id="fileproc" value="📄 File Processor&#xa;ETL Pipeline&#xa;&#xa;• OCR (Tesseract)&#xa;• PDF parser&#xa;• JSON triples&#xa;• Vectorize" style="shape=mxgraph.c4.c4_component;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="340" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: RAG Service -->
+        <mxCell id="rag" value="🔍 RAG Service&#xa;LangChain&#xa;&#xa;• semantic_search()&#xa;• top_k_retrieval()&#xa;• context_injection()&#xa;• vector_store_ops()" style="shape=mxgraph.c4.c4_component;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="560" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: MCP Agent Manager -->
+        <mxCell id="mcp" value="🤝 MCP Agent Manager&#xa;&#xa;• Ingestor Agent&#xa;• Razonador Agent&#xa;• Evaluador Agent&#xa;• feedback_loop()" style="shape=mxgraph.c4.c4_component;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="560" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Data Access Layer -->
+        <mxCell id="dal" value="🗄️ Data Access Layer&#xa;&#xa;• MongoDB client&#xa;• Vector Store client&#xa;• Encryption (Fernet)&#xa;• CRUD operations" style="shape=mxgraph.c4.c4_component;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="560" width="200" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- External: llama.rn -->
+        <mxCell id="llmlocal" value="📱 llama.rn&#xa;(On-device)" style="shape=mxgraph.c4.c4_container;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="120" width="150" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- External: AWS Bedrock -->
+        <mxCell id="bedrock" value="☁️ AWS Bedrock&#xa;(Cloud LLM)" style="shape=mxgraph.c4.c4_cloud;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="560" width="150" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Relationships -->
+        <mxCell id="rel1" value="Validates" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#6c8ebf;html=1;fontSize=10;" edge="1" source="endpoints" target="auth" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel2" value="Reads config" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#d6b656;html=1;fontSize=10;" edge="1" source="endpoints" target="config" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel3" value="Checks tier" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#d6b656;html=1;fontSize=10;" edge="1" source="endpoints" target="subscription" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel4" value="Delegates" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#9673a6;html=1;fontSize=10;" edge="1" source="endpoints" target="orchestrator" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel5" value="Resolves provider" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;html=1;fontSize=10;" edge="1" source="orchestrator" target="llmprovider" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel6" value="RAG context" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;html=1;fontSize=10;" edge="1" source="orchestrator" target="rag" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel7" value="Processes files" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#b85450;html=1;fontSize=10;" edge="1" source="endpoints" target="fileproc" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel8" value="Feedback" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#9673a6;html=1;fontSize=10;" edge="1" source="mcp" target="orchestrator" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel9" value="Stores/Retrieves" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#d6b656;html=1;fontSize=10;" edge="1" source="rag" target="dal" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel10" value="On-device (Free)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;html=1;fontSize=10;dashed=1;" edge="1" source="llmprovider" target="llmlocal" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel11" value="Cloud (Premium)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;html=1;fontSize=10;" edge="1" source="llmprovider" target="bedrock" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="Legend:&#xa;🔐 = Security&#xa;⚙️ = Configuration&#xa;🤖 = LLM Integration&#xa;📡 = API Layer&#xa;🔄 = Orchestration&#xa;📄 = Data Processing&#xa;🔍 = RAG&#xa;🤝 = Agents&#xa;🗄️ = Data Access" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=#CCCCCC;fillColor=#F5F5F5;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="120" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

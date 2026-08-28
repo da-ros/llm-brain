@@ -2,11 +2,12 @@
 
 ## Qué es
 
-Plataforma multi-tenant que permite a clientes (web y móvil) interactuar con un backend y LLMs
+Plataforma que permite a clientes (web y móvil) interactuar con un backend y LLMs
 para gestión personal de conocimiento: cargar documentos (recetas médicas, facturas, fotos) y
 recibir sugerencias inteligentes (comprar medicina, organizar gastos) basadas en RAG.
 
-Modelo de negocio: suscripciones **Free** y **Premium**.
+Modelo de negocio: dos perfiles de suscripción — **Free** y **Premium**.
+Puede implementarse como un usuario con dos perfiles o dos usuarios con suscripciones distintas.
 
 ## Clientes
 
@@ -19,8 +20,8 @@ Modelo de negocio: suscripciones **Free** y **Premium**.
 
 | Tier | LLM | Contexto | Archivos |
 |------|-----|----------|----------|
-| **Free** | ollama local (cuantizado en el dispositivo) | No | No |
-| **Premium** | LLM cloud (fine-tuned) + RAG | Sí | Sí (imágenes + PDFs) |
+| **Free** | llama.rn (Llama 3.2 3B, Q4_K_M on-device) | No | No |
+| **Premium** | AWS Bedrock (Llama 3 8B fine-tuned) + RAG | Sí | Sí (imágenes + PDFs) |
 
 ## Arquitectura General
 
@@ -46,7 +47,7 @@ Modelo de negocio: suscripciones **Free** y **Premium**.
 │ ┌──────────┐ ┌──────────┐  ┌──────────────────┐        │
 │ │API Backend│ │Fine-Tune │  │ LLM Local        │        │
 │ │(principal)│ │Service   │  │ (Mobile only)    │        │
-│ │           │ │(worker   │  │ ollama + cuantiz │        │
+│ │           │ │(worker   │  │ llama.rn (3B Q4) │        │
 │ │           │ │separado) │  │ FREE tier        │        │
 │ └─────┬─────┘ └─────┬────┘  └──────────────────┘        │
 │       │              │                                  │
@@ -60,8 +61,8 @@ Modelo de negocio: suscripciones **Free** y **Premium**.
 │       │                                                  │
 │       ▼                                                  │
 │ ┌──────────┐                                            │
-│ │LLM Cloud │  OpenRouter / OpenAI-compat                │
-│ │(Premium) │  fine-tuned + contexto RAG                 │
+│ │LLM Cloud │  AWS Bedrock (fine-tuned + inference)      │
+│ │(Premium) │  contexto RAG                              │
 │ └──────────┘                                            │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -74,8 +75,8 @@ Modelo de negocio: suscripciones **Free** y **Premium**.
 | **API Backend** | Auth, orchestración, endpoints REST, suscripciones |
 | **Fine-Tuning Service** | Worker separado, schedule periódico, entrena LoRA con datos del cliente |
 | **LLM Tool Layer** | RAG + Vector Store (encriptado) — soporte que el LLM cloud usa para contexto |
-| **LLM Local** | ollama en el dispositivo mobile — free tier, cuantizado, sin contexto |
-| **LLM Cloud** | OpenRouter / OpenAI-compat — premium, fine-tuned, con RAG |
+| **LLM Local** | llama.rn (Llama 3.2 3B Q4_K_M) en el dispositivo mobile — free tier, sin contexto |
+| **LLM Cloud** | AWS Bedrock (fine-tuned + inference) — premium, con RAG |
 
 ## Datos del usuario
 
@@ -83,6 +84,25 @@ Modelo de negocio: suscripciones **Free** y **Premium**.
 - **Procesamiento**: ETL extrae texto (OCR para imágenes, parser para PDFs) → JSON triples → Vector Store
 - **Encriptación**: datos en RAG encriptados a nivel de aplicación (Fernet o similar)
 - **TLS**: manejado por AWS API Gateway (certificado managed, sin costo adicional)
+
+## Módulos de valor (del anteproyecto)
+
+### Decision-Support Simulator
+Módulo "what-if" que genera 3-5 escenarios con supuestos explícitos y trazabilidad.
+Toma variables clave del contexto del usuario y produce escenarios deterministas con
+un árbol de decisión sencillo.
+
+### Life Analytics
+Dashboard web (React) con visualización de correlaciones interactivas:
+- Sueño vs productividad
+- Reuniones vs tiempo de foco
+
+Conecta con Google Calendar o ingiere un diario personal.
+Cada módulo escribe resultados en la DB para trazabilidad posterior.
+
+### Privacy & Scam Shield
+Detector de phishing/fraude/scam basado en heurísticas + similitud de embeddings
+sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra incidentes.
 
 ## Despliegue
 
@@ -103,13 +123,13 @@ Modelo de negocio: suscripciones **Free** y **Premium**.
 | Capa | Tecnología |
 |------|------------|
 | Backend API | Python 3.13, FastAPI |
-| Fine-Tuning | Python, llama-cpp-python, LoRA |
+| Fine-Tuning | AWS Bedrock (LoRA, managed) |
 | RAG | LangChain, Chroma/Pinecone |
 | Document Store | MongoDB Atlas |
-| LLM Local | ollama (cuantizado GGUF-Q4) |
-| LLM Cloud | OpenRouter / OpenAI-compat |
+| LLM Local | llama.rn (Llama 3.2 3B, Q4_K_M) |
+| LLM Cloud | AWS Bedrock (Llama 3 8B fine-tuned + inference) |
 | Web | React + Chart.js |
-| Mobile | React Native (con ollama en dispositivo) |
+| Mobile | React Native (con llama.rn on-device) |
 | Infra | Docker Compose (local), AWS ECS Fargate (prod) |
 | CI/CD | GitHub Actions |
 | Seguridad | Snyk (dependency scan + SAST en CI) |
@@ -133,9 +153,76 @@ DESARROLLO                                          PRODUCCIÓN
 - **Shift Left**: Snyk en GitHub Actions — scan de dependencias y análisis estático en cada push/PR
 - **Shift Right**: Monitoreo y logging en producción (módulos posteriores)
 
+## Límites y supuestos
+
+### Usuarios
+- **Incluido**: 1 usuario individual (single-tenant) con dos perfiles de suscripción (Free/Premium)
+- **Fuera de alcance**: Multi-usuario, compartición social
+
+### Idiomas
+- **Incluido**: Inglés (UI) y soporte en español para documentos (LLM infiere)
+- **Fuera de alcance**: UI Multilingüe
+
+### Plataformas
+- **Incluido**: Web app; proxy LLM corre en smartphone/laptop personal (CPU/GPU modesta)
+- **Fuera de alcance**: Asistentes de voz
+
+### Tipos de datos
+- **Incluido**: Texto, PDF, imágenes estáticas
+- **Fuera de alcance**: Audio streaming en vivo, video
+
+### Seguridad
+- **Incluido**: Autenticación básica
+- **Fuera de alcance**: Cifrado AES at-rest, HTTPS en tránsito, cumplimiento GDPR, OAuth federado
+
+### Privacidad
+- **Incluido**: Procesamiento on-device cuando sea posible; logs locales
+- **Fuera de alcance**: Zero-knowledge cloud
+
+### Aprendizaje continuo
+- **Incluido**: Fine-tuning regular manual *triggered* por agente o administrador
+- **Fuera de alcance**: Auto-entrenamiento en tiempo real
+
+### Escalabilidad
+- **Incluido**: 100 documentos en DB, 1 GB embeddings
+- **Fuera de alcance**: Alta disponibilidad, sharding, miles/millones de documentos
+
+### Simulaciones
+- **Incluido**: Análisis determinista "what-if" con árbol de decisión sencillo
+- **Fuera de alcance**: Optimización estocástica, simulación Monte Carlo
+
+### Detección de fraudes
+- **Incluido**: Heurísticas + similitud vectorial en correos/SMS/mensajes
+- **Fuera de alcance**: Modelos supervisados full-scale, suplantación de voz
+
+### Ética y gobernanza
+- **Incluido**: Lineamientos de uso responsable, panel de explicabilidad
+- **Fuera de alcance**: Auditoría externa, certificaciones ISO/IEC
+
+## Metodología
+
+Enfoque iterativo e incremental (agile), combinado con investigación aplicada.
+Cada paso indica qué se hará, cómo se ejecutará y para qué contribuye al logro global.
+
+### Fases del proyecto
+
+1. **Planificación y arquitectura**: Reunión de arranque, modelo C4, diagramas de agentes/contexto/flujo, repositorio Git. Resultado: arquitectura aprobada y hoja de ruta técnica.
+
+2. **Pipeline "One-Tap Memory Distillation"**: ETL con Python + Tesseract OCR + parsers PDF/HTML. Cada ítem produce JSON con triples (sujeto-predicado-objeto) + metadatos normalizados. Meta: 100 documentos transformados.
+
+3. **Almacén híbrido y RAG**: MongoDB Atlas Free para documentos, Chroma/MongoDB/Pinecone para embeddings. LangChain para búsqueda Top-k y recuperación semántica.
+
+4. **LLM principal on-cloud + LLM on-device**: Fine-tuning LoRA (5 épocas) en AWS Bedrock (Llama 3 8B). Inferencia premium en AWS Bedrock. On-device con llama.rn (Llama 3.2 3B Q4_K_M) para free tier. Latencia objetivo: ≤2s on-device (>18 tok/s).
+
+5. **Bucle de aprendizaje simbiótico**: Tres agentes MCP (Ingestor, Razonador, Evaluador). Al finalizar cada sesión, el Evaluador escribe feedback y genera lote semanal para fine-tuning incremental manual.
+
+6. **Módulos de valor**: Decision-Support Simulator (what-if, 3-5 escenarios), Life Analytics (dashboard React + Chart.js, 2 correlaciones), Privacy & Scam Shield (heurísticas + similitud de embeddings).
+
+7. **Validación**: Pruebas alfa internas, medición KPIs (tiempo de respuesta, precisión Top-3), video-demo.
+
 ## Contexto académico
 
-- **Maestría en Software con mención en Arquitectura** (cuarto nivel)
+- **Maestría en Software** (cuarto nivel)
 - La arquitectura es la parte fuerte de la defensa
 - La implementación es importante pero no es el foco de la defensa (tercer nivel)
 - Presupuesto target: ~$0 (OSS + free tiers)

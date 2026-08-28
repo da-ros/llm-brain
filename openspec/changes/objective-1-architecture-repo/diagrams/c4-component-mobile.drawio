@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-08-27T00:00:00.000Z" agent="Claude" version="24.0.0">
+  <diagram id="c4-component-mobile" name="Level 3 - Mobile App Components">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="C4 Level 3 — Mobile App (React Native) Components" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=16;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="400" y="10" width="450" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Container Boundary: Mobile App -->
+        <mxCell id="boundary" value="Mobile App — React Native" style="shape=mxgraph.c4.c4_container;fillColor=none;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="60" width="1100" height="700" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: UI Layer -->
+        <mxCell id="ui" value="🎨 UI Layer&#xa;React Native Screens&#xa;&#xa;• ChatScreen&#xa;• UploadScreen&#xa;• ProfileScreen&#xa;• DashboardScreen" style="shape=mxgraph.c4.c4_component;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="120" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: State Manager -->
+        <mxCell id="state" value="📊 State Manager&#xa;Context API / Zustand&#xa;&#xa;• userState&#xa;• chatState&#xa;• subscriptionTier&#xa;• documents" style="shape=mxgraph.c4.c4_component;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="120" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: API Client -->
+        <mxCell id="apiclient" value="📡 API Client&#xa;Axios / Fetch&#xa;&#xa;• login()&#xa;• sendMessage()&#xa;• uploadFile()&#xa;• getSubscription()" style="shape=mxgraph.c4.c4_component;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="120" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Local LLM Manager -->
+        <mxCell id="llm" value="🤖 Local LLM Manager&#xa;llama.rn binding&#xa;&#xa;• load_model(gguf)&#xa;• infer(prompt)&#xa;• get_tokens()&#xa;• unload_model()" style="shape=mxgraph.c4.c4_component;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="120" width="200" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: File Handler -->
+        <mxCell id="filehandler" value="📄 File Handler&#xa;&#xa;• pick_image()&#xa;• pick_pdf()&#xa;• compress_image()&#xa;• read_pdf_metadata()" style="shape=mxgraph.c4.c4_component;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="340" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Encryption Module -->
+        <mxCell id="encryption" value="🔐 Encryption Module&#xa;react-native-keychain&#xa;&#xa;• store_token()&#xa;• get_token()&#xa;• encrypt_local()&#xa;• secure_storage()" style="shape=mxgraph.c4.c4_component;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="340" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Chat Engine -->
+        <mxCell id="chat" value="💬 Chat Engine&#xa;&#xa;• stream_response()&#xa;• display_markdown()&#xa;• handle_typing()&#xa;• history_local()" style="shape=mxgraph.c4.c4_component;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="340" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Navigation -->
+        <mxCell id="nav" value="🧭 Navigation&#xa;React Navigation&#xa;&#xa;• Stack Navigator&#xa;• Tab Navigator&#xa;• Auth Guard&#xa;• Deep Links" style="shape=mxgraph.c4.c4_component;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="340" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Subscription UI -->
+        <mxCell id="subui" value="💳 Subscription UI&#xa;&#xa;• Free tier banner&#xa;• Premium upsell&#xa;• Feature gates&#xa;• Usage limits" style="shape=mxgraph.c4.c4_component;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="560" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Model Downloader -->
+        <mxCell id="downloader" value="⬇️ Model Downloader&#xa;&#xa;• download_gguf()&#xa;• verify_hash()&#xa;• progress_tracker()&#xa;• cache_manager()" style="shape=mxgraph.c4.c4_component;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="560" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- Component: Platform Services -->
+        <mxCell id="platform" value="📱 Platform Services&#xa;&#xa;• Camera access&#xa;• File system&#xa;• Notifications&#xa;• Background tasks" style="shape=mxgraph.c4.c4_component;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="560" width="180" height="160" as="geometry"/>
+        </mxCell>
+
+        <!-- External: Backend API -->
+        <mxCell id="backend" value="⚡ Backend API&#xa;FastAPI" style="shape=mxgraph.c4.c4_container;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="560" width="150" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Relationships -->
+        <mxCell id="rel1" value="Renders" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#6c8ebf;html=1;fontSize=10;" edge="1" source="ui" target="state" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel2" value="Reads state" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#d6b656;html=1;fontSize=10;" edge="1" source="chat" target="state" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel3" value="Sends requests" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#9673a6;html=1;fontSize=10;" edge="1" source="state" target="apiclient" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel4" value="Free: local" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;html=1;fontSize=10;" edge="1" source="chat" target="llm" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel5" value="Pick files" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#b85450;html=1;fontSize=10;" edge="1" source="ui" target="filehandler" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel6" value="Secures tokens" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#6c8ebf;html=1;fontSize=10;" edge="1" source="apiclient" target="encryption" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel7" value="Manages screens" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#9673a6;html=1;fontSize=10;" edge="1" source="ui" target="nav" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel8" value="Downloads model" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;html=1;fontSize=10;" edge="1" source="downloader" target="llm" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel9" value="Uploads files" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#b85450;html=1;fontSize=10;" edge="1" source="filehandler" target="apiclient" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel10" value="API calls" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#9673a6;html=1;fontSize=10;" edge="1" source="apiclient" target="backend" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel11" value="Checks tier" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#d6b656;html=1;fontSize=10;" edge="1" source="subui" target="state" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel12" value="Uses platform" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#b85450;html=1;fontSize=10;" edge="1" source="filehandler" target="platform" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

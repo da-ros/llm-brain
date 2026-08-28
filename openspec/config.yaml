@@ -14,24 +14,29 @@ context: |
        -> subject-predicate-object JSON triples + normalized metadata; >=100 items.
     3. Hybrid store + RAG: MongoDB Atlas (docs) + Chroma/Pinecone (embeddings) linked by
        unique ID; LangChain Top-k semantic retrieval.
-    4. LLM cloud fine-tune (LoRA) + on-device proxy (GGUF-Q4 via ollama, Docker).
+    4. LLM cloud fine-tune (LoRA on AWS Bedrock) + on-device (llama.rn, Llama 3.2 3B Q4_K_M).
     5. Symbiotic Learning Loop: MCP agents Ingestor / Razonador (Reasoner) / Evaluador,
        manual incremental fine-tuning batches.
     6. Decision-Support Simulator: deterministic what-if, 3-5 scenarios w/ explicit
        traceable assumptions.
-    7. Life Analytics: React + Chart.js dashboard, >=2 interactive correlations.
+    7. Life Analytics: React + Chart.js dashboard, >=2 interactive correlations (sleep/productivity).
     8. Privacy & Scam Shield: phishing/scam detection via heuristics + embedding similarity.
     9. Alpha validation: pytest, FastAPI+Mongo integration, KPIs (mean latency, RAG Top-3
        precision), video demo.
 
   Tech stack (OSS, ~$0 budget):
-    - Backend: Python 3.13, FastAPI, LangChain, llama-cpp-python.
+    - Backend: Python 3.13, FastAPI, LangChain.
     - Frontend: React + Chart.js.
     - Data: MongoDB Atlas M0, Chroma (local Docker) or Pinecone Starter.
-    - LLM: MODEL-AGNOSTIC. Prefer open-source models (e.g. Qwen/DeepSeek/GLM family) or
-      cloud via OpenRouter; selectable through config/env, not hardcoded.
-    - Infra: Docker Compose, ollama on-device proxy, GitHub Actions CI, Railway/Fly.io.
-    - Fine-tuning: LoRA on Google Colab (free/Pro) or AWS Bedrock free tier.
+    - LLM: MODEL-AGNOSTIC. On-device: Llama 3.2 3B (Q4_K_M) via llama.rn.
+      Cloud: Llama 3 8B (fine-tuned LoRA) via AWS Bedrock. Selectable through config/env.
+    - Infra: Docker Compose, GitHub Actions CI, AWS ECS Fargate, AWS API Gateway.
+    - Fine-tuning: AWS Bedrock (LoRA, managed) — free tier 750h/mes.
+    - Inference (premium): AWS Bedrock (managed endpoint).
+
+  Subscription profiles:
+    - Free: llama.rn (Llama 3.2 3B Q4_K_M on-device), sin contexto, sin archivos.
+    - Premium: AWS Bedrock (Llama 3 8B fine-tuned) + RAG, archivos, web dashboard.
 
   Constraints & non-goals (out of MVP scope): multi-user/social sharing, multilingual UI,
   voice assistants, live audio/video, AES-at-rest, HTTPS/GDPR/OAuth, zero-knowledge cloud,
@@ -63,3 +68,60 @@ context: |
 #     archive:
 #       guidance:
 #         - Summarize the archive outcome before finishing
+
+# Frames by objective
+# Each objective maps to a directory under openspec/changes/
+frames:
+  objective-1:
+    directory: objective-1-architecture-repo
+    title: "Architecture & Repository Foundation"
+    description: "C4 docs, MCP diagram, OSS stack, CI, config, LLM providers, FastAPI skeleton"
+    anteproyecto: "Objetivo Específico 1"
+
+  objective-2:
+    directory: objective-2-memory-distillation
+    title: "One-Tap Memory Distillation"
+    description: "Python ETL (Tesseract OCR, PDF/HTML parsers) -> JSON triples + metadata; >=100 items"
+    anteproyecto: "Objetivo Específico 2"
+
+  objective-3:
+    directory: objective-3-hybrid-store-rag
+    title: "Hybrid Store + RAG"
+    description: "MongoDB Atlas (docs) + Chroma/Pinecone (embeddings); LangChain Top-k retrieval"
+    anteproyecto: "Objetivo Específico 3"
+
+  objective-4:
+    directory: objective-4-llm-cloud-proxy
+    title: "LLM Cloud Fine-Tune + On-Device Proxy"
+    description: "LoRA fine-tuning on AWS Bedrock (Llama 3 8B); on-device with llama.rn (Llama 3.2 3B Q4_K_M)"
+    anteproyecto: "Objetivo Específico 4"
+
+  objective-5:
+    directory: objective-5-symbiotic-learning
+    title: "Symbiotic Learning Loop (MCP Agents)"
+    description: "MCP agents Ingestor / Razonador / Evaluador; manual incremental fine-tuning batches"
+    anteproyecto: "Objetivo Específico 5"
+
+  objective-6:
+    directory: objective-6-decision-support
+    title: "Decision-Support Simulator"
+    description: "Deterministic what-if analysis, 3-5 scenarios with explicit traceable assumptions"
+    anteproyecto: "Objetivo Específico 6"
+
+  objective-7:
+    directory: objective-7-life-analytics
+    title: "Life Analytics"
+    description: "React + Chart.js dashboard, >=2 interactive correlations (sleep/productivity)"
+    anteproyecto: "Objetivo Específico 7"
+
+  objective-8:
+    directory: objective-8-privacy-shield
+    title: "Privacy & Scam Shield"
+    description: "Phishing/scam detection via heuristics + embedding similarity; alert system"
+    anteproyecto: "Objetivo Específico 8"
+
+  objective-9:
+    directory: objective-9-alpha-validation
+    title: "Alpha Validation"
+    description: "pytest, FastAPI+Mongo integration, KPIs (latency, RAG Top-3 precision), video demo"
+    anteproyecto: "Objetivo Específico 9"

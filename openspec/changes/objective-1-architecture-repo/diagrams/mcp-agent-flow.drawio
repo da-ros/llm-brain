@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-08-27T00:00:00.000Z" agent="Claude" version="24.0.0">
+  <diagram id="mcp-agent-flow" name="MCP Agent Flow">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="MCP Agent Flow — Symbiotic Learning Cycle&#xa;Ingestor → Razonador → Evaluador" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=16;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="400" y="10" width="500" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Phase 1: Ingestion -->
+        <mxCell id="phase1" value="Phase 1 — Ingestion" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;html=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="80" width="300" height="350" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="trigger" value="📥 User uploads&#xa;document (PDF/Image)" style="shape=mxgraph.flowchart.terminator;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;html=1;" vertex="1" parent="phase1">
+          <mxGeometry x="60" y="50" width="180" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ocr" value="🔍 OCR / Parser&#xa;Tesseract + PDF parser" style="shape=mxgraph.flowchart.process;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="phase1">
+          <mxGeometry x="60" y="130" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="triples" value="📊 Extract Triples&#xa;(Subject-Predicate-Object)" style="shape=mxgraph.flowchart.process;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="phase1">
+          <mxGeometry x="60" y="200" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="embeddings" value="🧮 Generate Embeddings&#xa;Vector representation" style="shape=mxgraph.flowchart.process;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;html=1;" vertex="1" parent="phase1">
+          <mxGeometry x="60" y="270" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;" edge="1" source="trigger" target="ocr" parent="phase1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;" edge="1" source="ocr" target="triples" parent="phase1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;" edge="1" source="triples" target="embeddings" parent="phase1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Phase 2: Reasoning -->
+        <mxCell id="phase2" value="Phase 2 — Reasoning" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;html=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="80" width="300" height="350" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="query" value="💬 User query&#xa;(natural language)" style="shape=mxgraph.flowchart.terminator;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;html=1;" vertex="1" parent="phase2">
+          <mxGeometry x="60" y="50" width="180" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rag_search" value="🔍 RAG Search&#xa;Top-k semantic retrieval" style="shape=mxgraph.flowchart.process;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;html=1;" vertex="1" parent="phase2">
+          <mxGeometry x="60" y="130" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="context" value="📋 Context Injection&#xa;Relevant documents + history" style="shape=mxgraph.flowchart.process;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="phase2">
+          <mxGeometry x="60" y="200" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="llm_infer" value="🤖 LLM Inference&#xa;Llama 3 (cloud/device)" style="shape=mxgraph.flowchart.process;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;html=1;" vertex="1" parent="phase2">
+          <mxGeometry x="60" y="270" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;" edge="1" source="query" target="rag_search" parent="phase2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;" edge="1" source="rag_search" target="context" parent="phase2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;" edge="1" source="context" target="llm_infer" parent="phase2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Phase 3: Evaluation -->
+        <mxCell id="phase3" value="Phase 3 — Evaluation" style="swimlane;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;html=1;" vertex="1" parent="1">
+          <mxGeometry x="750" y="80" width="300" height="350" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="response" value="📤 LLM Response&#xa;Generated answer" style="shape=mxgraph.flowchart.terminator;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;html=1;" vertex="1" parent="phase3">
+          <mxGeometry x="60" y="50" width="180" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="evaluate" value="⚖️ Quality Evaluation&#xa;Relevance, accuracy, safety" style="shape=mxgraph.flowchart.process;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;html=1;" vertex="1" parent="phase3">
+          <mxGeometry x="60" y="130" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="feedback" value="📝 Generate Feedback&#xa;Score + improvements" style="shape=mxgraph.flowchart.process;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;html=1;" vertex="1" parent="phase3">
+          <mxGeometry x="60" y="200" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="batch" value="📦 Weekly Batch&#xa;Fine-tuning dataset" style="shape=mxgraph.flowchart.process;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;html=1;" vertex="1" parent="phase3">
+          <mxGeometry x="60" y="270" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;" edge="1" source="response" target="evaluate" parent="phase3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;" edge="1" source="evaluate" target="feedback" parent="phase3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rel9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;" edge="1" source="feedback" target="batch" parent="phase3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Cross-phase flows -->
+        <mxCell id="cross1" value="Embeddings stored&#xa;in Vector Store" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=3;strokeColor=#9673a6;html=1;fontSize=10;dashed=1;" edge="1" source="embeddings" target="rag_search" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="200" y="460"/>
+              <mxPoint x="550" y="460"/>
+              <mxPoint x="550" y="210"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="cross2" value="Response returned&#xa;to user" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=3;strokeColor=#82b366;html=1;fontSize=10;dashed=1;" edge="1" source="llm_infer" target="response" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="700" y="345"/>
+              <mxPoint x="700" y="110"/>
+              <mxPoint x="850" y="110"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="cross3" value="Fine-tuning&#xa;improves model" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=3;strokeColor=#b85450;html=1;fontSize=10;dashed=1;" edge="1" source="batch" target="llm_infer" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="900" y="400"/>
+              <mxPoint x="900" y="480"/>
+              <mxPoint x="200" y="480"/>
+              <mxPoint x="200" y="345"/>
+              <mxPoint x="600" y="345"/>
+              <mxPoint x="600" y="320"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="Legend:&#xa;📥 = Input/Trigger&#xa;🔍 = Search/Analysis&#xa;📊 = Data Processing&#xa;🧮 = ML Operations&#xa;💬 = User Query&#xa;📋 = Context&#xa;🤖 = LLM Inference&#xa;📤 = Output&#xa;⚖️ = Evaluation&#xa;📝 = Feedback&#xa;📦 = Batch Processing" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=#CCCCCC;fillColor=#F5F5F5;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="80" width="180" height="200" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
