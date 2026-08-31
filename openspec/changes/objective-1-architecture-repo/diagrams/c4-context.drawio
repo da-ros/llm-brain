@@ -12,7 +12,7 @@
         </mxCell>
 
         <!-- Person: User -->
-        <mxCell id="user" value="👤 User&#xa;(Single-tenant)" style="shape=mxgraph.basic.person;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;html=1;" vertex="1" parent="1">
+        <mxCell id="user" value="👤 User&#xa;(Multi-tenant)" style="shape=mxgraph.basic.person;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;html=1;" vertex="1" parent="1">
           <mxGeometry x="100" y="300" width="60" height="100" as="geometry"/>
         </mxCell>
 
@@ -22,7 +22,7 @@
         </mxCell>
 
         <!-- System: llm-brain -->
-        <mxCell id="system" value="🧠 llm-brain&#xa;AI-Augmented Digital Brain&#xa;&#xa;Single-tenant platform for&#xa;personal knowledge management&#xa;with LLMs and RAG." style="shape=mxgraph.basic.rounded_frame;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;html=1;arcSize=10;" vertex="1" parent="1">
+        <mxCell id="system" value="🧠 llm-brain&#xa;AI-Augmented Digital Brain&#xa;&#xa;Multi-tenant platform for&#xa;personal knowledge management&#xa;with LLMs and RAG.&#xa;JWT auth, per-user data isolation." style="shape=mxgraph.basic.rounded_frame;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;html=1;arcSize=10;" vertex="1" parent="1">
           <mxGeometry x="450" y="280" width="250" height="200" as="geometry"/>
         </mxCell>
 

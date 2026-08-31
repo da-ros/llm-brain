@@ -6,8 +6,11 @@ Plataforma que permite a clientes (web y móvil) interactuar con un backend y LL
 para gestión personal de conocimiento: cargar documentos (recetas médicas, facturas, fotos) y
 recibir sugerencias inteligentes (comprar medicina, organizar gastos) basadas en RAG.
 
-Modelo de negocio: dos perfiles de suscripción — **Free** y **Premium**.
-Puede implementarse como un usuario con dos perfiles o dos usuarios con suscripciones distintas.
+Modelo de negocio: plataforma **multi-usuario** con dos niveles de suscripción — **Free** y **Premium**.
+Cada usuario se registra, inicia sesión y tiene su propia suscripción. Los datos están aislados por usuario.
+
+> Nota: El anteproyecto menciona "un usuario" — esto se refiere al usuario que ingresa datos para fine-tuning.
+> La plataforma soporta múltiples usuarios reales desde el MVP.
 
 ## Clientes
 
@@ -23,65 +26,185 @@ Puede implementarse como un usuario con dos perfiles o dos usuarios con suscripc
 | **Free** | llama.rn (Llama 3.2 3B, Q4_K_M on-device) | No | No |
 | **Premium** | AWS Bedrock (Llama 3 8B fine-tuned) + RAG | Sí | Sí (imágenes + PDFs) |
 
+## Modelo de Usuario
+
+Cada usuario tiene una cuenta con suscripción. Los datos están aislados por `user_id`.
+
+| Entidad | Campos | Notas |
+|---------|--------|-------|
+| **Users** | id, email, password_hash, subscription_tier (free/premium), created_at | bcrypt para password_hash |
+| **Documents** | id, user_id (FK → Users), type (image/pdf), original_path, triples_path, created_at | Un usuario solo ve sus documentos |
+| **Subscriptions** | id, user_id (FK → Users), tier, status, started_at | Control de tier por usuario |
+| **Embeddings** | id, document_id (FK → Documents), vector, metadata | Encriptados con Fernet a nivel de aplicación |
+
 ## Arquitectura General
 
+### Arquitectura Microservicios
+
+El sistema usa una arquitectura de microservicios con comunicación async (Kafka) para
+operaciones pesadas y sync (HTTP) para consultas rápidas.
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      CLIENTES                           │
-│  ┌──────────────┐     ┌──────────────┐                 │
-│  │   Web App    │     │ Mobile App   │                 │
-│  │  (Premium)   │     │ (Free/Prem)  │                 │
-│  │  React+Chart │     │ React Native │                 │
-│  └──────┬───────┘     └──────┬───────┘                 │
-│         │  local: directo    │                          │
-│         │  prod: via API GW  │                          │
-│         └─────────┬──────────┘                          │
-│                   ▼                                     │
-│         ┌──────────────────┐                            │
-│         │   API Gateway    │  AWS API Gateway (prod)    │
-│         │   (solo prod)    │  Directo (local dev)       │
-│         └────────┬─────────┘                            │
-│                  │                                      │
-│    ┌─────────────┼─────────────────┐                    │
-│    ▼             ▼                 ▼                    │
-│ ┌──────────┐ ┌──────────┐  ┌──────────────────┐        │
-│ │API Backend│ │Fine-Tune │  │ LLM Local        │        │
-│ │(principal)│ │Service   │  │ (Mobile only)    │        │
-│ │           │ │(worker   │  │ llama.rn (3B Q4) │        │
-│ │           │ │separado) │  │ FREE tier        │        │
-│ └─────┬─────┘ └─────┬────┘  └──────────────────┘        │
-│       │              │                                  │
-│       ▼              │                                  │
-│ ┌──────────┐         │                                  │
-│ │LLM Tool  │◀────────┘  (fine-tuning usa RAG)          │
-│ │Layer     │                                            │
-│ │RAG+Vector│                                            │
-│ │Store     │                                            │
-│ └─────┬────┘                                            │
-│       │                                                  │
-│       ▼                                                  │
-│ ┌──────────┐                                            │
-│ │LLM Cloud │  AWS Bedrock (fine-tuned + inference)      │
-│ │(Premium) │  contexto RAG                              │
-│ └──────────┘                                            │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            CLIENTES                                      │
+│                       Web App / Mobile App                               │
+└─────────────────────────────────────┬───────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    AWS API Gateway (solo producción)                     │
+│           Rate limiting · HTTPS · WAF · Routing externo                 │
+└─────────────────────────────────────┬───────────────────────────────────┘
+                                      │ (producción)
+                                      │ (local: directo al router)
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      API Router (FastAPI)                                │
+│                    Puerto 8000 · JWT + Correlation ID                   │
+│                                                                         │
+│  POST /api/upload  → Kafka (async) → 202 + polling                      │
+│  POST /api/chat    → HTTP sync    → 200 + response                      │
+│  GET  /tasks/:id   → MongoDB       → 200 + status                       │
+│  GET  /health      → HTTP sync    → 200                                 │
+└────────────┬────────────────────────────────────┬───────────────────────┘
+             │                                    │
+             │ Kafka (async)                      │ HTTP (sync)
+             ▼                                    ▼
+┌─────────────────────┐              ┌─────────────────────┐
+│   Kafka Cluster     │              │    Services         │
+│                     │              │                     │
+│ Topics:             │              │ ┌─────────────────┐ │
+│ • file.uploaded     │◀─────────────│ │  ETL Service    │ │
+│ • task.response     │─────────────▶│ │  Puerto 8001    │ │
+│                     │              │ └─────────────────┘ │
+└─────────────────────┘              │ ┌─────────────────┐ │
+                                     │ │  RAG Service    │ │
+                                     │ │  Puerto 8002    │ │
+                                     │ └─────────────────┘ │
+                                     │ ┌─────────────────┐ │
+                                     │ │  LLM Service    │ │
+                                     │ │  Puerto 8003    │ │
+                                     │ └─────────────────┘ │
+                                     │ ┌─────────────────┐ │
+                                     │ │ Fine-Tune Svc   │ │
+                                     │ │ Puerto 8004     │ │
+                                     │ └─────────────────┘ │
+                                     └─────────────────────┘
+                                              │
+                                              ▼
+                                     ┌─────────────────────┐
+                                     │   Data Stores       │
+                                     │ • MongoDB (GridFS)  │
+                                     │ • Chroma            │
+                                     │ • AWS Bedrock       │
+                                     └─────────────────────┘
 ```
 
 ### Capas clave
 
-| Capa | Responsabilidad |
-|------|-----------------|
-| **API Gateway** | Rate limiting, routing, HTTPS (solo producción — AWS API Gateway managed) |
-| **API Backend** | Auth, orchestración, endpoints REST, suscripciones |
-| **Fine-Tuning Service** | Worker separado, schedule periódico, entrena LoRA con datos del cliente |
-| **LLM Tool Layer** | RAG + Vector Store (encriptado) — soporte que el LLM cloud usa para contexto |
-| **LLM Local** | llama.rn (Llama 3.2 3B Q4_K_M) en el dispositivo mobile — free tier, sin contexto |
-| **LLM Cloud** | AWS Bedrock (fine-tuned + inference) — premium, con RAG |
+| Capa | Puerto | Responsabilidad |
+|------|--------|-----------------|
+| **AWS API Gateway** | — | Rate limiting, routing, HTTPS (solo producción — managed) |
+| **API Router** | 8000 | JWT validation, correlation ID, routing interno a servicios |
+| **ETL Service** | 8001 | Parsers (PDF/HTML/EML/OCR), triple extraction, distillation |
+| **RAG Service** | 8002 | MongoDB, Chroma/Pinecone, semantic search, context injection |
+| **LLM Service** | 8003 | AWS Bedrock inference, model management |
+| **Fine-Tune Service** | 8004 | LoRA training (worker separado, background processing) |
+| **Kafka** | 9092 | Message queue async para operaciones pesadas |
+| **MongoDB** | 27017 | task_status, uploaded_files (GridFS), triples |
+| **Chroma** | 8005 | Vector embeddings (local dev) |
+
+### Comunicación entre servicios
+
+| Operación | Tipo | Flujo | Timeout |
+|-----------|------|-------|---------|
+| **Upload de archivo** | Async (Kafka) | Router → Kafka → 202 → Polling | 300s max |
+| **Chat / Query** | Sync (HTTP) | Router → RAG → LLM → 200 | 30s max |
+| **Task status** | Sync (HTTP) | Router → MongoDB → 200 | 1s max |
+| **Fine-tuning** | Async (Kafka) | Router → Kafka → 202 → Polling | Horas |
+
+### Correlation ID (X-Request-ID)
+
+Cada request recibe un UUID que viaja en todos los servicios para trazabilidad:
+
+```
+Header HTTP:  X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
+Logs:         2026-08-31T10:00:00 [550e8400-e29b-41d4-a716-446655440000] INFO api-gateway: POST /api/upload
+```
+
+- Generado por el API Router si no viene en el request
+- Propagado en headers HTTP a todos los servicios
+- Incluido en logs estructurados de cada servicio
+- Almacenado en MongoDB task_status para polling
+
+### Logging Estructurado
+
+Todos los servicios usan Python `logging` con formato consistente:
+
+```python
+# Formato de log
+"%(asctime)s [%(correlation_id)s] %(levelname)s %(name)s: %(message)s"
+
+# Ejemplo de salida
+2026-08-31T10:00:00 [550e8400-e29b-41d4-a716-446655440000] INFO api-gateway: POST /api/upload
+2026-08-31T10:00:01 [550e8400-e29b-41d4-a716-446655440000] INFO etl-service: Processing file: receta.pdf
+2026-08-31T10:00:03 [550e8400-e29b-41d4-a716-446655440000] INFO etl-service: Extracted 15 triples
+2026-08-31T10:00:04 [550e8400-e29b-41d4-a716-446655440000] INFO api-gateway: Task completed successfully
+```
+
+Cada servicio implementa:
+- `CorrelationFilter` — agrega correlation_id a todos los logs
+- `log_with_correlation(id, level, message)` — helper para logging consistente
+
+### Manejo de errores y reintentos
+
+```
+Request del cliente
+    │
+    ▼
+API Router: guarda en task_status {status: "in_progress"}
+    │
+    ▼
+Kafka → Service procesa
+    │
+    ├── ÉXITO: publica "success" → Router actualiza MongoDB → "success"
+    │
+    ├── ERROR 5xx: publica "error" → Router:
+    │       ├── retries < max_retries → Reintentar (guardar body, publicar de nuevo)
+    │       └── retries >= max_retries → Marcar "dlq-max" (error permanente)
+    │
+    └── ERROR 3xx/4xx: publica "error" → Router: Marcar "error" (no reintentar)
+```
+
+Configuración de reintentos (`.env`):
+```
+MAX_RETRIES=3
+RETRY_DELAY_SECONDS=5
+TASK_STATUS_TTL_DAYS=30
+```
+
+### Almacenamiento
+
+| Datos | Storage Local | Storage Producción |
+|-------|---------------|-------------------|
+| Archivos binarios | MongoDB GridFS | MongoDB GridFS (MVP) / DynamoDB (futuro) |
+| task_status | MongoDB | MongoDB |
+| Triples (JSONL) | filesystem | filesystem |
+| Embeddings | Chroma | Pinecone (futuro) |
+
+Rate Limiting (AWS API Gateway):
+```
+POST /api/upload:  10 req/min   (upload es pesado)
+POST /api/chat:    30 req/min   (chat es ligero)
+GET  /tasks/:id:   60 req/min   (polling)
+GET  /health:      1000 req/min (monitoreo)
+```
 
 ## Datos del usuario
 
 - **Tipos**: imágenes (fotos) y PDFs (recetas, facturas)
 - **Procesamiento**: ETL extrae texto (OCR para imágenes, parser para PDFs) → JSON triples → Vector Store
+- **Aislamiento**: cada documento y embedding está vinculado a un `user_id`. Un usuario solo accede a sus datos.
 - **Encriptación**: datos en RAG encriptados a nivel de aplicación (Fernet o similar)
 - **TLS**: manejado por AWS API Gateway (certificado managed, sin costo adicional)
 
@@ -108,32 +231,37 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 
 | Entorno | Infraestructura | Propósito |
 |---------|-----------------|-----------|
-| **Local** | Docker Compose | Desarrollo y pruebas. Clientes → backend directo (sin API GW) |
-| **Producción** | AWS ECS Fargate | Escalado, disponibilidad, load. API Gateway para routing |
+| **Local** | Docker Compose | Desarrollo y pruebas. Clientes → API Router directo (sin AWS API GW) |
+| **Producción** | AWS ECS Fargate | Escalado, disponibilidad, load. AWS API Gateway para routing externo |
 
 ### Decisiones de infraestructura
 
 - **Docker** para todos los servicios (consistencia local ↔ prod)
 - **ECS Fargate** para producción (serverless containers, sin managing EC2)
-- **Fine-Tuning Service** como ECS task separado (escala independiente, alto procesamiento)
-- **API Gateway**: AWS API Gateway en prod; sin API GW en local (directo al backend)
+- **Cada servicio** tiene su propio Dockerfile y se despliega independientemente
+- **Kafka**: Self-hosted en Docker (local) / AWS MSK (producción futura)
+- **AWS API Gateway**: Solo en producción; en local se accede directo al API Router
 
 ## Stack tecnológico
 
 | Capa | Tecnología |
 |------|------------|
-| Backend API | Python 3.13, FastAPI |
+| API Router | Python 3.13, FastAPI |
+| Microservicios | Python 3.13, FastAPI (cada servicio) |
+| Message Queue | Apache Kafka (async communication) |
 | Fine-Tuning | AWS Bedrock (LoRA, managed) |
 | RAG | LangChain, Chroma/Pinecone |
-| Document Store | MongoDB Atlas |
-| LLM Local | llama.rn (Llama 3.2 3B, Q4_K_M) |
+| Document Store | MongoDB Atlas (GridFS para archivos binarios) |
+| LLM Local | llama.rn (Llama 3.2 3B, Q4_K_M) — mobile only |
 | LLM Cloud | AWS Bedrock (Llama 3 8B fine-tuned + inference) |
 | Web | React + Chart.js |
 | Mobile | React Native (con llama.rn on-device) |
-| Infra | Docker Compose (local), AWS ECS Fargate (prod) |
+| Infra Local | Docker Compose (todos los servicios) |
+| Infra Prod | AWS ECS Fargate (servicios) + AWS API Gateway |
 | CI/CD | GitHub Actions |
 | Seguridad | Snyk (dependency scan + SAST en CI) |
 | Encriptación | Fernet (datos), TLS (conexión — AWS managed) |
+| Trazabilidad | Correlation ID (X-Request-ID) en headers + logs |
 
 ## Seguridad — Shift Left + Shift Right
 
@@ -156,8 +284,8 @@ DESARROLLO                                          PRODUCCIÓN
 ## Límites y supuestos
 
 ### Usuarios
-- **Incluido**: 1 usuario individual (single-tenant) con dos perfiles de suscripción (Free/Premium)
-- **Fuera de alcance**: Multi-usuario, compartición social
+- **Incluido**: Múltiples usuarios autenticados (JWT), cada uno con suscripción Free o Premium. Datos aislados por usuario (user_id).
+- **Fuera de alcance**: Compartición social entre usuarios
 
 ### Idiomas
 - **Incluido**: Inglés (UI) y soporte en español para documentos (LLM infiere)
@@ -172,8 +300,8 @@ DESARROLLO                                          PRODUCCIÓN
 - **Fuera de alcance**: Audio streaming en vivo, video
 
 ### Seguridad
-- **Incluido**: Autenticación básica
-- **Fuera de alcance**: Cifrado AES at-rest, HTTPS en tránsito, cumplimiento GDPR, OAuth federado
+- **Incluido**: Autenticación JWT + bcrypt (register, login, verify_token, get_current_user)
+- **Fuera de alcance**: Cifrado AES at-rest, cumplimiento GDPR, OAuth federado
 
 ### Privacidad
 - **Incluido**: Procesamiento on-device cuando sea posible; logs locales
@@ -184,7 +312,7 @@ DESARROLLO                                          PRODUCCIÓN
 - **Fuera de alcance**: Auto-entrenamiento en tiempo real
 
 ### Escalabilidad
-- **Incluido**: 100 documentos en DB, 1 GB embeddings
+- **Incluido**: Múltiples usuarios, 100 documentos por usuario en DB, 1 GB embeddings total
 - **Fuera de alcance**: Alta disponibilidad, sharding, miles/millones de documentos
 
 ### Simulaciones
@@ -219,6 +347,145 @@ Cada paso indica qué se hará, cómo se ejecutará y para qué contribuye al lo
 6. **Módulos de valor**: Decision-Support Simulator (what-if, 3-5 escenarios), Life Analytics (dashboard React + Chart.js, 2 correlaciones), Privacy & Scam Shield (heurísticas + similitud de embeddings).
 
 7. **Validación**: Pruebas alfa internas, medición KPIs (tiempo de respuesta, precisión Top-3), video-demo.
+
+## Convención de salidas por frame
+
+Cada frame (objetivo) tiene una carpeta `output/` con dos subcarpetas:
+
+```
+objective-N-nombre/
+├── output/
+│   ├── diagrams/                    ← Diagramas draw.io
+│   │   ├── {module}-architecture.drawio
+│   │   ├── {module}-dataflow.drawio
+│   │   └── README.md
+│   └── documents/                   ← Documentación de soporte
+│       └── justificacion-ejemplo.md
+├── proposal.md
+├── design.md
+├── tasks.md
+└── specs/
+```
+
+### output/diagrams/
+
+Cada frame genera **dos diagramas**:
+
+1. **Diagrama de arquitectura base** (`{module}-architecture.drawio`)
+   - Muestra el esqueleto y patrón del módulo dentro de la arquitectura existente
+   - Incluye componentes del frame anterior (azul) + nuevos componentes (verde)
+   - Define la estructura que se implementará
+
+2. **Diagrama de flujo de datos** (`{module}-dataflow.drawio`)
+   - Muestra cómo viajan los datos paso a paso en el módulo
+   - Secuencia: input → procesamiento → output → stores
+   - Incluye caminos de error
+
+### output/documents/
+
+Documentación de soporte: justificaciones técnicas, explicaciones de componentes, y cualquier documento que respalde las decisiones de diseño del frame. Si aplica, detallar todos los **patrones de diseño** y **principios SOLID** usados en la implementación del frame.
+
+**Requisito obligatorio**: Cada justificacion-ejemplo.md debe incluir **ejemplos de logs** para:
+- Cada endpoint (request → response)
+- Cada Kafka consumer (mensaje recibido → procesamiento → respuesta)
+- Cada Kafka producer (mensaje publicado)
+- Clases utilitarias (CorrelationFilter, helpers)
+- Todos los componentes por donde pase el flujo de información
+
+Formato de log estándar:
+```
+{timestamp} [{correlation_id}] {level} {service}: {message}
+```
+
+Ejemplo de flujo completo con logs:
+```
+2026-08-31T10:00:00 [abc-123] INFO api-gateway: POST /api/upload
+2026-08-31T10:00:00 [abc-123] INFO api-gateway: File saved to GridFS: receta.pdf
+2026-08-31T10:00:00 [abc-123] INFO api-gateway: Published to Kafka: file.uploaded
+2026-08-31T10:00:01 [abc-123] INFO etl-service: Consumed from Kafka: file.uploaded
+2026-08-31T10:00:01 [abc-123] INFO etl-service: Fetching file from GridFS
+2026-08-31T10:00:02 [abc-123] INFO etl-service: Starting ETL pipeline
+2026-08-31T10:00:03 [abc-123] INFO etl-service: Extracted 15 triples
+2026-08-31T10:00:03 [abc-123] INFO etl-service: Published to Kafka: task.response (success)
+2026-08-31T10:00:04 [abc-123] INFO api-gateway: Consumed from Kafka: task.response
+2026-08-31T10:00:04 [abc-123] INFO api-gateway: Task completed successfully
+2026-08-31T10:00:05 [abc-123] INFO api-gateway: Polling task status
+2026-08-31T10:00:05 [abc-123] INFO api-gateway: Task status: success
+```
+
+> Los logs son críticos para debugging en microservicios. Cada línea debe ser autoexplicativa y incluir el correlation_id para rastrear el flujo completo.
+
+## Jerarquía de verdad
+
+En caso de conflicto entre documentos, se sigue este orden de precedencia:
+
+1. **`context.txt`** (este archivo) — Verdad absoluta. Define el alcance, los límites y las reglas del proyecto.
+2. **Salidas del Frame 1** — Arquitectura base, diagramas C4, código del backend. Son la referencia técnica.
+3. **`openspec/config.yaml`** — Define el orden de ejecución y dependencias entre frames.
+4. **Archivos de cada frame** (proposal, design, tasks, specs) — Se alinean con context.txt y Frame 1. Si difieren, prevalece context.txt.
+
+> Si un diagrama, spec o propuesta contradice `context.txt` o las salidas de Frame 1, **se corrige el documento, no el contexto**.
+
+## Dependencias entre frames
+
+### Grafo de dependencias
+
+```
+Frame 1 (Architecture) ──────→ Frame 1.1 (API Router) ──┐
+    │                                                     │
+    ├──→ Frame 2 (ETL) ──────────→ Frame 4 (LLM) ────────┤
+    │       │                        │                     │
+    │       └──→ Frame 3 (RAG) ─────┤                     │
+    │               │               │                     │
+    │               ├──→ Frame 5 (Agents) ←──── (2+3+4)  │
+    │               │                                   │
+    │               ├──→ Frame 6 (Simulator) ──→ Frame 7 │
+    │               │       │                    (Analytics)
+    │               │       └── paralelo con ──→ Frame 8 │
+    │               │                          (Shield)  │
+    │               │                                   │
+    │               └───────────────────────────────────┘
+    │                                                     │
+    └──→ Frame 9 (Validation) ←── TODOS los frames ──────┘
+```
+
+### Dependencias por frame
+
+| Frame | Depende de | Puede correr en paralelo con |
+|-------|-----------|------------------------------|
+| **1. Architecture** | Ninguno (base) | — |
+| **1.1. API Router** | Frame 1 | — |
+| **2. ETL** | Frame 1.1 | Frame 3 |
+| **3. RAG** | Frame 1.1 | Frame 2 |
+| **4. LLM** | Frame 2 | — |
+| **5. Agents** | Frame 2, 3, 4 | — |
+| **6. Simulator** | Frame 1.1, 3 | Frame 8 |
+| **7. Analytics** | Frame 6, 8 | — |
+| **8. Shield** | Frame 1.1, 3 | Frame 6 |
+| **9. Validation** | TODOS | — (último) |
+| **10. Mobile** | Frame 4 | — |
+
+### Secuencia de ejecución
+
+```
+Fase 1: Frame 1 (Architecture)              ← Secuencial, es la base
+Fase 2: Frame 1.1 (API Router)              ← Secuencial (depende de Frame 1)
+Fase 3: Frame 2 + Frame 3                   ← Paralelo (ambos dependen de Frame 1.1)
+Fase 4: Frame 4 (LLM)                       ← Secuencial (depende de Frame 2)
+Fase 5: Frame 5 (Agents)                    ← Secuencial (depende de 2, 3, 4)
+Fase 6: Frame 6 + Frame 8                   ← Paralelo (ambos dependen de 1.1, 3)
+Fase 7: Frame 10 (Mobile)                   ← Secuencial (depende de Frame 4)
+Fase 8: Frame 7 (Analytics)                 ← Secuencial (depende de 6, 8)
+Fase 9: Frame 9 (Validation)                ← Último, depende de todos
+```
+
+### Reglas de dependencia
+
+- **Secuencial obligatorio**: Frame 1 → Frame 1.1 → todo lo demás. Frame 9 → después de todo.
+- **Paralelo permitido**: Frame 2 ∥ Frame 3, Frame 6 ∥ Frame 8.
+- **Integración**: Frame 5 (Agents) integra los resultados de Frames 2, 3 y 4.
+- **Mobile**: Frame 10 solo necesita Frame 4 (LLM on-device). No necesita RAG ni ETL.
+- **API Router**: Frame 1.1 es el punto de entrada para todos los servicios (ETL, RAG, LLM).
 
 ## Contexto académico
 

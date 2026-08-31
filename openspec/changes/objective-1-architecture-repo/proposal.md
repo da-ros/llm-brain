@@ -6,9 +6,12 @@ MCP agents, simulator, analytics, shield) depends on a shared, model-agnostic se
 a documented C4/MCP architecture, and a minimal CI pipeline. Establishing this first prevents
 rework and gives the defense a traceable starting point.
 
-This is a **single-tenant platform** with two subscription profiles (Free/Premium) — one user
-with two profiles, or two users with distinct subscriptions. Local LLM inference (free) and
-AWS Bedrock with RAG + fine-tuning (premium).
+This is a **multi-tenant platform** with two subscription tiers (Free/Premium). Each user
+registers, authenticates (JWT + bcrypt), and has isolated data. Local LLM inference (free)
+and AWS Bedrock with RAG + fine-tuning (premium).
+
+The anteproyecto mentions "one user" referring to the data inputter for fine-tuning.
+The platform supports multiple real users from the MVP.
 
 ## What Changes
 
@@ -41,19 +44,22 @@ AWS Bedrock with RAG + fine-tuning (premium).
 ### FastAPI Application Skeleton
 - Create main.py with app + router mounting
 - Implement `GET /health` (public)
-- Implement basic-auth dependency + sample protected endpoint
+- Implement JWT auth: register, login, verify_token, get_current_user
+- Implement subscription tier enforcement middleware
+- Sample protected endpoint demonstrating per-user data isolation
 
 ### Tests
 - Test `/health` returns 200 + no secrets leaked
 - Test config defaults + fail-fast on missing secret
 - Test provider resolution (mocked LLM calls)
-- Test protected endpoint (401/200)
+- Test JWT auth: register → login → access protected endpoint (401 without token, 200 with valid token)
+- Test subscription tier enforcement
 
 ## Capabilities
 
 ### New Capabilities
 - `platform-foundation`: shared application foundation — configuration, health endpoint,
-  basic authentication, and model-agnostic LLM provider resolution
+  JWT authentication (register/login/verify), user data model, and model-agnostic LLM provider resolution
 
 ### Modified Capabilities
 <!-- None: this is the first change; there are no existing specs to modify. -->

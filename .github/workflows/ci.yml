@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: pip install ruff
+      - name: Run ruff lint
+        run: ruff check .
+      - name: Run ruff format check
+        run: ruff format --check .
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      chroma:
+        image: chromadb/chroma:latest
+        ports:
+          - 8001:8000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+      - name: Run tests
+        run: pytest
+        env:
+          MONGODB_URI: mongodb://localhost:27017
+          MONGODB_DB: llm_brain_test
+          CHROMA_PERSIST_DIR: ./data/chroma_test
+          JWT_SECRET_KEY: test-secret
+          JWT_ALGORITHM: HS256
+          JWT_EXPIRATION_MINUTES: 60
+          FERNET_KEY: test-fernet-key-for-ci
+          LLM_PROVIDER: local
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: pip install snyk
+      - name: Run Snyk dependency scan
+        run: snyk test --all-projects
+        continue-on-error: true
+      - name: Run Snyk SAST
+        run: snyk code test
+        continue-on-error: true

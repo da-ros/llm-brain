@@ -1,0 +1,10 @@
+schema: spec-driven
+created: 2026-08-31
+specs:
+  - specs/api-router/spec.md
+output:
+  diagrams:
+    - api-router-architecture.drawio
+    - api-router-dataflow.drawio
+  documents:
+    - justificacion-ejemplo.md

@@ -56,3 +56,10 @@ Thumbs.db
 # --- IDE (keep OpenSpec-generated .cursor commands/skills) ---
 .idea/
 *.swp
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Logs ---
+*.log
+logs/

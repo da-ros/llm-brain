@@ -2,10 +2,10 @@
 
 This is the first change in a greenfield repo (empty git repo, Python 3.13). It is
 cross-cutting: it defines the app skeleton and conventions that all remaining thesis modules
-depend on. The project is a single-tenant platform with two subscription profiles (Free/Premium),
+depend on. The project is a **multi-tenant platform** with two subscription tiers (Free/Premium),
 and a clear separation between local LLM inference (free) and AWS Bedrock with RAG + fine-tuning (premium).
 
-See proposal.md — Why. Budget is ~$0 and the deployment target is a single-tenant MVP.
+See proposal.md — Why. Budget is ~$0 and the deployment target is a multi-tenant MVP.
 Choices favor OSS and local execution for development, with AWS ECS Fargate for production deployment.
 AWS Bedrock provides both fine-tuning and inference for the premium tier.
 
@@ -27,17 +27,24 @@ AWS Bedrock provides both fine-tuning and inference for the premium tier.
 
 ## Architecture Decisions
 
-### Single-Tenant with Subscription Profiles
+### Multi-Tenant with Subscription Tiers
 
-The system supports two subscription profiles with different capabilities:
+The platform supports multiple authenticated users, each with a subscription tier:
 
-| Profile | LLM | Context | Files | Web Access |
-|---------|-----|---------|-------|------------|
+| Tier | LLM | Context | Files | Web Access |
+|------|-----|---------|-------|------------|
 | Free | llama.rn (Llama 3.2 3B Q4_K_M) | No | No | No |
 | Premium | AWS Bedrock (fine-tuned) + RAG | Yes | Yes (images + PDFs) | Yes |
 
-**Rationale:** Single-tenant MVP with two profiles — one user with two profiles, or two users
-with distinct subscriptions. Demonstrates model-agnosticism and tiered architecture.
+**Data model:**
+- `Users`: id, email, password_hash (bcrypt), subscription_tier, created_at
+- `Documents`: id, user_id (FK), type, original_path, triples_path, created_at
+- `Subscriptions`: id, user_id (FK), tier, status, started_at
+- `Embeddings`: id, document_id (FK), vector, metadata (encrypted with Fernet)
+
+**Rationale:** The anteproyecto mentions "one user" referring to the data inputter for fine-tuning.
+The platform is multi-tenant from the MVP — each user has isolated data (documents, embeddings,
+triples scoped by user_id). This demonstrates tiered architecture with real subscription enforcement.
 Free tier proves local inference works; premium tier proves RAG + fine-tuning integration.
 
 ### Two Backend Services
@@ -96,11 +103,17 @@ inference for the premium tier, with free tier (750h/mes).
 
 ### Authentication
 
-- Basic auth via FastAPI dependency for protected endpoints
+- **JWT + bcrypt** for multi-user authentication
+- `register()`: create user with email + password (bcrypt hash)
+- `login()`: validate credentials, return JWT access token
+- `verify_token()`: decode and validate JWT, extract user_id
+- `get_current_user()`: FastAPI dependency — injects authenticated user into endpoints
 - `GET /health` left public (no secrets exposed)
-- No JWT/OAuth in MVP scope
+- Token expiration configurable via environment variable
 
-**Rationale:** Matches "autenticación básica" scope. Simple to test and demonstrate.
+**Rationale:** Multi-tenant platform requires per-user authentication and data isolation.
+JWT is lightweight, stateless, and integrates natively with FastAPI dependencies.
+bcrypt provides secure password hashing. OAuth federated auth is explicitly out of scope.
 
 ### Security Strategy: Shift Left + Shift Right
 
@@ -177,8 +190,8 @@ vector store and document database.
 ## Limits and Assumptions (from anteproyecto)
 
 ### Users
-- Included: 1 individual user (single-tenant) with two subscription profiles (Free/Premium)
-- Out of scope: Multi-user, social sharing
+- Included: Multiple authenticated users (JWT), each with Free or Premium subscription. Data isolated per user (user_id).
+- Out of scope: Social sharing between users
 
 ### Languages
 - Included: English (UI) + Spanish document support (LLM infers)
@@ -193,8 +206,8 @@ vector store and document database.
 - Out of scope: Live audio streaming, video
 
 ### Security
-- Included: Basic authentication
-- Out of scope: AES-at-rest, HTTPS in transit, GDPR compliance, federated OAuth
+- Included: JWT + bcrypt authentication (register, login, verify_token, get_current_user)
+- Out of scope: AES-at-rest, GDPR compliance, federated OAuth
 
 ### Privacy
 - Included: On-device processing when possible; local logs
@@ -205,7 +218,7 @@ vector store and document database.
 - Out of scope: Real-time auto-retraining
 
 ### Scalability
-- Included: 100 documents in DB, 1 GB embeddings
+- Included: Multiple users, 100 documents per user in DB, 1 GB embeddings total
 - Out of scope: High availability, sharding, thousands/millions of documents
 
 ### Simulations

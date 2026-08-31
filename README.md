@@ -1,6 +1,6 @@
 # llm-brain — AI-Augmented Digital Brain
 
-> MSc Software thesis MVP: a single-tenant personal LLM/OS emulating a **Brain–LLM symbiosis**
+> MSc Software thesis MVP: a **multi-tenant** personal LLM/OS emulating a **Brain–LLM symbiosis**
 > for infinite human memory, personal knowledge management (PKM), advanced reasoning and
 > decision-making support.
 
@@ -68,11 +68,35 @@ pip install -r requirements.txt
 cp .env.example .env      # then fill in secrets
 ```
 
+## Conventional Commits
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/). See `CONTRIBUTING.md` for details.
+
 ## Tech stack
 
 Python 3.13 · FastAPI · LangChain · React + Chart.js · MongoDB Atlas · Chroma/Pinecone ·
-ollama + llama-cpp-python · Docker Compose · GitHub Actions. **LLM is model-agnostic**
-(open-source models such as Qwen/DeepSeek/GLM, or cloud via OpenRouter — selectable via config).
+AWS Bedrock (Llama 3 8B fine-tuned) · llama.rn (Llama 3.2 3B Q4_K_M on mobile) · Docker Compose · GitHub Actions.
+**Backend**: AWS Bedrock only (premium tier). **Mobile**: llama.rn on-device (free tier).
+
+**Auth:** JWT + bcrypt (register, login, verify_token, get_current_user) with per-user data isolation.
+
+## Security
+
+### Shift Left (Prevent in CI)
+
+- **ruff**: Linting and code quality
+- **pytest**: Unit and integration tests
+- **Snyk**: Dependency scan and SAST (static analysis)
+
+### Shift Right (Detect in Production)
+
+- **CloudWatch**: Logs, metrics, alarms (future modules)
+- **Rate limiting**: API Gateway rate limiting in production
+
+### Data Encryption
+
+- **Application-level**: Fernet encryption for embeddings
+- **Transport**: TLS (AWS API Gateway managed)
 
 ## Budget
 

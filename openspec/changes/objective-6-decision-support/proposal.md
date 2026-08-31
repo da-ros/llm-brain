@@ -1,23 +1,37 @@
-## Why
+## Proposal: Decision-Support Simulator
 
-<!-- TODO: Justify this objective. Reference anteproyecto Objetivo Específico 6. -->
+### Context
 
-## What Changes
+Users need a decision-support tool that runs deterministic what-if scenarios based
+on their personal data. The simulator generates 3-5 scenarios with explicit,
+traceable assumptions to help users make informed decisions.
 
-<!-- TODO: Describe what this objective implements. -->
+### Why
 
-## Capabilities
+1. **Decision support**: The core value proposition — helping users make better
+   decisions based on their personal knowledge.
+2. **Thesis OE6**: Anteproyecto specifies deterministic what-if analysis with
+   3-5 scenarios and explicit traceable assumptions.
+3. **Trust**: Deterministic (not stochastic) simulations build user trust in
+   the system's recommendations.
 
-### New Capabilities
-<!-- TODO: List new capabilities introduced by this objective. -->
+### Deliverables
 
-### Modified Capabilities
-<!-- TODO: List capabilities modified by this objective. -->
+- What-if scenario generator
+- 3-5 scenarios per query with explicit assumptions
+- Deterministic execution (same input -> same output)
+- Assumption tracing (each assumption linked to source data)
+- Scenario comparison view (web dashboard)
+- Integration with RAG for context retrieval
 
-## Impact
+### Non-Deliverables
 
-<!-- TODO: Describe impact on code, docs, infra, dependencies. -->
+- Monte Carlo / stochastic simulations
+- Real-time market data integration
+- Automated decision execution
 
-## Execution Order
+### References
 
-<!-- TODO: Define execution order and dependencies. -->
+- Anteproyecto: Objetivo Específico 6 (Decision support)
+- Depends on: Frame 1 (Architecture), Frame 3 (Hybrid Store + RAG)
+- Parallel with: Frame 8 (Privacy & Scam Shield)

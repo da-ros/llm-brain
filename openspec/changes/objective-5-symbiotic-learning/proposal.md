@@ -1,23 +1,37 @@
-## Why
+## Proposal: Symbiotic Learning Loop (MCP Agents)
 
-<!-- TODO: Justify this objective. Reference anteproyecto Objetivo Específico 5. -->
+### Context
 
-## What Changes
+The platform uses MCP (Model Context Protocol) agents to create a learning loop
+where the system continuously improves from user interactions. Three agents
+(Ingestor, Razonador, Evaluador) process user data, reason over it, and evaluate
+output quality to trigger incremental fine-tuning.
 
-<!-- TODO: Describe what this objective implements. -->
+### Why
 
-## Capabilities
+1. **Continuous improvement**: The system should get better over time from user
+   interactions — this is the "symbiotic" aspect of Brain-LLM symbiosis.
+2. **Thesis OE5**: Anteproyecto specifies MCP agents for the learning loop
+   with manual incremental fine-tuning batches.
+3. **Feedback loop**: User corrections and preferences should influence model
+   behavior through fine-tuning.
 
-### New Capabilities
-<!-- TODO: List new capabilities introduced by this objective. -->
+### Deliverables
 
-### Modified Capabilities
-<!-- TODO: List capabilities modified by this objective. -->
+- MCP agent framework (Ingestor, Razonador, Evaluador)
+- Ingestor: processes user interactions into training data
+- Razonador: reasons over user context and generates suggestions
+- Evaluador: scores output quality, triggers fine-tuning when threshold met
+- Manual incremental fine-tuning batch system
+- Agent communication protocol
 
-## Impact
+### Non-Deliverables
 
-<!-- TODO: Describe impact on code, docs, infra, dependencies. -->
+- Autonomous retraining (manual trigger only)
+- Reinforcement learning from human feedback (RLHF)
+- Multi-agent debate/consensus
 
-## Execution Order
+### References
 
-<!-- TODO: Define execution order and dependencies. -->
+- Anteproyecto: Objetivo Específico 5 (Learning loop)
+- Depends on: Frame 2 (Memory Distillation), Frame 3 (Hybrid Store), Frame 4 (LLM Provider)
