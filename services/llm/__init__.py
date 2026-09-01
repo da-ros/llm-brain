@@ -1,0 +1,1 @@
+"""LLM Service — AWS Bedrock inference microservice for premium users."""

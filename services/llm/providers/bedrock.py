@@ -4,7 +4,7 @@ Cloud inference using AWS Bedrock with Llama 3 8B (fine-tuned).
 This is the premium-tier provider that runs on AWS.
 """
 
-from services.api.llm.base import LLMProvider
+from services.llm.providers.base import LLMProvider
 
 
 class BedrockProvider(LLMProvider):

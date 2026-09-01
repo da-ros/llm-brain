@@ -1,0 +1,1 @@
+"""LLM Service routers — /generate and /chat endpoints."""
