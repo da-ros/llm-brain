@@ -31,12 +31,12 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["apps", "services"]
 asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["apps", "services"]
-omit = ["tests/*", "notebooks/*"]
+omit = ["*/test_*", "notebooks/*"]
 
 [tool.coverage.report]
 show_missing = true
