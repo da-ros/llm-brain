@@ -23,7 +23,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["apps", "services"]
+known-first-party = ["services"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -31,11 +31,11 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.pytest.ini_options]
-testpaths = ["apps", "services"]
+testpaths = ["services"]
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["apps", "services"]
+source = ["services"]
 omit = ["*/test_*", "notebooks/*"]
 
 [tool.coverage.report]

@@ -1,0 +1,27 @@
+frame: frame-4
+title: "LLM Cloud (Bedrock) + Fine-Tuning Services"
+description: "LLM inference service (port 8003) and LoRA fine-tuning service (port 8004) on AWS Bedrock"
+anteproyecto_objectives:
+  - "Objetivo Específico 4 (LLM principal)"
+depends_on:
+  - frame-2
+execution_order: 3
+status: proposed
+services:
+  - name: llm-service
+    directory: services/llm
+    port: 8003
+    description: "AWS Bedrock inference — Llama 3 8B for premium users"
+  - name: finetune-service
+    directory: services/finetune
+    port: 8004
+    description: "LoRA fine-tuning pipeline on AWS Bedrock"
+output:
+  diagrams:
+    - llm-architecture.drawio
+    - llm-dataflow.drawio
+  documents:
+    - justificacion-ejemplo.md
+specs:
+  - specs/llm-service/spec.md
+  - specs/finetune-service/spec.md

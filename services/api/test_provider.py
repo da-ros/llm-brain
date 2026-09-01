@@ -2,8 +2,8 @@
 
 import pytest
 
-from apps.api.llm.bedrock import BedrockProvider
-from apps.api.llm.resolver import get_provider
+from services.api.llm.bedrock import BedrockProvider
+from services.api.llm.resolver import get_provider
 
 
 def test_provider_resolution_premium_tier():

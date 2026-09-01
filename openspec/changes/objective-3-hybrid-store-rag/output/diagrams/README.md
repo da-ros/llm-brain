@@ -34,5 +34,5 @@ Draw.io XML diagrams for the Hybrid Store + RAG module.
 ## 📚 References
 
 - [C4 Model](https://c4model.com/) — Architecture documentation
-- [Frame 1 Diagrams](../../objective-1-architecture-repo/output/diagrams/) — Base architecture
+- [Frame 1 Diagrams](../../objective-1-0-architecture-repo/output/diagrams/) — Base architecture
 - [Frame 2 Diagrams](../../objective-2-memory-distillation/output/diagrams/) — ETL pipeline

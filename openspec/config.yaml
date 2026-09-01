@@ -102,7 +102,7 @@ operations:
 # Output convention: each frame has output/diagrams/ and output/documents/
 frames:
   frame-1:
-    directory: objective-1-architecture-repo
+    directory: objective-1-0-architecture-repo
     title: "Architecture & Repository Foundation"
     description: "C4 docs, MCP diagram, OSS stack, CI, JWT auth, user data model, config, LLM provider protocol, FastAPI skeleton"
     anteproyecto_objectives:
@@ -165,13 +165,20 @@ frames:
         - justificacion-ejemplo.md
 
   frame-4:
-    directory: objective-4-llm-cloud-proxy
-    title: "LLM Cloud Fine-Tune + On-Device"
-    description: "LoRA fine-tuning on AWS Bedrock (Llama 3 8B); on-device with llama.rn (Llama 3.2 3B Q4_K_M)"
+    directory: objective-4-llm-inference-finetuning
+    title: "LLM Cloud (Bedrock) + Fine-Tuning Services"
+    description: "LLM inference service (port 8003) and LoRA fine-tuning service (port 8004) on AWS Bedrock. On-device LLM (llama.rn) is in Frame 10."
     anteproyecto_objectives:
       - "Objetivo Específico 4 (LLM principal)"
     depends_on: ["frame-2"]
     execution_order: 3
+    services:
+      - name: llm-service
+        directory: services/llm
+        port: 8003
+      - name: finetune-service
+        directory: services/finetune
+        port: 8004
 
   frame-5:
     directory: objective-5-symbiotic-learning

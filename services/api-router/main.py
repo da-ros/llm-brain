@@ -1,4 +1,4 @@
-"""API Gateway — FastAPI Application.
+"""API Router — FastAPI Application.
 
 Main entry point for the microservices architecture.
 Handles JWT validation, correlation ID, routing, task status polling,
@@ -24,7 +24,7 @@ logging.basicConfig(
     format="%(asctime)s [%(correlation_id)s] %(levelname)s %(name)s: %(message)s",
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
-logger = logging.getLogger("api-gateway")
+logger = logging.getLogger("api-router")
 
 
 class CorrelationFilter(logging.Filter):
@@ -45,8 +45,8 @@ def log_with_correlation(correlation_id: str, level: str, message: str):
 
 
 app = FastAPI(
-    title="llm-brain API Gateway",
-    description="AI-Augmented Digital Brain — API Gateway with correlation ID",
+    title="llm-brain API Router",
+    description="AI-Augmented Digital Brain — API Router with correlation ID",
     version="0.1.0",
 )
 
@@ -114,7 +114,7 @@ async def health_check():
     """Public health check endpoint."""
     return {
         "status": "ok",
-        "service": "api-gateway",
+        "service": "api-router",
         "version": "0.1.0",
     }
 
@@ -307,7 +307,7 @@ def start_kafka_consumer():
         consumer = KafkaConsumer(
             settings.KAFKA_TOPIC_TASK_RESPONSE,
             bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-            group_id="api-gateway",
+            group_id="api-router",
             auto_offset_reset="latest",
             value_deserializer=lambda m: json.loads(m.decode("utf-8")),
         )

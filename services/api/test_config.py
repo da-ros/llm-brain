@@ -12,7 +12,7 @@ def test_config_falls_back_to_defaults():
     env_vars = {k: v for k, v in os.environ.items() if k not in ["API_PORT", "API_HOST"]}
 
     with patch.dict(os.environ, env_vars, clear=True):
-        from apps.api.config import Settings
+        from services.api.config import Settings
         settings = Settings()
         assert settings.API_PORT == 8000
         assert settings.API_HOST == "0.0.0.0"
@@ -25,6 +25,6 @@ def test_config_fails_fast_on_missing_required_secret():
         "JWT_SECRET_KEY": "change-me-in-production",
         "FERNET_KEY": "change-me-in-production",
     }, clear=True):
-        from apps.api.config import get_settings
+        from services.api.config import get_settings
         with pytest.raises(ValueError, match="JWT_SECRET_KEY"):
             get_settings()

@@ -1,4 +1,4 @@
-"""Tests for API Gateway — Auth, Correlation ID, Task Status."""
+"""Tests for API Router — Auth, Correlation ID, Task Status."""
 
 import os
 import sys
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add apps/gateway to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "gateway"))
+# Add services/api-router to Python path
+sys.path.insert(0, str(Path(__file__).parent))
 
 # Set env vars
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-testing-only")
@@ -110,9 +110,9 @@ class TestHealthEndpoint:
         """Test health response format."""
         response = {
             "status": "ok",
-            "service": "api-gateway",
+            "service": "api-router",
             "version": "0.1.0",
         }
         assert response["status"] == "ok"
-        assert response["service"] == "api-gateway"
+        assert response["service"] == "api-router"
         assert "version" in response

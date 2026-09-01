@@ -8,9 +8,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from apps.api.config import settings
-from apps.api.llm.resolver import get_provider
-from apps.api.main import verify_token
+from services.api.config import settings
+from services.api.llm.resolver import get_provider
+from services.api.main import verify_token
 from services.rag.rag_service import rag_service
 
 router = APIRouter(prefix="/api", tags=["chat"])

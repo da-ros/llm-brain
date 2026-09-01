@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from apps.api.main import app
+from services.api.main import app
 
 client = TestClient(app)
 
@@ -17,7 +17,7 @@ def test_protected_endpoint_returns_200_with_valid_token():
     """Test that protected endpoint returns 200 with valid JWT token."""
     # Create a valid JWT token for testing
     from jose import jwt
-    from apps.api.config import settings
+    from services.api.config import settings
 
     token = jwt.encode(
         {"sub": "test-user-123", "tier": "premium"},

@@ -8,8 +8,8 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from apps.api.config import settings
-from apps.api.routers import chat, upload
+from services.api.config import settings
+from services.api.routers import chat, upload
 
 app = FastAPI(
     title="llm-brain API",

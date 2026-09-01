@@ -36,4 +36,4 @@ Draw.io XML diagrams for the API Router (Gateway) service.
 ## 📚 References
 
 - [C4 Model](https://c4model.com/) — Architecture documentation
-- [Frame 1 Diagrams](../../objective-1-architecture-repo/diagrams/) — Base architecture
+- [Frame 1 Diagrams](../../objective-1-0-architecture-repo/diagrams/) — Base architecture

@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 
-from apps.api.main import verify_token
+from services.api.main import verify_token
 from services.rag.document_store import document_store
 from services.rag.rag_service import rag_service
 

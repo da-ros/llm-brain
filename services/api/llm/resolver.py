@@ -5,9 +5,9 @@ The backend only uses AWS Bedrock (premium tier).
 On-device inference (llama.rn) runs on the mobile app, not the backend.
 """
 
-from apps.api.llm.base import LLMProvider
-from apps.api.llm.bedrock import BedrockProvider
-from apps.api.config import settings
+from services.api.llm.base import LLMProvider
+from services.api.llm.bedrock import BedrockProvider
+from services.api.config import settings
 
 
 def get_provider(tier: str = "premium") -> LLMProvider:
