@@ -45,7 +45,7 @@ The platform supports multiple real users from the MVP.
 - Create main.py with app + router mounting
 - Implement `GET /health` (public)
 - Implement JWT auth: register, login, verify_token, get_current_user
-- Implement subscription tier enforcement middleware
+- Implement subscription tier enforcement via FastAPI dependency
 - Sample protected endpoint demonstrating per-user data isolation
 
 ### Tests

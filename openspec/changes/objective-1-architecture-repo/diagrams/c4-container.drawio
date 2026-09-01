@@ -1,140 +1,141 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" modified="2026-08-27T00:00:00.000Z" agent="Claude" version="24.0.0">
-  <diagram id="c4-container" name="Level 2 - Container">
-    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
-      <root>
-        <mxCell id="0"/>
-        <mxCell id="1" parent="0"/>
-
-        <!-- Title -->
-        <mxCell id="title" value="C4 Level 2 — Container Diagram&#xa;llm-brain System" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=16;fontStyle=1" vertex="1" parent="1">
-          <mxGeometry x="500" y="10" width="400" height="40" as="geometry"/>
-        </mxCell>
-
-        <!-- Person: User -->
-        <mxCell id="user" value="👤 User&#xa;(Multi-tenant)" style="shape=mxgraph.basic.person;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;html=1;" vertex="1" parent="1">
-          <mxGeometry x="30" y="350" width="60" height="100" as="geometry"/>
-        </mxCell>
-
-        <!-- System Boundary: llm-brain -->
-        <mxCell id="boundary" value="llm-brain System" style="shape=mxgraph.c4.c4_container;fillColor=none;strokeColor=#666666;fontSize=14;fontStyle=1;html=1;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="150" y="60" width="1100" height="780" as="geometry"/>
-        </mxCell>
-
-        <!-- Container: Web App -->
-        <mxCell id="webapp" value="🌐 Web App&#xa;React + Chart.js&#xa;&#xa;[Premium only]&#xa;Charts, dashboard" style="shape=mxgraph.c4.c4_container;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=0;html=1;" vertex="1" parent="1">
-          <mxGeometry x="200" y="120" width="180" height="120" as="geometry"/>
-        </mxCell>
-
-        <!-- Container: Mobile App -->
-        <mxCell id="mobile" value="📱 Mobile App&#xa;React Native&#xa;&#xa;[Free/Premium]&#xa;llama.rn on-device" style="shape=mxgraph.c4.c4_container;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=0;html=1;" vertex="1" parent="1">
-          <mxGeometry x="200" y="300" width="180" height="120" as="geometry"/>
-        </mxCell>
-
-        <!-- Container: API Gateway -->
-        <mxCell id="apigw" value="🚪 API Gateway&#xa;AWS API Gateway&#xa;&#xa;[Production only]&#xa;Rate limiting, routing" style="shape=mxgraph.c4.c4_container;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;fontStyle=0;html=1;" vertex="1" parent="1">
-          <mxGeometry x="450" y="220" width="180" height="120" as="geometry"/>
-        </mxCell>
-
-        <!-- Container: API Backend -->
-        <mxCell id="api" value="⚡ API Backend&#xa;FastAPI (Python 3.13)&#xa;&#xa;JWT auth, orchestration&#xa;REST endpoints&#xa;Per-user data isolation" style="shape=mxgraph.c4.c4_container;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=0;html=1;" vertex="1" parent="1">
-          <mxGeometry x="700" y="120" width="180" height="120" as="geometry"/>
-        </mxCell>
-
-        <!-- Container: Fine-Tuning Service -->
-        <mxCell id="finetune" value="🎯 Fine-Tuning Service&#xa;Separate ECS Task&#xa;&#xa;LoRA training&#xa;Scheduled execution" style="shape=mxgraph.c4.c4_container;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=0;html=1;" vertex="1" parent="1">
-          <mxGeometry x="700" y="300" width="180" height="120" as="geometry"/>
-        </mxCell>
-
-        <!-- Container: LLM Local (Mobile) -->
-        <mxCell id="llmlocal" value="🤖 LLM Local&#xa;llama.rn&#xa;Llama 3.2 3B Q4_K_M&#xa;&#xa;[Free tier]&#xa;On-device inference" style="shape=mxgraph.c4.c4_container;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=0;html=1;" vertex="1" parent="1">
-          <mxGeometry x="450" y="500" width="180" height="130" as="geometry"/>
-        </mxCell>
-
-        <!-- Container: LLM Cloud -->
-        <mxCell id="llmcloud" value="☁️ LLM Cloud&#xa;AWS Bedrock&#xa;Llama 3 8B (fine-tuned)&#xa;&#xa;[Premium tier]&#xa;RAG context" style="shape=mxgraph.c4.c4_container;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=0;html=1;" vertex="1" parent="1">
-          <mxGeometry x="700" y="500" width="180" height="130" as="geometry"/>
-        </mxCell>
-
-        <!-- Container: LLM Tool Layer -->
-        <mxCell id="llmtool" value="🔧 LLM Tool Layer&#xa;LangChain&#xa;RAG + Vector Search&#xa;&#xa;Top-k retrieval&#xa;Semantic search" style="shape=mxgraph.c4.c4_container;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=0;html=1;" vertex="1" parent="1">
-          <mxGeometry x="950" y="500" width="180" height="130" as="geometry"/>
-        </mxCell>
-
-        <!-- Container: MCP Agents -->
-        <mxCell id="mcp" value="🤝 MCP Agents&#xa;Ingestor → Razonador → Evaluador&#xa;&#xa;Memory distillation&#xa;Feedback loop" style="shape=mxgraph.c4.c4_container;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;fontStyle=0;html=1;" vertex="1" parent="1">
-          <mxGeometry x="950" y="300" width="180" height="120" as="geometry"/>
-        </mxCell>
-
-        <!-- External: MongoDB Atlas -->
-        <mxCell id="mongodb" value="🗄️ MongoDB Atlas&#xa;Document Store" style="shape=mxgraph.c4.c4_cloud;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;html=1;" vertex="1" parent="1">
-          <mxGeometry x="1300" y="150" width="150" height="100" as="geometry"/>
-        </mxCell>
-
-        <!-- External: Vector Store -->
-        <mxCell id="vector" value="🔍 Chroma / Pinecone&#xa;Vector Store" style="shape=mxgraph.c4.c4_cloud;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;html=1;" vertex="1" parent="1">
-          <mxGeometry x="1300" y="350" width="150" height="100" as="geometry"/>
-        </mxCell>
-
-        <!-- External: AWS Bedrock -->
-        <mxCell id="bedrock" value="☁️ AWS Bedrock&#xa;LLM Service" style="shape=mxgraph.c4.c4_cloud;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;html=1;" vertex="1" parent="1">
-          <mxGeometry x="1300" y="550" width="150" height="100" as="geometry"/>
-        </mxCell>
-
-        <!-- Relationships -->
-        <mxCell id="rel1" value="Uses" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#6c8ebf;html=1;fontSize=10;" edge="1" source="user" target="webapp" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel2" value="Uses" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#6c8ebf;html=1;fontSize=10;" edge="1" source="user" target="mobile" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel3" value="Routes (prod)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#9673a6;html=1;fontSize=10;" edge="1" source="webapp" target="apigw" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel4" value="Routes (prod)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#9673a6;html=1;fontSize=10;" edge="1" source="mobile" target="apigw" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel5" value="Forwards" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#9673a6;html=1;fontSize=10;" edge="1" source="apigw" target="api" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel6" value="Orchestrates" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#d6b656;html=1;fontSize=10;" edge="1" source="api" target="finetune" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel7" value="RAG queries" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#d6b656;html=1;fontSize=10;" edge="1" source="api" target="llmtool" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel8" value="Premium inference" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;html=1;fontSize=10;" edge="1" source="llmtool" target="llmcloud" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel9" value="Free: on-device" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;html=1;fontSize=10;" edge="1" source="mobile" target="llmlocal" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel10" value="Stores docs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;fontSize=10;" edge="1" source="api" target="mongodb" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel11" value="Stores embeddings" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;fontSize=10;" edge="1" source="llmtool" target="vector" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel12" value="Fine-tuning" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;html=1;fontSize=10;" edge="1" source="finetune" target="bedrock" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rel13" value="MCP feedback" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#9673a6;html=1;fontSize=10;" edge="1" source="mcp" target="api" parent="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-      </root>
-    </mxGraphModel>
-  </diagram>
+<mxfile host="65bd71144e">
+    <diagram id="c4-container" name="C4 Level 2 — Microservices Architecture">
+        <mxGraphModel dx="264885" dy="148980" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="3200" pageHeight="1800" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=20;fontStyle=1" value="C4 Level 2 — Microservices Architecture&#xa;llm-brain System" vertex="1">
+                    <mxGeometry height="60" width="550" x="900" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier_clients" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" value="CLIENTS" vertex="1">
+                    <mxGeometry height="30" width="100" x="132" y="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="user" parent="1" style="shape=mxgraph.basic.smiley;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;html=1;" value="👤 User&#xa;(Multi-tenant)" vertex="1">
+                    <mxGeometry height="130" width="160" x="101" y="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="webapp" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" value="🌐 Web App&#xa;React + Chart.js&#xa;[Premium only]" vertex="1">
+                    <mxGeometry height="80" width="200" x="80" y="332" as="geometry"/>
+                </mxCell>
+                <mxCell id="mobile" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" value="📱 Mobile App&#xa;React Native&#xa;[Free + Premium]" vertex="1">
+                    <mxGeometry height="80" width="200" x="80" y="447" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier_gw" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#9673a6" value="AWS API GATEWAY (Production only)" vertex="1">
+                    <mxGeometry height="30" width="320" x="380" y="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="apigw" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;strokeWidth=2;" value="🚪 AWS API Gateway&#xa;Rate limiting · HTTPS · WAF&#xa;Managed service" vertex="1">
+                    <mxGeometry height="90" width="280" x="370" y="139" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier_router" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#d6b656" value="API ROUTER (FastAPI)" vertex="1">
+                    <mxGeometry height="30" width="200" x="828" y="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="router" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;strokeWidth=3;" value="⚡ API Router&#xa;FastAPI (Python 3.13)&#xa;Puerto 8000&#xa;&#xa;• JWT validation&#xa;• Correlation ID (X-Request-ID)&#xa;• Routing to services&#xa;• Task status polling" vertex="1">
+                    <mxGeometry height="160" width="280" x="780" y="144" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier_kafka" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#b85450" value="MESSAGE QUEUE" vertex="1">
+                    <mxGeometry height="30" width="150" x="780" y="328" as="geometry"/>
+                </mxCell>
+                <mxCell id="kafka" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;strokeWidth=2;" value="📨 Kafka Cluster&#xa;Puerto 9092&#xa;&#xa;Topics:&#xa;• file.uploaded&#xa;• task.response" vertex="1">
+                    <mxGeometry height="130" width="250" x="795" y="369" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier_services" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#82b366" value="MICROSERVICES" vertex="1">
+                    <mxGeometry height="30" width="150" x="1227" y="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="etl" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" value="📥 ETL Service&#xa;Puerto 8001&#xa;&#xa;• PDF/HTML/EML/OCR parsers&#xa;• Triple extraction&#xa;• Distillation pipeline" vertex="1">
+                    <mxGeometry height="120" width="250" x="1177" y="437" as="geometry"/>
+                </mxCell>
+                <mxCell id="rag" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" value="🔍 RAG Service&#xa;Puerto 8002&#xa;&#xa;• Semantic search&#xa;• Context injection&#xa;• Top-k retrieval" vertex="1">
+                    <mxGeometry height="110" width="250" x="1177" y="169" as="geometry"/>
+                </mxCell>
+                <mxCell id="llm" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" value="☁️ LLM Service&#xa;Puerto 8003&#xa;&#xa;• AWS Bedrock inference&#xa;• Model management&#xa;• Premium tier only" vertex="1">
+                    <mxGeometry height="110" width="250" x="1177" y="304" as="geometry"/>
+                </mxCell>
+                <mxCell id="finetune" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" value="🎯 Fine-Tune Service&#xa;Puerto 8004&#xa;&#xa;• LoRA training&#xa;• Background worker&#xa;• Scheduled execution" vertex="1">
+                    <mxGeometry height="110" width="250" x="1177" y="580" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier_data" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#666666" value="DATA STORES" vertex="1">
+                    <mxGeometry height="30" width="130" x="1675" y="88" as="geometry"/>
+                </mxCell>
+                <mxCell id="mongo" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" value="🗄️ MongoDB&#xa;task_status&#xa;uploaded_files (GridFS)&#xa;triples" vertex="1">
+                    <mxGeometry height="100" width="220" x="1630" y="447" as="geometry"/>
+                </mxCell>
+                <mxCell id="chroma" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" value="🔍 Chroma&#xa;Vector embeddings" vertex="1">
+                    <mxGeometry height="80" width="220" x="1627" y="184" as="geometry"/>
+                </mxCell>
+                <mxCell id="bedrock" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;" value="☁️ AWS Bedrock&#xa;LLM inference&#xa;+ fine-tuning" vertex="1">
+                    <mxGeometry height="70" width="220" x="1627" y="323" as="geometry"/>
+                </mxCell>
+                <mxCell id="r1" edge="1" parent="1" source="user" style="rounded=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;" target="webapp">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r2" edge="1" parent="1" source="user" style="rounded=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitPerimeter=0;" target="mobile">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="40" y="205"/>
+                            <mxPoint x="40" y="490"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r3" edge="1" parent="1" source="webapp" style="rounded=1;strokeWidth=2;strokeColor=#9673a6;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0.25;entryY=1;entryDx=0;entryDy=0;" target="apigw">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="440" y="350"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r3_label" connectable="0" parent="r3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=2" value="Production" vertex="1"/>
+                <mxCell id="r4" edge="1" parent="1" source="mobile" style="rounded=1;strokeWidth=2;strokeColor=#9673a6;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="apigw">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="510" y="487"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r5" edge="1" parent="1" source="apigw" style="rounded=1;strokeWidth=2;strokeColor=#9673a6;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="router">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r5_label" connectable="0" parent="r5" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10" value="Forwards" vertex="1"/>
+                <mxCell id="r6" edge="1" parent="1" source="webapp" style="rounded=1;strokeWidth=2;strokeColor=#6c8ebf;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.8;entryDx=0;entryDy=0;" target="router">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="540" y="370"/>
+                            <mxPoint x="540" y="270"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r6_label" connectable="0" parent="r6" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=2;fontColor=#6c8ebf" value="Local (direct)" vertex="1"/>
+                <mxCell id="r7" edge="1" parent="1" source="router" style="rounded=1;strokeWidth=2;strokeColor=#b85450;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="kafka">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r7_label" connectable="0" parent="r7" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1;fontColor=#b85450" value="Async (uploads)" vertex="1"/>
+                <mxCell id="r8" edge="1" parent="1" source="router" style="rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="rag">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r8_label" connectable="0" parent="r8" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1;fontColor=#82b366" value="Sync (queries)" vertex="1"/>
+                <mxCell id="r9" edge="1" parent="1" source="kafka" style="rounded=1;strokeWidth=2;strokeColor=#b85450;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="etl">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r9_label" connectable="0" parent="r9" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10" value="Consumes" vertex="1"/>
+                <mxCell id="r10" edge="1" parent="1" source="etl" style="rounded=1;strokeWidth=2;strokeColor=#b85450;exitX=0;exitY=0.75;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="kafka">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="920" y="527"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r10_label" connectable="0" parent="r10" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10" value="Publishes response" vertex="1"/>
+                <mxCell id="r11" edge="1" parent="1" source="etl" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="mongo">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r12" edge="1" parent="1" source="rag" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="chroma">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r13" edge="1" parent="1" source="llm" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="bedrock">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend" parent="1" style="text;html=1;align=left;verticalAlign=top;fontSize=11;fillColor=#f5f5f5;strokeColor=#999999;rounded=1;spacingLeft=8;spacingRight=8;spacingTop=4;spacingBottom=4;" value="🔵 Blue = Clients    🟣 Purple = AWS API GW    🟡 Yellow = API Router    🔴 Red = Kafka + Async    🟢 Green = Services    ⚪ Gray = Data Stores    --- = Local dev" vertex="1">
+                    <mxGeometry height="30" width="900" x="80" y="720" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
 </mxfile>

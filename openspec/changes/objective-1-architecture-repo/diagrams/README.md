@@ -1,18 +1,15 @@
 # Architecture Diagrams — llm-brain
 
-Draw.io XML diagrams for the AI-Augmented Digital Brain architecture.
+Draw.io XML diagrams for the AI-Augmented Digital Brain architecture (Frame 1).
 
 ## 📁 Diagram Files
 
 | File | C4 Level | Description |
 |------|----------|-------------|
-| `c4-context.drawio` | Level 1 | System Context — actors, system, external dependencies |
-| `c4-container.drawio` | Level 2 | Containers — apps, services, data stores |
-| `c4-component-api.drawio` | Level 3 | API Backend components — FastAPI modules |
-| `c4-component-mobile.drawio` | Level 3 | Mobile App components — React Native modules |
-| `mcp-agent-flow.drawio` | — | MCP Agent flow — Ingestor → Razonador → Evaluador |
-| `deployment.drawio` | — | Deployment — Local (Docker) + Production (ECS Fargate) |
-| `tech-stack.drawio` | — | Technology stack decisions with rationale |
+| `c4-context.drawio` | Level 1 | System Context — actors (User, Admin), llm-brain system, external dependencies (Bedrock, MongoDB, Chroma) |
+| `c4-container.drawio` | Level 2 | Containers — Web App, Mobile App, API Gateway, API Backend, Fine-Tuning Service, LLM Local/Cloud, Tool Layer, data stores |
+| `c4-component-api.drawio` | Level 3 | API Backend components — FastAPI App, Config, Auth (JWT+bcrypt), LLM Provider Protocol, Routers, Dependencies |
+| `deployment.drawio` | — | Deployment — Docker Compose (local dev) + AWS ECS Fargate (production) with API Gateway |
 
 ## 🔧 How to Open
 

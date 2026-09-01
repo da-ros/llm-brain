@@ -1,2 +1,11 @@
 schema: spec-driven
 created: 2026-08-27
+updated: 2026-08-31
+specs:
+  - specs/memory-distillation/spec.md
+output:
+  diagrams:
+    - etl-architecture.drawio
+    - etl-dataflow.drawio
+  documents:
+    - justificacion-ejemplo.md

@@ -1,0 +1,139 @@
+<mxfile host="app.diagrams.net" modified="2026-08-31T00:00:00.000Z" agent="Claude" version="24.0.0" type="device">
+  <diagram id="rag-architecture" name="Frame 3 — RAG Architecture">
+    <mxGraphModel dx="2200" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2800" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="Frame 3 — Hybrid Store + RAG Architecture" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="750" y="20" width="500" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== LEFT: EXISTING (Frame 1 + 2) ===== -->
+        <mxCell id="existing_label" value="EXISTING (Frame 1 + 2)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="220" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- FastAPI Backend -->
+        <mxCell id="fastapi" value="⚡ FastAPI Backend&#xa;(Frame 1)&#xa;&#xa;• JWT Auth&#xa;• Config Layer&#xa;• LLM Provider" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="140" width="220" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- ETL Pipeline -->
+        <mxCell id="etl" value="📥 ETL Pipeline&#xa;(Frame 2)&#xa;&#xa;• Parsers (PDF/HTML/EML/OCR)&#xa;• Triple extraction&#xa;• JSONL output" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="290" width="220" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- JSONL Output -->
+        <mxCell id="jsonl" value="📁 JSONL Triples&#xa;data/triples/{user_id}/&#xa;{doc_id}.jsonl" style="shape=document;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;size=0.12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="440" width="220" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== CENTER: NEW (Frame 3) ===== -->
+        <mxCell id="new_label" value="NEW — HYBRID STORE + RAG (Frame 3)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="400" y="100" width="350" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rag_boundary" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#82b366;strokeWidth=2;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="130" width="700" height="620" as="geometry"/>
+        </mxCell>
+
+        <!-- Document Store (MongoDB) -->
+        <mxCell id="doc_store" value="🗄️ Document Store&#xa;services/rag/document_store.py&#xa;&#xa;• MongoDB Atlas&#xa;• Per-user isolation&#xa;• CRUD with user_id filter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="440" y="160" width="260" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- Vector Store -->
+        <mxCell id="vec_store" value="🔍 Vector Store&#xa;services/rag/vector_store.py&#xa;&#xa;• ChromaVectorStore (local)&#xa;• PineconeVectorStore (prod)&#xa;• Fernet encryption" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="440" y="320" width="260" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- Embedding Pipeline -->
+        <mxCell id="embed_pipe" value="🧮 Embedding Pipeline&#xa;&#xa;• sentence-transformers&#xa;• RecursiveCharacterTextSplitter&#xa;• Chunk: 1000 chars, overlap 200" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="440" y="480" width="260" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- RAG Service -->
+        <mxCell id="rag_svc" value="🤖 RAG Service&#xa;services/rag/rag_service.py&#xa;&#xa;• semantic_search()&#xa;• top_k_retrieval()&#xa;• context_injection()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="440" y="620" width="260" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== RIGHT: EXTERNAL ===== -->
+        <mxCell id="ext_label" value="EXTERNAL" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="1200" y="100" width="100" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- MongoDB Atlas -->
+        <mxCell id="mongo_ext" value="🗄️ MongoDB Atlas&#xa;M0 Free Tier" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="160" width="220" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Chroma -->
+        <mxCell id="chroma_ext" value="🔍 Chroma (local)&#xa;Pinecone (prod)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="300" width="220" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- LLM Cloud -->
+        <mxCell id="llm_ext" value="☁️ AWS Bedrock&#xa;(LLM Cloud)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="440" width="220" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== FLOW ARROWS ===== -->
+
+        <!-- FastAPI → ETL -->
+        <mxCell id="r1" style="rounded=1;strokeWidth=2;strokeColor=#d6b656;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="fastapi" target="etl" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ETL → JSONL -->
+        <mxCell id="r2" style="rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="etl" target="jsonl" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- JSONL → Document Store -->
+        <mxCell id="r3" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="jsonl" target="doc_store" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r3_label" value="Ingest triples" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" vertex="1" connectable="0" parent="r3"/>
+
+        <!-- Document Store → Vector Store -->
+        <mxCell id="r4" style="rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="doc_store" target="vec_store" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Vector Store → Embedding Pipeline -->
+        <mxCell id="r5" style="rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="vec_store" target="embed_pipe" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Embedding Pipeline → RAG Service -->
+        <mxCell id="r6" style="rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="embed_pipe" target="rag_svc" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Document Store → MongoDB Atlas -->
+        <mxCell id="r7" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="doc_store" target="mongo_ext" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Vector Store → Chroma -->
+        <mxCell id="r8" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="vec_store" target="chroma_ext" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- RAG Service → LLM -->
+        <mxCell id="r9" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="rag_svc" target="llm_ext" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r9_label" value="Context injection" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10" vertex="1" connectable="0" parent="r9"/>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="🔵 Blue = Existing (Frame 1+2)    🟢 Green = New (Frame 3 — RAG)    ⚪ Gray = External Stores    🟡 Yellow = Data Flow" style="text;html=1;align=left;verticalAlign=top;fontSize=11;fillColor=#f5f5f5;strokeColor=#999999;rounded=1;spacingLeft=8;spacingRight=8;spacingTop=4;spacingBottom=4;" vertex="1" parent="1">
+          <mxGeometry x="80" y="800" width="750" height="30" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

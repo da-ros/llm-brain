@@ -1,257 +1,279 @@
 ## Context
 
 This is the first change in a greenfield repo (empty git repo, Python 3.13). It is
-cross-cutting: it defines the app skeleton and conventions that all remaining thesis modules
-depend on. The project is a **multi-tenant platform** with two subscription tiers (Free/Premium),
-and a clear separation between local LLM inference (free) and AWS Bedrock with RAG + fine-tuning (premium).
+cross-cutting: it defines the microservices architecture and conventions that all remaining
+thesis modules depend on. The project is a **multi-tenant platform** with two subscription
+tiers (Free/Premium), using **Kafka** for async communication and **HTTP** for sync queries.
 
 See proposal.md — Why. Budget is ~$0 and the deployment target is a multi-tenant MVP.
-Choices favor OSS and local execution for development, with AWS ECS Fargate for production deployment.
-AWS Bedrock provides both fine-tuning and inference for the premium tier.
+Architecture: API Router (FastAPI) + Microservices (ETL, RAG, LLM, Fine-Tune) + Kafka.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- A single mountable FastAPI app that later modules attach routers to.
-- LLM access behind one interface so the concrete model is a config choice, not a code choice.
-- Clear separation between local LLM (mobile free tier) and cloud LLM (premium tier with RAG).
-- Architecture documented as C4 + deployment diagrams for the defense.
-- Docker-based development and deployment (Docker Compose local, ECS Fargate production).
-- CI that runs lint + tests on every push.
+- Microservices architecture with API Router as entry point
+- Kafka for async communication (file uploads)
+- HTTP sync for queries (chat, RAG)
+- Correlation ID (X-Request-ID) for request tracing
+- Rate limiting via AWS API Gateway (production)
+- JWT authentication at API Router level
+- MongoDB for task status and file storage (GridFS)
+- Docker-based development and deployment
+- CI that runs lint + tests on every push
 
 **Non-Goals:**
-- No real ingestion, RAG, agents, or UI yet (those are later changes).
-- No production hardening (AES-at-rest, OAuth, WAF) — explicitly out of thesis scope.
-- No fine-tuning implementation here (Objetivo 4) — only the service skeleton.
-- No API Gateway in local development — direct client → backend.
+- No monolithic backend — each service is independent
+- No WebSocket/Firebase for MVP — polling for task status
+- No service-to-service JWT (future enhancement)
+- No production hardening (WAF, OAuth) — explicitly out of thesis scope
 
 ## Architecture Decisions
 
-### Multi-Tenant with Subscription Tiers
+### 1. Microservices Architecture
 
-The platform supports multiple authenticated users, each with a subscription tier:
+**Decision**: Split the backend into independent services, each with its own Dockerfile.
+
+| Service | Port | Responsibility |
+|---------|------|----------------|
+| API Router | 8000 | JWT validation, correlation ID, routing |
+| ETL Service | 8001 | Document parsing, triple extraction |
+| RAG Service | 8002 | MongoDB, Chroma, semantic search |
+| LLM Service | 8003 | AWS Bedrock inference |
+| Fine-Tune Service | 8004 | LoRA training (background worker) |
+
+**Rationale**:
+- Independent scaling per service
+- Fault isolation (one service crash doesn't kill others)
+- Easier to test and deploy individually
+- Aligns with AWS ECS Fargate (one task per service)
+
+### 2. Kafka for Async Communication
+
+**Decision**: Use Kafka for file upload processing (heavy operations).
+
+```
+Cliente → API Router → Kafka (file.uploaded) → ETL Service
+                          │
+                          └── 202 Accepted + correlation ID
+```
+
+**Rationale**:
+- File processing (OCR, parsing) takes seconds to minutes
+- Don't block the client — return 202 immediately
+- Retry failed tasks from DLQ (Dead Letter Queue)
+- Decouple producer (Router) from consumer (ETL)
+
+### 3. HTTP Sync for Queries
+
+**Decision**: Use synchronous HTTP for chat and RAG queries.
+
+```
+Cliente → API Router → RAG Service → LLM Service → 200 Response
+```
+
+**Rationale**:
+- Queries need immediate response (2-5 seconds acceptable)
+- No benefit from async for fast operations
+- Simpler implementation and debugging
+
+### 4. Correlation ID (X-Request-ID)
+
+**Decision**: Every request gets a UUID that travels through all services.
+
+```
+Header:  X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
+Logs:    [550e8400-e29b-41d4-a716-446655440000] Processing file...
+```
+
+**Rationale**:
+- Trace requests across services for debugging
+- Link task status polling to original request
+- Essential for microservices observability
+
+### 5. Rate Limiting (AWS API Gateway)
+
+**Decision**: Use AWS API Gateway rate limiting in production.
+
+| Endpoint | Limit |
+|----------|-------|
+| POST /api/upload | 10 req/min |
+| POST /api/chat | 30 req/min |
+| GET /tasks/:id | 60 req/min |
+| GET /health | 1000 req/min |
+
+**Rationale**:
+- Protects against abuse and bugs
+- Free tier (1M requests/month)
+- Configurable per endpoint
+
+### 6. Task Status Polling
+
+**Decision**: Client polls `GET /tasks/:correlation_id` for async results.
+
+```
+1. Upload → 202 {correlation_id}
+2. Poll GET /tasks/:id every 2 seconds
+3. Response: {status: "in_progress"} or {status: "success", result: {...}}
+```
+
+**Rationale**:
+- Simple implementation, works on web and mobile
+- No WebSocket/Firebase dependency
+- Acceptable for MVP (≤100 documents)
+
+### 7. MongoDB for Task Status + Files
+
+**Decision**: MongoDB with GridFS for file storage and task tracking.
+
+```javascript
+// task_status collection
+{
+  _id: "correlation-id",
+  status: "in_progress|success|error|dlq|dlq-max",
+  service: "etl-service",
+  retries: 0,
+  max_retries: 3,
+  expires_at: ISODate("...")  // TTL auto-delete
+}
+```
+
+**Rationale**:
+- GridFS handles binary files up to 5GB
+- TTL indexes auto-clean old tasks
+- Single database for simplicity (MVP)
+- DynamoDB for production if needed later
+
+### 8. Retry Logic with DLQ
+
+**Decision**: Failed tasks retry up to MAX_RETRIES, then move to DLQ.
+
+```
+Error 5xx → Retry (retries < max_retries)
+Error 3xx/4xx → Fail (no retry)
+Max retries → dlq-max (permanent failure)
+```
+
+**Rationale**:
+- Transient errors (503) should retry
+- Client errors (422) should not retry
+- DLQ allows manual inspection of permanent failures
+
+### 9. JWT Authentication
+
+**Decision**: JWT + bcrypt at API Router level only.
+
+- Gateway validates JWT on initial request
+- Reintents from DLQ skip JWT (file already authenticated)
+- Future: service-to-service JWT for inter-service auth
+
+**Rationale**:
+- Multi-tenant requires per-user authentication
+- JWT is lightweight and stateless
+- Simpler than service mesh for MVP
+
+### 10. Multi-Tenant with Subscription Tiers
+
+**Decision**: Two tiers with different capabilities.
 
 | Tier | LLM | Context | Files | Web Access |
 |------|-----|---------|-------|------------|
-| Free | llama.rn (Llama 3.2 3B Q4_K_M) | No | No | No |
-| Premium | AWS Bedrock (fine-tuned) + RAG | Yes | Yes (images + PDFs) | Yes |
+| Free | llama.rn (on-device) | No | No | No |
+| Premium | AWS Bedrock + RAG | Yes | Yes | Yes |
 
-**Data model:**
-- `Users`: id, email, password_hash (bcrypt), subscription_tier, created_at
-- `Documents`: id, user_id (FK), type, original_path, triples_path, created_at
-- `Subscriptions`: id, user_id (FK), tier, status, started_at
-- `Embeddings`: id, document_id (FK), vector, metadata (encrypted with Fernet)
+**Rationale**:
+- Demonstrates tiered architecture
+- Free tier proves local inference works
+- Premium tier proves RAG + fine-tuning integration
 
-**Rationale:** The anteproyecto mentions "one user" referring to the data inputter for fine-tuning.
-The platform is multi-tenant from the MVP — each user has isolated data (documents, embeddings,
-triples scoped by user_id). This demonstrates tiered architecture with real subscription enforcement.
-Free tier proves local inference works; premium tier proves RAG + fine-tuning integration.
+## Data Flow
 
-### Two Backend Services
-
-| Service | Responsibility | Scaling |
-|---------|---------------|---------|
-| API Backend | Auth, orchestration, REST endpoints, subscriptions | Horizontal (ECS tasks) |
-| Fine-Tuning Service | Scheduled LoRA training, data processing | Separate ECS task, scales independently |
-
-**Rationale:** Fine-tuning is compute-intensive and runs on schedule (not request-driven).
-Separating it prevents training jobs from blocking user-facing API requests.
-
-### LLM Tool Layer vs LLM Layer
-
-| Layer | What | Purpose |
-|-------|------|---------|
-| **LLM Tool Layer** | RAG + Vector Store (Chroma/Pinecone) + MongoDB | Infrastructure that the LLM cloud uses for context retrieval |
-| **LLM Layer** | llama.rn (local) / AWS Bedrock (cloud) | The actual LLM inference |
-
-**Rationale:** The Tool Layer is not the model — it's the supporting infrastructure (vector
-search, document retrieval, embeddings). The Layer is where inference happens. This separation
-is critical for the C4 diagrams and for understanding the data flow. AWS Bedrock handles both
-fine-tuning and inference for the premium tier.
-
-### LLM Provider Abstraction
-
-Provider selected by `LLM_PROVIDER` env var at runtime. Two implementations:
-- **llama.rn**: on-device inference for quantized open-source models (Llama 3.2 3B Q4_K_M)
-- **AWS Bedrock**: cloud provider for fine-tuned models (Llama 3 8B LoRA) + inference
-
-**Rationale:** Keeps the model open per the user's requirement. Switching between providers
-requires only a config change, not code changes. AWS Bedrock provides both fine-tuning and
-inference for the premium tier, with free tier (750h/mes).
-
-### Deployment Strategy
-
-| Environment | Infrastructure | API Gateway |
-|-------------|---------------|-------------|
-| **Local** | Docker Compose | None (direct client → backend) |
-| **Production** | AWS ECS Fargate | AWS API Gateway (managed HTTPS) |
-
-**Rationale:**
-- Local: Docker Compose for fast development iteration. No API Gateway complexity.
-- Production: ECS Fargate for serverless containers (no EC2 management). AWS API Gateway
-  provides HTTPS certificates for free, rate limiting, and routing.
-- Fine-Tuning Service runs as a separate ECS task for independent scaling.
-
-### Configuration Management
-
-- **pydantic-settings** for typed config loaded from environment variables
-- `.env` file for local development
-- ECS Task Definition environment variables for production
-- Secrets (API keys) via environment variables, never hardcoded
-
-**Rationale:** 12-factor app approach. Works in both Docker Compose and ECS without code changes.
-
-### Authentication
-
-- **JWT + bcrypt** for multi-user authentication
-- `register()`: create user with email + password (bcrypt hash)
-- `login()`: validate credentials, return JWT access token
-- `verify_token()`: decode and validate JWT, extract user_id
-- `get_current_user()`: FastAPI dependency — injects authenticated user into endpoints
-- `GET /health` left public (no secrets exposed)
-- Token expiration configurable via environment variable
-
-**Rationale:** Multi-tenant platform requires per-user authentication and data isolation.
-JWT is lightweight, stateless, and integrates natively with FastAPI dependencies.
-bcrypt provides secure password hashing. OAuth federated auth is explicitly out of scope.
-
-### Security Strategy: Shift Left + Shift Right
+### Upload (Async via Kafka)
 
 ```
-DESARROLLO                                          PRODUCCIÓN
-◄───────────────────────────────────┼───────────────────────────────────►
-                                    │
-        SHIFT LEFT                 │              SHIFT RIGHT
-   (prevenir en CI)                │    (detectar en runtime)
-                                    │
-   • ruff (linting)                 │   • Health checks
-   • pytest (tests)                 │   • Rate limiting logs
-   • snyk test (deps)              │   • Anomaly detection
-   • snyk code test (SAST)         │   • Monitoring (futuro)
-   • Secret scanning               │
+1. POST /api/upload (file)
+2. API Router: validate JWT ✓
+3. API Router: generate correlationId
+4. API Router: save to MongoDB task_status {status: "in_progress"}
+5. API Router: publish to Kafka "file.uploaded"
+6. API Router: return 202 {correlation_id}
+
+7. ETL Service: consume from Kafka
+8. ETL Service: process file (parse, triples)
+9. ETL Service: publish to Kafka "task.response" {status: "success"}
+10. API Router: consume response, update MongoDB {status: "success"}
+
+11. Client: poll GET /tasks/:id
+12. API Router: return {status: "success", triples_count: 15}
 ```
 
-**Shift Left (MVP — implemented now):**
-- `snyk test --file=requirements.txt` — scans dependencies for known vulnerabilities
-- `snyk code test` — static application security testing (SAST) on Python code
-- Both run in GitHub Actions CI on every push/PR
-- Snyk free tier: 200 tests/month, sufficient for MVP
+### Query (Sync via HTTP)
 
-**Shift Right (future modules):**
-- Centralized logging (CloudWatch or similar)
-- Rate limiting monitoring via API Gateway metrics
-- Anomaly detection on LLM usage patterns
-- Alerting on suspicious access patterns
-
-**Rationale:** Security is a thesis concern (Objetivo 8 — Privacy & Scam Shield). Shift Left
-catches vulnerabilities early at zero cost (Snyk free tier). Shift Right will be implemented
-in later modules when production monitoring is needed.
-
-### Data Encryption
-
-- **TLS**: managed by AWS API Gateway (production). Local uses plain HTTP.
-- **Application-level encryption**: Fernet symmetric encryption for data in RAG
-  (documents, embeddings at rest)
-
-**Rationale:** AWS API Gateway provides HTTPS certificates at no cost. Application-level
-encryption protects sensitive user data (medical records, financial documents) in the
-vector store and document database.
-
-### Technology Stack
-
-| Layer | Technology | Rationale |
-|-------|------------|-----------|
-| Backend API | Python 3.13, FastAPI | Async-friendly, first-class pytest + httpx testing |
-| Fine-Tuning | AWS Bedrock (LoRA, managed) | Managed service, free tier, integrates with inference |
-| RAG | LangChain, Chroma/Pinecone | Industry standard for semantic retrieval |
-| Document Store | MongoDB Atlas (M0 free tier) | Flexible schema for diverse document types |
-| LLM Local | llama.rn (Llama 3.2 3B, Q4_K_M) | On-device inference, 18-25 tok/s, no cloud dependency |
-| LLM Cloud | AWS Bedrock (Llama 3 8B fine-tuned + inference) | Managed service, free tier 750h/mes, fine-tuning + inference |
-| Web | React + Chart.js | Matches anteproyecto stack |
-| Mobile | React Native | Cross-platform, supports local LLM (llama.rn integration) |
-| Infra Local | Docker Compose | Fast dev iteration |
-| Infra Prod | AWS ECS Fargate | Serverless containers, no EC2 management |
-| CI/CD | GitHub Actions | Free tier, matches stack |
-| Encryption | Fernet (data), TLS (connection) | Simple, auditable, no external dependencies |
+```
+1. POST /api/chat {message, use_rag: true}
+2. API Router: validate JWT ✓
+3. API Router: call RAG Service (HTTP) → context
+4. API Router: call LLM Service (HTTP) → response
+5. API Router: return 200 {response, context_used}
+```
 
 ## Risks / Trade-offs
 
-- [Local llama.rn not available in CI] → CI tests mock the LLM provider; live provider calls
-  are exercised manually/locally, not in CI.
-- [React Native + local LLM on mobile] → May require platform-specific optimizations;
-  prototype early to validate feasibility.
-- [Fine-tuning service complexity] → Keep it as a simple worker; expand only when a later
-  module needs more sophisticated orchestration.
-- [Config drift between environments] → Startup validation test asserts every required
-  setting has a default or is documented in `.env.example`.
-- [AWS costs] → Fargate + API Gateway are pay-per-use; MVP traffic should stay within
-  free tier limits. Bedrock free tier (750h/mes) covers MVP inference needs.
+| Risk | Mitigation |
+|------|-----------|
+| Kafka adds complexity | Use Docker Compose for local dev; managed service in prod |
+| Polling wastes resources | Acceptable for MVP (≤100 docs, 2s intervals) |
+| MongoDB GridFS limits | 5GB per file;足够 for MVP |
+| Service discovery | Use Docker DNS (container names) for local; ECS service discovery in prod |
+| Distributed transactions | Accept eventual consistency; retry logic handles failures |
 
-## Limits and Assumptions (from anteproyecto)
+## Technology Stack
 
-### Users
-- Included: Multiple authenticated users (JWT), each with Free or Premium subscription. Data isolated per user (user_id).
-- Out of scope: Social sharing between users
+| Layer | Technology | Rationale |
+|-------|------------|-----------|
+| API Router | Python 3.13, FastAPI | Async-friendly, first-class testing |
+| Microservices | Python 3.13, FastAPI | Independent deployment |
+| Message Queue | Apache Kafka | Async communication, retry, DLQ |
+| Document Store | MongoDB Atlas (GridFS) | Flexible schema, file storage |
+| Vector Store | Chroma (local) / Pinecone (prod) | Semantic search |
+| LLM Cloud | AWS Bedrock | Managed, free tier, fine-tuning |
+| LLM Local | llama.rn (mobile only) | On-device inference |
+| Web | React + Chart.js | Dashboard |
+| Mobile | React Native | Cross-platform |
+| Infra Local | Docker Compose | Fast dev iteration |
+| Infra Prod | AWS ECS Fargate + API Gateway | Serverless, managed |
+| CI/CD | GitHub Actions | Free tier |
+| Encryption | Fernet (data), TLS (connection) | Simple, auditable |
+| Trazabilidad | Correlation ID (X-Request-ID) | Request tracing |
 
-### Languages
-- Included: English (UI) + Spanish document support (LLM infers)
-- Out of scope: Multilingual UI
+## Design Patterns & SOLID Principles
 
-### Platforms
-- Included: Web app; proxy LLM runs on personal smartphone/laptop (modest CPU/GPU)
-- Out of scope: Voice assistants
+### Patterns Used
 
-### Data Types
-- Included: Text, PDF, static images
-- Out of scope: Live audio streaming, video
+| Pattern | Where | Purpose |
+|---------|-------|---------|
+| **API Gateway** | AWS API Gateway | Rate limiting, HTTPS, routing |
+| **Message Broker** | Kafka | Async communication, retry, DLQ |
+| **CQRS** | Sync queries vs async writes | Different patterns for different operations |
+| **Retry + DLQ** | Task status handling | Transient error recovery |
+| **Facade** | API Router | Single entry point for all clients |
 
-### Security
-- Included: JWT + bcrypt authentication (register, login, verify_token, get_current_user)
-- Out of scope: AES-at-rest, GDPR compliance, federated OAuth
+### SOLID Principles Applied
 
-### Privacy
-- Included: On-device processing when possible; local logs
-- Out of scope: Zero-knowledge cloud
-
-### Continuous Learning
-- Included: Regular manual fine-tuning triggered by agent or admin
-- Out of scope: Real-time auto-retraining
-
-### Scalability
-- Included: Multiple users, 100 documents per user in DB, 1 GB embeddings total
-- Out of scope: High availability, sharding, thousands/millions of documents
-
-### Simulations
-- Included: Deterministic "what-if" analysis with simple decision tree
-- Out of scope: Stochastic optimization, Monte Carlo simulation
-
-### Fraud Detection
-- Included: Heuristics + vector similarity in emails/SMS/messages
-- Out of scope: Full-scale supervised models, voice spoofing
-
-### Ethics and Governance
-- Included: Responsible use guidelines, explainability panel
-- Out of scope: External audit, ISO/IEC certifications
-
-## Migration Plan
-
-Not applicable — greenfield. Rollback = revert the change branch.
+| Principle | Application |
+|-----------|-------------|
+| **S** | Each service has ONE responsibility (ETL, RAG, LLM) |
+| **O** | Add new service by creating new Dockerfile — zero changes to Router |
+| **L** | Any service can be replaced (Chroma → Pinecone) without affecting others |
+| **I** | Services expose minimal APIs (ETL: /process, RAG: /search) |
+| **D** | API Router depends on service abstractions (HTTP endpoints), not implementations |
 
 ## Decisions Made
 
-### Default Open-Source Model
-- **Decision:** Llama 3.2 3B (on-device, free tier) + Llama 3 8B (cloud, premium tier)
-- **Rationale:** 3B fits in 6GB RAM phones at 18-25 tok/s; 8B runs on Bedrock servers
-  with no mobile constraints. Q4_K_M quantization for on-device (recommended for mobile).
-
-### API Gateway
-- **Decision:** AWS API Gateway (not Kong)
-- **Rationale:** Managed service, free HTTPS certificates, rate limiting, routing.
-  No DevOps overhead. Already in AWS ecosystem (ECS Fargate).
-
-### Mobile LLM Integration
-- **Decision:** `llama.rn` (not ollama-js, not react-native-ollama)
-- **Rationale:** `llama.rn` is the React Native binding for llama.cpp — runs models
-  ON DEVICE with GPU/NPU acceleration (Metal iOS, OpenCL Android).
-  Ollama is a server runtime, not a mobile library. `llama.rn` loads GGUF models
-  (same format as Ollama) directly on the device.
+- Architecture: Microservices (not monolith)
+- Communication: Kafka (async writes) + HTTP (sync reads)
+- Correlation ID: X-Request-ID header + MongoDB task_status
+- Rate Limiting: AWS API Gateway (production)
+- Task Status: MongoDB with TTL auto-cleanup
+- Retry: MAX_RETRIES=3, DLQ for permanent failures
+- JWT: API Router only (no service-to-service JWT yet)
+- Storage: MongoDB GridFS for files (DynamoDB future)

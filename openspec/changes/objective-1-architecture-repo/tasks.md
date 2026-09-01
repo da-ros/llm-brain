@@ -7,13 +7,10 @@
       — Clients (web/mobile), API Gateway, backends, LLM layers, data stores, external systems
 - [x] A.2 C4 Level 2 (Containers) diagram — `diagrams/c4-container.drawio`
       — Docker containers: API Backend, Fine-Tuning Service, RAG, MongoDB, Chroma, API Gateway
-- [x] A.3 C4 Level 3 (Components) diagrams — `diagrams/c4-component-api.drawio`, `diagrams/c4-component-mobile.drawio`
-      — Internal structure: auth, config, LLM provider layer, routers, mobile components
-- [x] A.4 MCP agent-flow diagram (Ingestor → Razonador → Evaluador) — `diagrams/mcp-agent-flow.drawio`
-- [x] A.5 Deployment diagram (Docker Compose local + AWS ECS Fargate) — `diagrams/deployment.drawio`
+- [x] A.3 C4 Level 3 (Components) diagram — `diagrams/c4-component-api.drawio`
+      — Internal structure: FastAPI App, Config, Auth (JWT+bcrypt), LLM Provider Protocol, Routers, Dependencies
+- [x] A.4 Deployment diagram (Docker Compose local + AWS ECS Fargate) — `diagrams/deployment.drawio`
       — Two views: local dev (direct client → backend) and production (via API Gateway)
-- [x] A.6 OSS stack decision record (chosen tools + rationale) — `diagrams/tech-stack.drawio`
-      — Document every technology choice and WHY it was selected
 - [ ] A.7 Validate architecture with tutor / align on scope before proceeding to code
 
 ## B. Repository Foundation
