@@ -1,0 +1,102 @@
+<mxfile host="app.diagrams.net" modified="2026-08-31T00:00:00.000Z" agent="Claude" version="24.0.0" type="device">
+  <diagram id="c4-context" name="C4 Level 1 — System Context">
+    <mxGraphModel dx="2200" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="C4 Level 1 — System Context&#xa;llm-brain (AI-Augmented Digital Brain)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="750" y="30" width="500" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== LEFT COLUMN: ACTORS ===== -->
+
+        <!-- Person: User -->
+        <mxCell id="user" value="👤 User&#xa;(Multi-tenant)" style="shape=mxgraph.basic.smiley;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;html=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="250" width="160" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="user_note" value="Web (Premium)&#xa;Mobile (Free + Premium)" style="text;html=1;align=center;verticalAlign=top;fontSize=10;fillColor=none;strokeColor=none;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="80" y="395" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Person: Admin -->
+        <mxCell id="admin" value="🔧 Admin&#xa;(Fine-tuning trigger)" style="shape=mxgraph.basic.smiley;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;html=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="480" width="160" height="140" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== CENTER: SYSTEM ===== -->
+
+        <!-- System: llm-brain -->
+        <mxCell id="system" value="🧠 llm-brain&#xa;AI-Augmented Digital Brain&#xa;&#xa;Multi-tenant platform for&#xa;personal knowledge management&#xa;with LLMs and RAG.&#xa;JWT auth, per-user data isolation." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontStyle=1;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="600" y="300" width="350" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== RIGHT COLUMN: EXTERNAL SYSTEMS ===== -->
+
+        <!-- External: AWS Bedrock -->
+        <mxCell id="bedrock" value="☁️ AWS Bedrock&#xa;Cloud LLM Service&#xa;&#xa;Llama 3 8B (fine-tuned)&#xa;LoRA fine-tuning&#xa;Inference API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="180" width="250" height="140" as="geometry"/>
+        </mxCell>
+
+        <!-- External: MongoDB Atlas -->
+        <mxCell id="mongo" value="🗄️ MongoDB Atlas&#xa;Document Store" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="380" width="250" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- External: Chroma / Pinecone -->
+        <mxCell id="chroma" value="🔍 Chroma / Pinecone&#xa;Vector Store (Embeddings)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="530" width="250" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== ARROWS ===== -->
+
+        <!-- User → System -->
+        <mxCell id="r1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" source="user" target="system" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r1_label" value="Uses (Free/Premium)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1" vertex="1" connectable="0" parent="r1">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- Admin → System -->
+        <mxCell id="r2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;" edge="1" source="admin" target="system" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r2_label" value="Triggers fine-tuning" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1" vertex="1" connectable="0" parent="r2">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- System → Bedrock -->
+        <mxCell id="r3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="system" target="bedrock" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r3_label" value="Premium: LLM inference + fine-tuning" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11" vertex="1" connectable="0" parent="r3">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- System → MongoDB -->
+        <mxCell id="r4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="system" target="mongo" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r4_label" value="Stores documents" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11" vertex="1" connectable="0" parent="r4">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- System → Chroma -->
+        <mxCell id="r5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="system" target="chroma" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r5_label" value="Stores embeddings" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11" vertex="1" connectable="0" parent="r5">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="🔵 Blue = Person/Actor    🟡 Yellow = System (llm-brain)    ⚪ Gray = External System" style="text;html=1;align=left;verticalAlign=top;fontSize=11;fillColor=#f5f5f5;strokeColor=#999999;rounded=1;spacingLeft=8;spacingRight=8;spacingTop=4;spacingBottom=4;" vertex="1" parent="1">
+          <mxGeometry x="100" y="700" width="550" height="30" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

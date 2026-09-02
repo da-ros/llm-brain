@@ -1,0 +1,11 @@
+schema: spec-driven
+created: 2026-08-27
+updated: 2026-08-31
+specs:
+  - specs/hybrid-store-rag/spec.md
+output:
+  diagrams:
+    - rag-architecture.drawio
+    - rag-dataflow.drawio
+  documents:
+    - justificacion-ejemplo.md

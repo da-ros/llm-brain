@@ -2,7 +2,7 @@ schema: spec-driven
 
 context: |
   Project: "AI-Augmented Digital Brain" (llm-brain) — MSc Software thesis MVP.
-  Goal: a single-tenant personal LLM/OS emulating a Brain-LLM symbiosis for infinite
+  Goal: a multi-tenant personal LLM/OS emulating a Brain-LLM symbiosis for infinite
   memory, personal knowledge management (PKM), advanced reasoning and decision support.
 
   Authors: Pedro David Rodas Mantilla, Giovanny Daniel Jacome Cajamarca.
@@ -14,27 +14,37 @@ context: |
        -> subject-predicate-object JSON triples + normalized metadata; >=100 items.
     3. Hybrid store + RAG: MongoDB Atlas (docs) + Chroma/Pinecone (embeddings) linked by
        unique ID; LangChain Top-k semantic retrieval.
-    4. LLM cloud fine-tune (LoRA) + on-device proxy (GGUF-Q4 via ollama, Docker).
+    4. LLM cloud fine-tune (LoRA on AWS Bedrock) + on-device (llama.rn, Llama 3.2 3B Q4_K_M).
     5. Symbiotic Learning Loop: MCP agents Ingestor / Razonador (Reasoner) / Evaluador,
        manual incremental fine-tuning batches.
     6. Decision-Support Simulator: deterministic what-if, 3-5 scenarios w/ explicit
        traceable assumptions.
-    7. Life Analytics: React + Chart.js dashboard, >=2 interactive correlations.
+    7. Life Analytics: React + Chart.js dashboard, >=2 interactive correlations (sleep/productivity).
     8. Privacy & Scam Shield: phishing/scam detection via heuristics + embedding similarity.
     9. Alpha validation: pytest, FastAPI+Mongo integration, KPIs (mean latency, RAG Top-3
        precision), video demo.
 
   Tech stack (OSS, ~$0 budget):
-    - Backend: Python 3.13, FastAPI, LangChain, llama-cpp-python.
+    - Backend: Python 3.13, FastAPI, LangChain.
     - Frontend: React + Chart.js.
     - Data: MongoDB Atlas M0, Chroma (local Docker) or Pinecone Starter.
-    - LLM: MODEL-AGNOSTIC. Prefer open-source models (e.g. Qwen/DeepSeek/GLM family) or
-      cloud via OpenRouter; selectable through config/env, not hardcoded.
-    - Infra: Docker Compose, ollama on-device proxy, GitHub Actions CI, Railway/Fly.io.
-    - Fine-tuning: LoRA on Google Colab (free/Pro) or AWS Bedrock free tier.
+    - LLM: MODEL-AGNOSTIC. On-device: Llama 3.2 3B (Q4_K_M) via llama.rn.
+      Cloud: Llama 3 8B (fine-tuned LoRA) via AWS Bedrock. Selectable through config/env.
+    - Infra: Docker Compose, GitHub Actions CI, AWS ECS Fargate, AWS API Gateway.
+    - Fine-tuning: AWS Bedrock (LoRA, managed) — free tier 750h/mes.
+    - Inference (premium): AWS Bedrock (managed endpoint).
 
-  Constraints & non-goals (out of MVP scope): multi-user/social sharing, multilingual UI,
-  voice assistants, live audio/video, AES-at-rest, HTTPS/GDPR/OAuth, zero-knowledge cloud,
+  Subscription profiles (multi-tenant):
+    - Free: llama.rn (Llama 3.2 3B Q4_K_M on-device), sin contexto, sin archivos.
+    - Premium: AWS Bedrock (Llama 3 8B fine-tuned) + RAG, archivos, web dashboard.
+    - Each user authenticates (JWT + bcrypt) and has isolated data (user_id).
+
+  Frames ↔ Thesis objectives mapping:
+    Each frame covers one or more "Objetivos Específicos" from the thesis plan.
+    The thesis objectives are preserved as academic reference; frames are the technical execution.
+
+  Constraints & non-goals (out of MVP scope): social sharing between users, multilingual UI,
+  voice assistants, live audio/video, AES-at-rest, GDPR, OAuth federado, zero-knowledge cloud,
   real-time auto-retraining, HA/sharding/millions of docs, Monte Carlo/stochastic sims,
   supervised full-scale fraud models, external audits/ISO certs.
 
@@ -42,24 +52,187 @@ context: |
   versions in requirements.txt; keep a Markdown experiment log for every fine-tune
   (dataset, hyperparams, metrics); English UI, Spanish document support.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Truth hierarchy (in case of conflict):
+    1. context.txt — Absolute truth. Defines scope, limits, and rules.
+    2. Frame 1 outputs — Architecture base, C4 diagrams, backend code.
+    3. openspec/config.yaml — Execution order and dependencies.
+    4. Frame files (proposal, design, tasks, specs) — Align with context.txt.
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+  Output convention per frame:
+    Each frame has an output/ directory with:
+    - output/diagrams/ — Architecture base + data flow diagrams (.drawio)
+    - output/documents/ — Justifications, component explanations, design patterns & SOLID
+
+# Per-artifact rules
+rules:
+  proposal:
+    - Always include "Context from Frame X" section citing dependency outputs
+    - Always include "Output" section with directory structure
+    - Include "Capabilities" section (New + Modified)
+    - Include "Execution Order" section
+  design:
+    - Always include "Design Patterns & SOLID Principles" section
+    - Document all patterns used with table (Pattern | Where | Purpose)
+    - Document all SOLID principles applied with table (Principle | Application)
+    - Include "Data Flow" section with ASCII diagram
+  tasks:
+    - Break tasks into chunks of max 2 hours
+    - Always include Section F: Documentation (output/documents/)
+    - Reference output directory in task descriptions
+  specs:
+    - Use Given/When/Then scenario format
+    - Include "MODIFIED Requirements" section for changes to existing frames
+
+# Per-operation guidance
+operations:
+  apply:
+    guidance:
+      - Validate XML of all .drawio files before marking complete
+      - Run xmllint on diagrams to catch syntax errors
+      - Check that output/ structure matches proposal.md Output section
+  archive:
+    guidance:
+      - Summarize the archive outcome before finishing
+      - Verify all tasks in tasks.md are checked
+      - Ensure spec.md requirements have matching test coverage
+
+# Frames by execution order
+# Each frame maps to a directory under openspec/changes/
+# anteproyecto_objectives: which thesis "Objetivos Específicos" this frame covers
+# Output convention: each frame has output/diagrams/ and output/documents/
+frames:
+  frame-1:
+    directory: objective-1-0-architecture-repo
+    title: "Architecture & Repository Foundation"
+    description: "C4 docs, MCP diagram, OSS stack, CI, JWT auth, user data model, config, LLM provider protocol, FastAPI skeleton"
+    anteproyecto_objectives:
+      - "Objetivo Específico 1 (Architecture)"
+      - "Objetivo Específico 9 (CI/test infrastructure)"
+    depends_on: []
+    execution_order: 1
+    output:
+      diagrams:
+        - c4-context.drawio
+        - c4-container.drawio
+        - c4-component-api.drawio
+        - deployment.drawio
+
+  frame-1-1:
+    directory: objective-1-1-api-router
+    title: "API Router (Gateway)"
+    description: "FastAPI router with JWT auth, correlation ID, Kafka integration, task status polling"
+    anteproyecto_objectives:
+      - "Objetivo Específico 1 (Architecture - API Router)"
+    depends_on: ["frame-1"]
+    execution_order: 2
+    output:
+      diagrams:
+        - api-router-architecture.drawio
+        - api-router-dataflow.drawio
+      documents:
+        - justificacion-ejemplo.md
+
+  frame-2:
+    directory: objective-2-memory-distillation
+    title: "One-Tap Memory Distillation"
+    description: "Python ETL (Tesseract OCR, PDF/HTML/EML parsers) -> JSON triples + metadata; >=100 items"
+    anteproyecto_objectives:
+      - "Objetivo Específico 2 (ETL pipeline)"
+    depends_on: ["frame-1-1"]
+    execution_order: 3
+    parallel_with: ["frame-3"]
+    output:
+      diagrams:
+        - etl-architecture.drawio
+        - etl-dataflow.drawio
+      documents:
+        - justificacion-ejemplo.md
+
+  frame-3:
+    directory: objective-3-hybrid-store-rag
+    title: "Hybrid Store + RAG"
+    description: "MongoDB Atlas (docs) + Chroma/Pinecone (embeddings); LangChain Top-k retrieval"
+    anteproyecto_objectives:
+      - "Objetivo Específico 3 (Hybrid store)"
+    depends_on: ["frame-1-1"]
+    execution_order: 3
+    parallel_with: ["frame-2"]
+    output:
+      diagrams:
+        - rag-architecture.drawio
+        - rag-dataflow.drawio
+      documents:
+        - justificacion-ejemplo.md
+
+  frame-4:
+    directory: objective-4-llm-inference-finetuning
+    title: "LLM Cloud (Bedrock) + Fine-Tuning Services"
+    description: "LLM inference service (port 8003) and LoRA fine-tuning service (port 8004) on AWS Bedrock. On-device LLM (llama.rn) is in Frame 10."
+    anteproyecto_objectives:
+      - "Objetivo Específico 4 (LLM principal)"
+    depends_on: ["frame-2"]
+    execution_order: 3
+    services:
+      - name: llm-service
+        directory: services/llm
+        port: 8003
+      - name: finetune-service
+        directory: services/finetune
+        port: 8004
+
+  frame-5:
+    directory: objective-5-symbiotic-learning
+    title: "Symbiotic Learning Loop (MCP Agents)"
+    description: "MCP agents Ingestor / Razonador / Evaluador; manual incremental fine-tuning batches"
+    anteproyecto_objectives:
+      - "Objetivo Específico 5 (Learning loop)"
+    depends_on: ["frame-2", "frame-3", "frame-4"]
+    execution_order: 4
+
+  frame-6:
+    directory: objective-6-decision-support
+    title: "Decision-Support Simulator"
+    description: "Deterministic what-if analysis, 3-5 scenarios with explicit traceable assumptions"
+    anteproyecto_objectives:
+      - "Objetivo Específico 6 (Decision support)"
+    depends_on: ["frame-1", "frame-3"]
+    execution_order: 5
+    parallel_with: ["frame-8"]
+
+  frame-7:
+    directory: objective-7-life-analytics
+    title: "Life Analytics (Frontend)"
+    description: "React + Chart.js dashboard, >=2 interactive correlations (sleep/productivity)"
+    anteproyecto_objectives:
+      - "Objetivo Específico 7 (Analytics dashboard)"
+    depends_on: ["frame-6", "frame-8"]
+    execution_order: 7
+
+  frame-8:
+    directory: objective-8-privacy-shield
+    title: "Privacy & Scam Shield"
+    description: "Phishing/scam detection via heuristics + embedding similarity; alert system"
+    anteproyecto_objectives:
+      - "Objetivo Específico 8 (Privacy shield)"
+    depends_on: ["frame-1", "frame-3"]
+    execution_order: 5
+    parallel_with: ["frame-6"]
+
+  frame-9:
+    directory: objective-9-alpha-validation
+    title: "Alpha Validation + KPIs + Demo"
+    description: "KPI measurement (latency, RAG Top-3 precision), video demo"
+    anteproyecto_objectives:
+      - "Objetivo Específico 9 (Validation)"
+    depends_on: ["frame-1", "frame-2", "frame-3", "frame-4", "frame-5", "frame-6", "frame-7", "frame-8", "frame-10"]
+    execution_order: 9
+
+  frame-10:
+    directory: objective-10-mobile-app
+    title: "Mobile App (React Native)"
+    description: "React Native app structure, auth, navigation, llama.rn integration for free tier"
+    anteproyecto_objectives:
+      - "Objetivo Específico 1 (mobile foundation)"
+      - "Objetivo Específico 4 (llama.rn on-device)"
+    depends_on: ["frame-4"]
+    execution_order: 8

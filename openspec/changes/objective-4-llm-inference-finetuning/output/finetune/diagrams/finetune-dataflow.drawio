@@ -1,0 +1,166 @@
+<mxfile host="65bd71144e">
+    <diagram id="finetune-dataflow" name="Frame 4 — Fine-Tune Service Data Flow">
+        <mxGraphModel dx="1864" dy="724" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1600" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=20;fontStyle=1" value="Frame 4 — Fine-Tune Service Data Flow" vertex="1">
+                    <mxGeometry height="60" width="600" x="900" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow1_title" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" value="FLOW 1: SUBMIT TRAINING JOB (Async — hours)" vertex="1">
+                    <mxGeometry height="30" width="450" x="100" y="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_trigger" parent="1" style="shape=mxgraph.basic.smiley;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;html=1;" value="Agent /&#xa;Manual" vertex="1">
+                    <mxGeometry height="70" width="100" x="100" y="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_ft" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" value="Fine-Tune Service&#xa;POST /train" vertex="1">
+                    <mxGeometry height="70" width="150" x="260" y="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_validate" parent="1" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" value="Validate dataset&#xa;exists?" vertex="1">
+                    <mxGeometry height="50" width="130" x="470" y="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_convert" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" value="convert_triples()&#xa;JSONL → Bedrock format&#xa;{input, output}" vertex="1">
+                    <mxGeometry height="70" width="160" x="660" y="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_submit" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" value="submit_job()&#xa;Generate job_id&#xa;Status: submitted" vertex="1">
+                    <mxGeometry height="70" width="150" x="880" y="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="s6_bedrock" parent="1" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;" value="AWS Bedrock&#xa;LoRA Training" vertex="1">
+                    <mxGeometry height="70" width="150" x="1100" y="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="s7_store" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;fontStyle=1;" value="Job Store&#xa;(in-memory)" vertex="1">
+                    <mxGeometry height="70" width="120" x="895" y="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="s8_response" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" value="202 Accepted&#xa;{job_id, status}" vertex="1">
+                    <mxGeometry height="60" width="140" x="260" y="260" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_a1" edge="1" parent="1" source="s1_trigger" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#6c8ebf;" target="s2_ft">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_a1_label" connectable="0" parent="f1_a1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" value="HTTP POST" vertex="1">
+                    <mxGeometry relative="1" x="-0.1" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f1_a2" edge="1" parent="1" source="s2_ft" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#82b366;" target="s3_validate">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_a3" edge="1" parent="1" source="s3_validate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#82b366;" target="s4_convert">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_a3_label" connectable="0" parent="f1_a3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#82b366;" value="✓ valid" vertex="1">
+                    <mxGeometry relative="1" x="-0.1" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f1_a4" edge="1" parent="1" source="s4_convert" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#82b366;" target="s5_submit">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_a5" edge="1" parent="1" source="s5_submit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#d79b00;" target="s6_bedrock">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_a5_label" connectable="0" parent="f1_a5" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" value="Submit job" vertex="1">
+                    <mxGeometry relative="1" x="-0.1" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f1_a6" edge="1" parent="1" source="s5_submit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#82b366;" target="s7_store">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_a6_label" connectable="0" parent="f1_a6" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" value="Save job" vertex="1">
+                    <mxGeometry relative="1" x="-0.1" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f1_r1" edge="1" parent="1" source="s5_submit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=1;strokeColor=#999;dashed=1;" target="s8_response">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="955" y="240"/>
+                            <mxPoint x="330" y="240"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f1_r1_label" connectable="0" parent="f1_r1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#999;" value="202 Accepted" vertex="1">
+                    <mxGeometry relative="1" x="-0.1" as="geometry">
+                        <mxPoint y="12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="flow2_title" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" value="FLOW 2: POLL TRAINING STATUS (Sync — 1s timeout)" vertex="1">
+                    <mxGeometry height="30" width="450" x="100" y="380" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_trigger" parent="1" style="shape=mxgraph.basic.smiley;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;html=1;" value="Agent /&#xa;Manual" vertex="1">
+                    <mxGeometry height="70" width="100" x="100" y="513" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_ft_status" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" value="Fine-Tune Service&#xa;GET /status/:job_id" vertex="1">
+                    <mxGeometry height="70" width="170" x="260" y="513" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_store" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;fontStyle=1;" value="Job Store&#xa;(in-memory)" vertex="1">
+                    <mxGeometry height="70" width="120" x="500" y="513" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_response" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" value="200 OK&#xa;{status, metrics,&#xa;model_version}" vertex="1">
+                    <mxGeometry height="70" width="160" x="700" y="513" as="geometry"/>
+                </mxCell>
+                <mxCell id="statuses_title" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontStyle=5;fontColor=#333333" value="Status Values:" vertex="1">
+                    <mxGeometry height="20" width="100" x="100" y="613" as="geometry"/>
+                </mxCell>
+                <mxCell id="status_submitted" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=10;fontStyle=1;" value="submitted" vertex="1">
+                    <mxGeometry height="30" width="90" x="210" y="603" as="geometry"/>
+                </mxCell>
+                <mxCell id="status_progress" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;fontStyle=1;" value="in_progress" vertex="1">
+                    <mxGeometry height="30" width="100" x="310" y="603" as="geometry"/>
+                </mxCell>
+                <mxCell id="status_completed" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" value="completed" vertex="1">
+                    <mxGeometry height="30" width="90" x="420" y="603" as="geometry"/>
+                </mxCell>
+                <mxCell id="status_failed" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" value="failed" vertex="1">
+                    <mxGeometry height="30" width="70" x="520" y="603" as="geometry"/>
+                </mxCell>
+                <mxCell id="status_cancelled" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;fontStyle=1;" value="cancelled" vertex="1">
+                    <mxGeometry height="30" width="90" x="600" y="603" as="geometry"/>
+                </mxCell>
+                <mxCell id="f2_a1" edge="1" parent="1" source="s2_trigger" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#6c8ebf;" target="s2_ft_status">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f2_a1_label" connectable="0" parent="f2_a1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" value="HTTP GET" vertex="1">
+                    <mxGeometry relative="1" x="-0.1" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f2_a2" edge="1" parent="1" source="s2_ft_status" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#82b366;" target="s2_store">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f2_a2_label" connectable="0" parent="f2_a2" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" value="Query" vertex="1">
+                    <mxGeometry relative="1" x="-0.1" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f2_a3" edge="1" parent="1" source="s2_store" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=1;strokeColor=#999;dashed=1;" target="s2_response">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="err_404" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" value="Job not found&#xa;→ 404" vertex="1">
+                    <mxGeometry height="50" width="120" x="285" y="430" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_ft_to_404" edge="1" parent="1" source="s2_ft_status" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=1;strokeColor=#b85450;dashed=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="err_404">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="320" y="523" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="notes_title" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#333333" value="KEY DESIGN NOTES" vertex="1">
+                    <mxGeometry height="30" width="200" x="100" y="680" as="geometry"/>
+                </mxCell>
+                <mxCell id="note1" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="• Training jobs are async — can take hours" vertex="1">
+                    <mxGeometry height="25" width="400" x="100" y="710" as="geometry"/>
+                </mxCell>
+                <mxCell id="note2" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="• In-memory job store (replaced by MongoDB when Bedrock integration is real)" vertex="1">
+                    <mxGeometry height="25" width="500" x="100" y="740" as="geometry"/>
+                </mxCell>
+                <mxCell id="note3" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="• Correlation ID propagated via X-Request-ID header" vertex="1">
+                    <mxGeometry height="25" width="400" x="100" y="770" as="geometry"/>
+                </mxCell>
+                <mxCell id="note4" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="• POST /train returns 202 (async pattern, matches api-router upload)" vertex="1">
+                    <mxGeometry height="25" width="500" x="100" y="800" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
