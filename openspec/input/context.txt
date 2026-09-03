@@ -63,7 +63,9 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 │                    Puerto 8000 · JWT + Correlation ID                   │
 │                                                                         │
 │  POST /api/upload  → Kafka (async) → 202 + polling                      │
-│  POST /api/chat    → HTTP sync    → 200 + response                      │
+│  POST /api/chat    → HTTP sync    → Agents (premium) / on-device (free) │
+│  POST /api/sessions/end → 202 (premium, cierra sesión de agentes)       │
+│  POST /api/finetune → 202 (trigger manual de LoRA)                      │
 │  GET  /tasks/:id   → MongoDB       → 200 + status                       │
 │  GET  /health      → HTTP sync    → 200                                 │
 └────────────┬────────────────────────────────────┬───────────────────────┘
@@ -76,20 +78,25 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 │ Topics:             │              │ ┌─────────────────┐ │
 │ • file.uploaded     │◀─────────────│ │  ETL Service    │ │
 │ • task.response     │─────────────▶│ │  Puerto 8001    │ │
+│ • session.turn.completed           │ └─────────────────┘ │
+│                     │              │ ┌─────────────────┐ │
+│                     │              │ │  RAG Service    │ │
+│                     │              │ │  Puerto 8002    │ │
 │                     │              │ └─────────────────┘ │
-└─────────────────────┘              │ ┌─────────────────┐ │
-                                     │ │  RAG Service    │ │
-                                     │ │  Puerto 8002    │ │
-                                     │ └─────────────────┘ │
-                                     │ ┌─────────────────┐ │
-                                     │ │  LLM Service    │ │
-                                     │ │  Puerto 8003    │ │
-                                     │ └─────────────────┘ │
-                                     │ ┌─────────────────┐ │
-                                     │ │ Fine-Tune Svc   │ │
-                                     │ │ Puerto 8004     │ │
-                                     │ └─────────────────┘ │
-                                     └─────────────────────┘
+│                     │              │ ┌─────────────────┐ │
+│                     │              │ │  LLM Service    │ │
+│                     │              │ │  Puerto 8003    │ │
+│                     │              │ └─────────────────┘ │
+│                     │              │ ┌─────────────────┐ │
+│                     │              │ │ Fine-Tune Svc   │ │
+│                     │              │ │ Puerto 8004     │ │
+│                     │              │ └─────────────────┘ │
+│                     │              │ ┌─────────────────┐ │
+│                     │              │ │ Agents Service  │ │
+│                     │              │ │ Puerto 8006     │ │
+│                     │              │ │ LangGraph+MCP   │ │
+│                     │              │ └─────────────────┘ │
+└─────────────────────┘              └─────────────────────┘
                                               │
                                               ▼
                                      ┌─────────────────────┐
@@ -110,18 +117,21 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 | **RAG Service** | 8002 | MongoDB, Chroma/Pinecone, semantic search, context injection |
 | **LLM Service** | 8003 | AWS Bedrock inference, model management |
 | **Fine-Tune Service** | 8004 | LoRA training (worker separado, background processing) |
-| **Kafka** | 9092 | Message queue async para operaciones pesadas |
-| **MongoDB** | 27017 | task_status, uploaded_files (GridFS), triples |
 | **Chroma** | 8005 | Vector embeddings (local dev) |
+| **Agents Service** | 8006 | Bucle simbiótico: LangGraph (`reason_graph` + `learn_graph`) + MCP (Ingestor, Razonador, Evaluador). Premium only. |
+| **Kafka** | 9092 | Message queue async para operaciones pesadas |
+| **MongoDB** | 27017 | task_status, uploaded_files (GridFS), triples, agent_interactions, agent_feedback, finetune_batches |
 
 ### Comunicación entre servicios
 
 | Operación | Tipo | Flujo | Timeout |
 |-----------|------|-------|---------|
 | **Upload de archivo** | Async (Kafka) | Router → Kafka → 202 → Polling | 300s max |
-| **Chat / Query** | Sync (HTTP) | Router → RAG → LLM → 200 | 30s max |
+| **Chat / Query (Premium)** | Sync (HTTP) | Router → Agents `reason_graph` → RAG + LLM → 200 | 30s max |
+| **Chat / Query (Free)** | Sync | On-device llama.rn (Frame 10); sin Agents ni RAG | ≤2s on-device |
+| **Session turn (aprendizaje)** | Async (Kafka) | Router publica `session.turn.completed` → Agents `learn_graph` (Ingestor → Evaluador) | — |
 | **Task status** | Sync (HTTP) | Router → MongoDB → 200 | 1s max |
-| **Fine-tuning** | Async (Kafka) | Router → Kafka → 202 → Polling | Horas |
+| **Fine-tuning** | Async | Router → Agents trigger manual → Fine-Tune `POST /train` → 202 → Polling | Horas |
 
 ### Correlation ID (X-Request-ID)
 
@@ -191,11 +201,14 @@ TASK_STATUS_TTL_DAYS=30
 | task_status | MongoDB | MongoDB |
 | Triples (JSONL) | filesystem | filesystem |
 | Embeddings | Chroma | Pinecone (futuro) |
+| Agent interactions / feedback / batches | MongoDB | MongoDB |
 
 Rate Limiting (AWS API Gateway):
 ```
 POST /api/upload:  10 req/min   (upload es pesado)
 POST /api/chat:    30 req/min   (chat es ligero)
+POST /api/sessions/end: 30 req/min
+POST /api/finetune: 5 req/min   (entrenamiento es pesado)
 GET  /tasks/:id:   60 req/min   (polling)
 GET  /health:      1000 req/min (monitoreo)
 ```
@@ -209,6 +222,23 @@ GET  /health:      1000 req/min (monitoreo)
 - **TLS**: manejado por AWS API Gateway (certificado managed, sin costo adicional)
 
 ## Módulos de valor (del anteproyecto)
+
+### Bucle de aprendizaje simbiótico (Frame 5 — Agents Service)
+
+Microservicio en puerto **8006**. Orquestación con **LangGraph** (no LangChain
+AgentExecutor). LangChain se queda en el servicio RAG (Frame 3).
+
+Dos grafos compilados:
+- **`reason_graph`** (sync, chat premium): retrieve_context → generate_answer → extract_assumptions
+- **`learn_graph`** (async, Kafka `session.turn.completed`): ingest_turn → evaluate_turn → maybe_append_batch
+
+Tres agentes MCP (herramientas HTTP): **Ingestor**, **Razonador**, **Evaluador**.
+El Evaluador escribe feedback y arma el lote semanal; **no** lanza fine-tuning.
+El entrenamiento LoRA se dispara solo con `POST /api/finetune` (manual).
+Free tier no usa este bucle (sin archivos, sin contexto RAG).
+
+Los nodos llaman a RAG (8002), LLM (8003) y Fine-Tune (8004) por HTTP. No hay
+acceso directo a Bedrock ni a Chroma desde Agents Service.
 
 ### Decision-Support Simulator
 Módulo "what-if" que genera 3-5 escenarios con supuestos explícitos y trazabilidad.
@@ -251,6 +281,7 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 | Message Queue | Apache Kafka (async communication) |
 | Fine-Tuning | AWS Bedrock (LoRA, managed) |
 | RAG | LangChain, Chroma/Pinecone |
+| Agents / bucle simbiótico | LangGraph (orquestación) + MCP tool contracts; nodos HTTP hacia RAG/LLM/Fine-Tune |
 | Document Store | MongoDB Atlas (GridFS para archivos binarios) |
 | LLM Local | llama.rn (Llama 3.2 3B, Q4_K_M) — mobile only |
 | LLM Cloud | AWS Bedrock (Llama 3 8B fine-tuned + inference) |
@@ -342,7 +373,11 @@ Cada paso indica qué se hará, cómo se ejecutará y para qué contribuye al lo
 
 4. **LLM principal on-cloud + LLM on-device**: Fine-tuning LoRA (5 épocas) en AWS Bedrock (Llama 3 8B). Inferencia premium en AWS Bedrock. On-device con llama.rn (Llama 3.2 3B Q4_K_M) para free tier. Latencia objetivo: ≤2s on-device (>18 tok/s).
 
-5. **Bucle de aprendizaje simbiótico**: Tres agentes MCP (Ingestor, Razonador, Evaluador). Al finalizar cada sesión, el Evaluador escribe feedback y genera lote semanal para fine-tuning incremental manual.
+5. **Bucle de aprendizaje simbiótico**: Agents Service (puerto 8006) con LangGraph
+   (`reason_graph` + `learn_graph`) y tres agentes MCP (Ingestor, Razonador, Evaluador).
+   Tras cada turno premium, Kafka `session.turn.completed` dispara el grafo de
+   aprendizaje. El Evaluador escribe feedback y genera lote semanal; fine-tuning
+   incremental solo con trigger manual. LangChain permanece en RAG (Frame 3).
 
 6. **Módulos de valor**: Decision-Support Simulator (what-if, 3-5 escenarios), Life Analytics (dashboard React + Chart.js, 2 correlaciones), Privacy & Scam Shield (heurísticas + similitud de embeddings).
 

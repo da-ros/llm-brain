@@ -1,2 +1,27 @@
 schema: spec-driven
-created: 2026-08-27
+created: 2026-09-02
+frame: frame-5
+title: "Symbiotic Learning Loop (MCP Agents)"
+description: "Agents Service (port 8006): LangGraph + MCP Ingestor / Razonador / Evaluador; weekly batches; manual fine-tune trigger"
+anteproyecto_objectives:
+  - "Objetivo Específico 5 (Learning loop)"
+depends_on:
+  - frame-2
+  - frame-3
+  - frame-4
+execution_order: 5
+status: proposed
+services:
+  - name: agents-service
+    directory: services/agents
+    port: 8006
+    description: "LangGraph + MCP agents Ingestor / Razonador / Evaluador — premium symbiotic loop"
+specs:
+  - specs/agents-service/spec.md
+  - specs/api-router/spec.md
+output:
+  diagrams:
+    - agents-architecture.drawio
+    - agents-dataflow.drawio
+  documents:
+    - justificacion-ejemplo.md

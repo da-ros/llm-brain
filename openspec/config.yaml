@@ -15,8 +15,8 @@ context: |
     3. Hybrid store + RAG: MongoDB Atlas (docs) + Chroma/Pinecone (embeddings) linked by
        unique ID; LangChain Top-k semantic retrieval.
     4. LLM cloud fine-tune (LoRA on AWS Bedrock) + on-device (llama.rn, Llama 3.2 3B Q4_K_M).
-    5. Symbiotic Learning Loop: MCP agents Ingestor / Razonador (Reasoner) / Evaluador,
-       manual incremental fine-tuning batches.
+    5. Symbiotic Learning Loop: LangGraph + MCP agents Ingestor / Razonador /
+       Evaluador; manual incremental fine-tuning batches. LangChain stays in RAG.
     6. Decision-Support Simulator: deterministic what-if, 3-5 scenarios w/ explicit
        traceable assumptions.
     7. Life Analytics: React + Chart.js dashboard, >=2 interactive correlations (sleep/productivity).
@@ -25,7 +25,7 @@ context: |
        precision), video demo.
 
   Tech stack (OSS, ~$0 budget):
-    - Backend: Python 3.13, FastAPI, LangChain.
+    - Backend: Python 3.13, FastAPI, LangChain (RAG), LangGraph (agents).
     - Frontend: React + Chart.js.
     - Data: MongoDB Atlas M0, Chroma (local Docker) or Pinecone Starter.
     - LLM: MODEL-AGNOSTIC. On-device: Llama 3.2 3B (Q4_K_M) via llama.rn.
@@ -183,11 +183,17 @@ frames:
   frame-5:
     directory: objective-5-symbiotic-learning
     title: "Symbiotic Learning Loop (MCP Agents)"
-    description: "MCP agents Ingestor / Razonador / Evaluador; manual incremental fine-tuning batches"
+    description: "Agents Service (port 8006): LangGraph + MCP agents Ingestor / Razonador / Evaluador; weekly batches; manual fine-tune trigger"
     anteproyecto_objectives:
       - "Objetivo Específico 5 (Learning loop)"
     depends_on: ["frame-2", "frame-3", "frame-4"]
-    execution_order: 4
+    execution_order: 5
+    output:
+      diagrams:
+        - agents-architecture.drawio
+        - agents-dataflow.drawio
+      documents:
+        - justificacion-ejemplo.md
 
   frame-6:
     directory: objective-6-decision-support
