@@ -6,7 +6,7 @@
 - [x] A.2 Create `services/llm/main.py` — FastAPI app with health endpoint
       — Correlation ID middleware, structured logging
 - [x] A.3 Create `services/llm/config.py` — pydantic-settings
-      — AWS credentials, Bedrock model ID, service host/port
+      — Qwen3.5-4B model ID, service host/port (cloud = base; LoRA adapter used for Premium on-device build only)
 - [x] A.4 Create `services/llm/Dockerfile` — container setup
 - [x] A.5 Create `services/llm/requirements.txt` — fastapi, pydantic-settings, uvicorn
 
@@ -15,8 +15,8 @@
 - [x] B.1 Create `services/llm/providers/__init__.py`
 - [x] B.2 Migrate `services/api/llm/base.py` → `services/llm/providers/base.py`
       — LLMProvider Protocol (chat, complete)
-- [x] B.3 Migrate `services/api/llm/bedrock.py` → `services/llm/providers/bedrock.py`
-      — BedrockProvider (boto3, Llama 3 8B)
+- [x] B.3 Migrate `services/api/llm/*.py` → `services/llm/providers/qwen_local.py`
+      — Local Qwen3.5-4B provider (contenedor local, base model full precision — not fine-tuned)
 - [x] B.4 Migrate `services/api/llm/resolver.py` → `services/llm/providers/resolver.py`
       — get_provider(tier) — select by subscription tier
 - [x] B.5 Update imports: `services.api.llm.*` → `services.llm.providers.*`
@@ -30,7 +30,7 @@
       — Request: `{"messages": [...], "context": "...", "user_id": "..."}`
       — Response: `{"response": "...", "tokens_used": N}`
 - [x] C.3 Add correlation ID propagation from request headers
-- [x] C.4 Add error handling: Bedrock throttling, model not found, timeout
+- [x] C.4 Add error handling: local Qwen3.5-4B container unavailable, model not found, timeout
 - [x] C.5 Add cost tracking: tokens used per request in response
 
 ### D. Fine-Tune Service — Foundation
@@ -39,16 +39,16 @@
 - [x] D.2 Create `services/finetune/main.py` — FastAPI app with health endpoint
       — Correlation ID middleware, structured logging
 - [x] D.3 Create `services/finetune/config.py` — pydantic-settings
-      — AWS credentials, training hyperparams, service host/port
+      — base model (Qwen3.5-4B), LoRA backend (PEFT/ms-swift/Unsloth), training hyperparams, service host/port
 - [x] D.4 Create `services/finetune/Dockerfile` — container setup
 - [x] D.5 Create `services/finetune/requirements.txt` — fastapi, pydantic-settings, uvicorn
 
 ### E. Fine-Tune Service — Training Pipeline
 
-- [x] E.1 Implement dataset preparation: triples (JSONL) → Bedrock training format
-- [x] E.2 Implement LoRA fine-tuning job submission to AWS Bedrock
-- [x] E.3 Implement training status polling (Bedrock API)
-- [x] E.4 Implement training completion handling (save LoRA adapter, update model version)
+- [x] E.1 Implement dataset preparation: triples (JSONL) → local LoRA training format
+- [x] E.2 Implement local LoRA fine-tuning job over Qwen3.5-4B (PEFT/ms-swift/Unsloth)
+- [x] E.3 Implement training status polling (local job store)
+- [x] E.4 Implement training completion handling (save local LoRA adapter, update model version)
 
 ### F. Fine-Tune Service — Endpoints
 
@@ -62,12 +62,12 @@
 
 ### G. Testing
 
-- [x] G.1 Unit tests for LLMProvider protocol (mock Bedrock)
+- [x] G.1 Unit tests for LLMProvider protocol (mock local Qwen provider)
 - [x] G.2 Unit tests for provider resolver (tier switching)
-- [x] G.3 Integration test: LLM Service `/generate` (mocked Bedrock)
-- [x] G.4 Integration test: LLM Service `/chat` (mocked Bedrock)
+- [x] G.3 Integration test: LLM Service `/generate` (mocked local Qwen3.5-4B)
+- [x] G.4 Integration test: LLM Service `/chat` (mocked local Qwen3.5-4B)
 - [x] G.5 Unit tests for Fine-Tune Service training pipeline
-- [x] G.6 Integration test: Fine-Tune Service `/train` + `/status` (mocked Bedrock)
+- [x] G.6 Integration test: Fine-Tune Service `/train` + `/status` (mocked local LoRA)
 
 ### H. Monolith Cleanup
 

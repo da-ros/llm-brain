@@ -6,10 +6,10 @@ Draw.io XML diagrams for the AI-Augmented Digital Brain architecture (Frame 1).
 
 | File | C4 Level | Description |
 |------|----------|-------------|
-| `c4-context.drawio` | Level 1 | System Context — actors (User, Admin), llm-brain system, external dependencies (Bedrock, MongoDB, Chroma) |
-| `c4-container.drawio` | Level 2 | Containers — Web App, Mobile App, API Gateway, API Backend, Fine-Tuning Service, LLM Local/Cloud, Tool Layer, data stores |
+| `c4-context.drawio` | Level 1 | System Context — actors (User, Admin), llm-brain system, dependencies (Qwen3.5-4B local LLM container, MongoDB, Chroma); AWS API Gateway shown as future |
+| `c4-container.drawio` | Level 2 | Containers — Web App, React Native mobile app, API Router, API Backend, Fine-Tuning Service, LLM Service (Qwen3.5-4B container) + on-device LLM, Tool Layer, data stores (AWS API Gateway shown as future) |
 | `c4-component-api.drawio` | Level 3 | API Backend components — FastAPI App, Config, Auth (JWT+bcrypt), LLM Provider Protocol, Routers, Dependencies |
-| `deployment.drawio` | — | Deployment — Docker Compose (local dev) + AWS ECS Fargate (production) with API Gateway |
+| `deployment.drawio` | — | Deployment — Docker Compose (local MVP); AWS ECS Fargate + API Gateway shown as future/out of scope |
 
 ## 🔧 How to Open
 

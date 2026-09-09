@@ -7,8 +7,10 @@ a documented C4/MCP architecture, and a minimal CI pipeline. Establishing this f
 rework and gives the defense a traceable starting point.
 
 This is a **multi-tenant platform** with two subscription tiers (Free/Premium). Each user
-registers, authenticates (JWT + bcrypt), and has isolated data. Local LLM inference (free)
-and AWS Bedrock with RAG + fine-tuning (premium).
+registers, authenticates (JWT + bcrypt), and has isolated data. On-device LLM inference in
+the React Native iPhone app (free) and a local containerized LLM Service running the same model with RAG +
+fine-tuning (premium). A single inference model — **Qwen3.5-4B** (dense, natively multimodal:
+text/image/video) — is used everywhere.
 
 The anteproyecto mentions "one user" referring to the data inputter for fine-tuning.
 The platform supports multiple real users from the MVP.
@@ -16,11 +18,13 @@ The platform supports multiple real users from the MVP.
 ## What Changes
 
 ### Architecture Documentation (C4 + Deployment)
-- Add **C4 Level 1** (System Context): clients, API Gateway, backends, LLM layers, data stores
-- Add **C4 Level 2** (Containers): Docker containers for each service
+- Add **C4 Level 1** (System Context): clients, API Router, backends, LLM layers (local
+  container + on-device React Native), data stores (AWS API Gateway shown as future/out of scope)
+- Add **C4 Level 2** (Containers): Docker containers for each service (incl. local LLM container)
 - Add **C4 Level 3** (Components): internal structure of the API backend
 - Add **MCP agent-flow diagram**: Ingestor / Razonador / Evaluador
-- Add **Deployment diagram**: Docker Compose (local) + AWS ECS Fargate (production)
+- Add **Deployment diagram**: Docker Compose (local MVP); AWS ECS Fargate + API Gateway shown
+  as future/out of scope
 - Add **OSS stack decision record**: chosen tools + rationale
 
 ### Repository Foundation
@@ -33,12 +37,15 @@ The platform supports multiple real users from the MVP.
 ### Configuration Layer
 - Implement config loading from environment (pydantic-settings + .env)
 - Validate required secrets at startup
-- Support two environments: local (direct) and production (via API Gateway)
+- Support the local MVP topology (clients → API Router directly); production via API Gateway
+  is future/out of scope
 
 ### Model-Agnostic LLM Provider Layer
 - Define `LLMProvider` protocol (chat/completion interface)
-- Implement llama.rn provider (on-device, mobile free tier — Llama 3.2 3B Q4_K_M)
-- Implement AWS Bedrock provider (cloud, premium tier — Llama 3 8B fine-tuned + inference)
+- Implement on-device provider (React Native — Free: Qwen3.5-4B **base** quantized Q4;
+  Premium: fine-tuned quantized Q4; Neural Engine / Metal)
+- Implement the local containerized "cloud" provider (premium tier — Qwen3.5-4B **base**,
+  not fine-tuned, served by the LLM Service Docker container on port 8003)
 - Implement `get_provider()` resolver
 
 ### FastAPI Application Skeleton
@@ -68,7 +75,8 @@ The platform supports multiple real users from the MVP.
 
 - New code: `apps/api/` (FastAPI app, config, auth, LLM provider layer)
 - New docs: `docs/architecture/` (C4 + MCP + deployment diagrams + stack decision)
-- New infra: Docker Compose (local), ECS task definitions (production), GitHub Actions CI
+- New infra: Docker Compose (local MVP; includes the LLM container); ECS task definitions are
+  future/out of scope; GitHub Actions CI
 - Dependencies introduced: FastAPI, uvicorn, pydantic-settings, httpx/openai (LLM clients)
 - No user data is processed yet; establishes the contract for all subsequent modules
 

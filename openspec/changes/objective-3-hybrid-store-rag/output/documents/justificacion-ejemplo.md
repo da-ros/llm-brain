@@ -22,12 +22,15 @@ class DocumentStore:
     def list_documents(self, user_id: str) -> list[dict]: ...
 ```
 
-Es la capa de acceso a MongoDB. Cada operación filtra por `user_id` — un usuario
-nunca ve los documentos de otro.
+Es la capa de acceso a MongoDB (contenedor **local**). Guarda los binarios originales
+(texto/pdf/imagen/video) en **GridFS** y los registros/metadata en colecciones MongoDB.
+Cada operación filtra por `user_id` — un usuario nunca ve los documentos de otro.
 
-**¿Por qué MongoDB?**
+**¿Por qué MongoDB local + GridFS?**
 - Schema flexible: cada documento puede tener campos diferentes
-- Free tier (M0) suficiente para MVP
+- GridFS guarda el binario completo de cualquier modalidad; `gridfs_id` se referencia desde Documents
+- Corre $0 en un contenedor Docker local (sin Atlas, sin nube) para el MVP
+- Chroma **no** guarda binarios, así que MongoDB es necesario para binarios + registros
 - Motor async (motor) para no bloquear el event loop de FastAPI
 
 ---
@@ -41,43 +44,49 @@ class VectorStore(Protocol):
     def delete(self, filter: dict) -> None: ...
 ```
 
-Dos implementaciones:
-- **ChromaVectorStore**: para desarrollo local (corre en Docker, zero-config)
-- **PineconeVectorStore**: para producción (managed, escala)
+Implementación del MVP:
+- **ChromaVectorStore**: vector store local (corre en Docker, zero-config, $0)
+
+> Pinecone / vector stores gestionados en la nube son **trabajo futuro** (fuera del MVP).
 
 El `VectorStore` protocol es como el `DocumentParser` de Frame 2 — una abstracción
-que permite cambiar la implementación sin tocar el resto del código.
+que permite agregar otra implementación en el futuro sin tocar el resto del código.
 
 ---
 
 ## 🧮 Embedding Pipeline
 
 ```
-Triple JSONL
+Triple JSONL (+ binario en GridFS)
     │
     ▼
 Chunking (1000 chars, 200 overlap)
     │
     ▼
-sentence-transformers (384 dimensions)
+Qwen3-VL-Embedding-2B (2048 dimensions, multimodal)
     │
     ▼
 Fernet encryption
     │
     ▼
-Store in Chroma/Pinecone
+Store in Chroma (vector + chunk_text + metadata→gridfs_id)
 ```
 
 ### ¿Qué es un embedding?
 
-Un **embedding** es un vector numérico que representa el significado semántico del texto:
+Un **embedding** es un vector numérico que representa el significado semántico del contenido:
 
 ```
-"Paciente tiene diabetes" → [0.12, -0.45, 0.78, ..., 0.33]  (384 números)
+"Paciente tiene diabetes" → [0.12, -0.45, 0.78, ..., 0.33]  (2048 números)
 ```
 
-Dos textos con significado similar tendrán vectores cercanos en el espacio vectorial.
+Dos contenidos con significado similar tendrán vectores cercanos en el espacio vectorial.
 Esto permite buscar por **significado**, no solo por palabras exactas.
+
+**Multimodal + cross-modal:** Qwen3-VL-Embedding-2B embebe **texto, imágenes, screenshots
+y video** en un **único espacio compartido de 2048-dim**. Por eso una consulta de texto
+puede recuperar imágenes o video (retrieval cross-modal). Con **Matryoshka (MRL)** el
+vector 2048-dim puede truncarse a 1024/512/256 con pérdida mínima; el **default es 2048**.
 
 ### ¿Qué es chunking?
 
@@ -170,14 +179,14 @@ Si alguien accede a la base de datos, no puede leer los vectores sin la clave Fe
 ### Ingestión (después de upload)
 
 ```
-1. Usuario sube "receta.pdf"
+1. Usuario sube "receta.pdf" → binario guardado en MongoDB GridFS
 2. Frame 2: ETL extrae triples → JSONL
 3. Frame 3: Lee JSONL
 4. Frame 3: Chunking del texto
-5. Frame 3: Genera embeddings (sentence-transformers)
+5. Frame 3: Genera embeddings (Qwen3-VL-Embedding-2B, 2048-dim, multimodal)
 6. Frame 3: Encripta con Fernet
-7. Frame 3: Guarda en Chroma/Pinecone
-8. Frame 3: Guarda metadata en MongoDB
+7. Frame 3: Guarda en Chroma (vector + chunk_text + metadata→gridfs_id)
+8. Frame 3: Guarda metadata/registros en MongoDB
 ```
 
 ### Retrieval (cuando usuario pregunta)
@@ -203,8 +212,8 @@ Cada vector store es una **estrategia** diferente:
 
 ```
 VectorStore (Protocol)
-    ├── ChromaVectorStore    → Estrategia para desarrollo
-    └── PineconeVectorStore  → Estrategia para producción
+    └── ChromaVectorStore    → Estrategia del MVP (local)
+    (futuras estrategias se agregan igual, p. ej. un store gestionado en la nube)
 ```
 
 `create_vector_store()` **selecciona** la estrategia correcta según la config.
@@ -215,17 +224,15 @@ VectorStore (Protocol)
 def create_vector_store(provider: str) -> VectorStore:
     if provider == "chroma":
         return ChromaVectorStore()
-    elif provider == "pinecone":
-        return PineconeVectorStore()
+    # Futuro: otros providers gestionados (fuera del MVP)
 ```
 
 #### Adapter (Adaptador)
 
-Los wrappers de Chroma y Pinecone **adaptan** APIs diferentes a una interfaz común:
+El wrapper de Chroma **adapta** su API a una interfaz común (futuros stores se conectan igual):
 
 ```
 Chroma API     → ChromaVectorStore     → VectorStore (Protocol)
-Pinecone API   → PineconeVectorStore   → VectorStore (Protocol)
 ```
 
 #### Facade (Fachada)
@@ -256,7 +263,7 @@ Solo llama: document_store.list_documents(user_id)
 | **O** | Agregar Weaviate = crear clase nueva, cero cambios en RAG service |
 | **L** | Cualquier `VectorStore` reemplaza a otra sin romper `rag_service` |
 | **I** | `VectorStore` protocol tiene solo 3 métodos: `add`, `search`, `delete` |
-| **D** | `rag_service` depende de `VectorStore` (abstracción), no de Chroma/Pinecone (concreto) |
+| **D** | `rag_service` depende de `VectorStore` (abstracción), no de Chroma (concreto) |
 
 ---
 
@@ -342,7 +349,7 @@ def log_with_correlation(correlation_id: str, level: str, message: str):
 
 ```
 2026-08-31T10:00:00 [def-456] DEBUG rag-service: Embedding query: 'diabetes treatment'
-2026-08-31T10:00:00 [def-456] DEBUG rag-service: Query embedding: [0.12, -0.45, 0.78, ...] (384 dims)
+2026-08-31T10:00:00 [def-456] DEBUG rag-service: Query embedding: [0.12, -0.45, 0.78, ...] (2048 dims)
 2026-08-31T10:00:00 [def-456] DEBUG rag-service: Searching Chroma with k=3, user_id=user1
 2026-08-31T10:00:01 [def-456] DEBUG rag-service: Found 3 results (scores: 0.92, 0.87, 0.81)
 2026-08-31T10:00:01 [def-456] DEBUG rag-service: Decrypting results with Fernet
@@ -365,10 +372,10 @@ def log_with_correlation(correlation_id: str, level: str, message: str):
 ### Embedding generation
 
 ```
-2026-08-31T10:00:00 [abc-123] DEBUG rag-service: Loading embedding model: sentence-transformers/all-MiniLM-L6-v2
-2026-08-31T10:00:01 [abc-123] DEBUG rag-service: Embedding model loaded (384 dims)
+2026-08-31T10:00:00 [abc-123] DEBUG rag-service: Loading embedding model: Qwen3-VL-Embedding-2B
+2026-08-31T10:00:01 [abc-123] DEBUG rag-service: Embedding model loaded (2048 dims, multimodal)
 2026-08-31T10:00:01 [abc-123] DEBUG rag-service: Embedding 15 text chunks
-2026-08-31T10:00:02 [abc-123] DEBUG rag-service: Embeddings generated: 15 vectors (384 dims each)
+2026-08-31T10:00:02 [abc-123] DEBUG rag-service: Embeddings generated: 15 vectors (2048 dims each)
 ```
 
 ### Chunking

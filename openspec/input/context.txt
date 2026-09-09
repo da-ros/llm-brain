@@ -2,12 +2,22 @@
 
 ## Qué es
 
-Plataforma que permite a clientes (web y móvil) interactuar con un backend y LLMs
-para gestión personal de conocimiento: cargar documentos (recetas médicas, facturas, fotos) y
-recibir sugerencias inteligentes (comprar medicina, organizar gastos) basadas en RAG.
+Plataforma que permite a clientes (web y app móvil React Native) interactuar con un backend y un LLM
+multimodal para gestión personal de conocimiento: cargar cualquier archivo (texto, PDF,
+imágenes, video — recetas médicas, facturas, fotos) y recibir sugerencias inteligentes
+(comprar medicina, organizar gastos) basadas en RAG.
 
 Modelo de negocio: plataforma **multi-usuario** con dos niveles de suscripción — **Free** y **Premium**.
 Cada usuario se registra, inicia sesión y tiene su propia suscripción. Los datos están aislados por usuario.
+
+> **Estado actual: SOLO DESARROLLO LOCAL.** No se despliega en la nube todavía.
+> El "modelo en la nube" es un **contenedor Docker en la laptop** que sirve
+> **Qwen3.5-4B base** (sin fine-tuning). El on-device corre en **React Native en
+> iPhone** (Neural Engine / Metal): **Free** = Qwen3.5-4B base cuantizado (out of
+> the box, sin fine-tuning, sin acceso al cloud); **Premium** = Qwen3.5-4B
+> **fine-tuneado** + cuantizado on-device, **y además** acceso al cloud (contenedor
+> base + RAG + archivos + web dashboard). Servicios AWS (Bedrock, ECS Fargate,
+> API Gateway) quedan como **trabajo futuro**, no MVP.
 
 > Nota: El anteproyecto menciona "un usuario" — esto se refiere al usuario que ingresa datos para fine-tuning.
 > La plataforma soporta múltiples usuarios reales desde el MVP.
@@ -17,14 +27,21 @@ Cada usuario se registra, inicia sesión y tiene su propia suscripción. Los dat
 | Cliente | Tecnología | Tier | Funcionalidad |
 |---------|------------|------|---------------|
 | **Web App** | React + Chart.js | Premium | Charts de gastos, enfermedades, visualización de datos |
-| **Mobile App** | React Native | Free / Premium | Consultas LLM, carga de archivos |
+| **Mobile App** | React Native (iPhone) + Neural Engine / Metal | Free / Premium | Consultas LLM, carga de archivos, inferencia on-device offline |
 
-### Mobile — Free vs Premium
+La app móvil es **React Native** (no PWA). El modelo on-device se **descarga** y corre
+nativamente en el **iPhone** vía **Neural Engine / Metal** (puente nativo, p. ej.
+ExecuTorch / Core ML / MLC — no WebGPU en navegador).
+
+### Móvil (React Native) — Free vs Premium
 
 | Tier | LLM | Contexto | Archivos |
 |------|-----|----------|----------|
-| **Free** | llama.rn (Llama 3.2 3B, Q4_K_M on-device) | No | No |
-| **Premium** | AWS Bedrock (Llama 3 8B fine-tuned) + RAG | Sí | Sí (imágenes + PDFs) |
+| **Free** | Qwen3.5-4B **base** cuantizado (Q4), on-device — out of the box, **sin** fine-tuning; **sin** acceso al cloud | No | No |
+| **Premium** | On-device: Qwen3.5-4B **fine-tuneado** + cuantizado (Q4). Cloud: Qwen3.5-4B **base** en contenedor local (**sin** fine-tuning) + RAG | Sí | Sí (texto, PDF, imágenes, video) |
+
+> Ambos tiers usan la misma familia **Qwen3.5-4B**. Free = solo on-device base.
+> Premium = on-device fine-tuneado **más** cloud base (contenedor) con RAG, archivos y web dashboard.
 
 ## Modelo de Usuario
 
@@ -33,9 +50,9 @@ Cada usuario tiene una cuenta con suscripción. Los datos están aislados por `u
 | Entidad | Campos | Notas |
 |---------|--------|-------|
 | **Users** | id, email, password_hash, subscription_tier (free/premium), created_at | bcrypt para password_hash |
-| **Documents** | id, user_id (FK → Users), type (image/pdf), original_path, triples_path, created_at | Un usuario solo ve sus documentos |
+| **Documents** | id, user_id (FK → Users), type (text/pdf/image/video), gridfs_id, triples_path, created_at | Cualquier archivo; binario en GridFS |
 | **Subscriptions** | id, user_id (FK → Users), tier, status, started_at | Control de tier por usuario |
-| **Embeddings** | id, document_id (FK → Documents), vector, metadata | Encriptados con Fernet a nivel de aplicación |
+| **Embeddings** | id, document_id (FK → Documents), vector (2048-dim), modality, chunk_text, metadata | Vector en Chroma; Fernet a nivel de aplicación |
 
 ## Arquitectura General
 
@@ -52,11 +69,11 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    AWS API Gateway (solo producción)                     │
+│              AWS API Gateway (FUTURO — no MVP, solo producción)           │
 │           Rate limiting · HTTPS · WAF · Routing externo                 │
 └─────────────────────────────────────┬───────────────────────────────────┘
-                                      │ (producción)
-                                      │ (local: directo al router)
+                                      │ (futuro producción)
+                                      │ (LOCAL/MVP: cliente → API Router directo)
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      API Router (FastAPI)                                │
@@ -86,6 +103,8 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 │                     │              │ ┌─────────────────┐ │
 │                     │              │ │  LLM Service    │ │
 │                     │              │ │  Puerto 8003    │ │
+│                     │              │ │ Qwen3.5-4B      │ │
+│                     │              │ │ (contenedor)    │ │
 │                     │              │ └─────────────────┘ │
 │                     │              │ ┌─────────────────┐ │
 │                     │              │ │ Fine-Tune Svc   │ │
@@ -102,8 +121,8 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
                                      ┌─────────────────────┐
                                      │   Data Stores       │
                                      │ • MongoDB (GridFS)  │
-                                     │ • Chroma            │
-                                     │ • AWS Bedrock       │
+                                     │ • Chroma (2048-dim) │
+                                     │ • Qwen3.5-4B (cont.)│
                                      └─────────────────────┘
 ```
 
@@ -111,13 +130,13 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 
 | Capa | Puerto | Responsabilidad |
 |------|--------|-----------------|
-| **AWS API Gateway** | — | Rate limiting, routing, HTTPS (solo producción — managed) |
+| **AWS API Gateway** | — | Rate limiting, routing, HTTPS (FUTURO — no MVP) |
 | **API Router** | 8000 | JWT validation, correlation ID, routing interno a servicios |
-| **ETL Service** | 8001 | Parsers (PDF/HTML/EML/OCR), triple extraction, distillation |
-| **RAG Service** | 8002 | MongoDB, Chroma/Pinecone, semantic search, context injection |
-| **LLM Service** | 8003 | AWS Bedrock inference, model management |
-| **Fine-Tune Service** | 8004 | LoRA training (worker separado, background processing) |
-| **Chroma** | 8005 | Vector embeddings (local dev) |
+| **ETL Service** | 8001 | Loaders LangChain (cualquier archivo), extracción de triples por LLM, distillation |
+| **RAG Service** | 8002 | MongoDB, Chroma, embeddings Qwen3-VL-Embedding-2B, semantic search, context injection |
+| **LLM Service** | 8003 | Inferencia multimodal Qwen3.5-4B (contenedor local), model management |
+| **Fine-Tune Service** | 8004 | LoRA local (PEFT/ms-swift) sobre Qwen3.5-4B; produce adapter + build cuantizado **solo para Premium on-device** (React Native / Neural Engine) |
+| **Chroma** | 8005 | Vector store: embeddings 2048-dim + chunk_text + metadata (local dev) |
 | **Agents Service** | 8006 | Bucle simbiótico: LangGraph (`reason_graph` + `learn_graph`) + MCP (Ingestor, Razonador, Evaluador). Premium only. |
 | **Kafka** | 9092 | Message queue async para operaciones pesadas |
 | **MongoDB** | 27017 | task_status, uploaded_files (GridFS), triples, agent_interactions, agent_feedback, finetune_batches |
@@ -128,7 +147,7 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 |-----------|------|-------|---------|
 | **Upload de archivo** | Async (Kafka) | Router → Kafka → 202 → Polling | 300s max |
 | **Chat / Query (Premium)** | Sync (HTTP) | Router → Agents `reason_graph` → RAG + LLM → 200 | 30s max |
-| **Chat / Query (Free)** | Sync | On-device llama.rn (Frame 10); sin Agents ni RAG | ≤2s on-device |
+| **Chat / Query (Free)** | Sync | On-device Qwen3.5-4B **base** en React Native (Neural Engine / Metal, Frame 10); sin cloud, Agents ni RAG | ≤2s on-device |
 | **Session turn (aprendizaje)** | Async (Kafka) | Router publica `session.turn.completed` → Agents `learn_graph` (Ingestor → Evaluador) | — |
 | **Task status** | Sync (HTTP) | Router → MongoDB → 200 | 1s max |
 | **Fine-tuning** | Async | Router → Agents trigger manual → Fine-Tune `POST /train` → 202 → Polling | Horas |
@@ -195,15 +214,23 @@ TASK_STATUS_TTL_DAYS=30
 
 ### Almacenamiento
 
-| Datos | Storage Local | Storage Producción |
-|-------|---------------|-------------------|
-| Archivos binarios | MongoDB GridFS | MongoDB GridFS (MVP) / DynamoDB (futuro) |
-| task_status | MongoDB | MongoDB |
-| Triples (JSONL) | filesystem | filesystem |
-| Embeddings | Chroma | Pinecone (futuro) |
-| Agent interactions / feedback / batches | MongoDB | MongoDB |
+**Regla:** los binarios originales viven en **MongoDB GridFS**; los **vectores + el
+chunk de texto + metadata** viven en **Chroma**; los registros/estado viven en **MongoDB**;
+los **triples JSONL** en el filesystem (para fine-tuning). Chroma **no** guarda binarios
+(PDF/imagen/video); MongoDB **sí es necesario** (contenedor local) para binarios y registros.
 
-Rate Limiting (AWS API Gateway):
+| Datos | Dónde (MVP local) | Notas |
+|-------|-------------------|-------|
+| Archivos originales (texto, PDF, imagen, video) | **MongoDB GridFS** | Binario completo; `gridfs_id` referenciado desde Documents |
+| Chunks de texto (de texto y PDF) | **Chroma** (campo `document`) | El chunk se guarda junto al vector; metadata apunta a `gridfs_id` |
+| Embeddings (vectores 2048-dim, todas las modalidades) | **Chroma** | Texto, imagen y video en el **mismo espacio** (cross-modal) |
+| Triples (JSONL) | filesystem | Fuente para RAG y fine-tuning LoRA |
+| task_status | MongoDB | Polling |
+| Users / Documents / Subscriptions | MongoDB | Registros e índice de documentos |
+| Agent interactions / feedback / batches | MongoDB | Bucle simbiótico (Frame 5) |
+| Producción (futuro) | DynamoDB / Pinecone / S3 | Fuera de MVP |
+
+Rate Limiting (API Router en local; AWS API Gateway en producción futura):
 ```
 POST /api/upload:  10 req/min   (upload es pesado)
 POST /api/chat:    30 req/min   (chat es ligero)
@@ -215,11 +242,96 @@ GET  /health:      1000 req/min (monitoreo)
 
 ## Datos del usuario
 
-- **Tipos**: imágenes (fotos) y PDFs (recetas, facturas)
-- **Procesamiento**: ETL extrae texto (OCR para imágenes, parser para PDFs) → JSON triples → Vector Store
+- **Tipos**: cualquier archivo — texto, PDF, imágenes y video (recetas, facturas, fotos, clips)
+- **Procesamiento**:
+  1. **Loaders LangChain** (out-of-the-box) cargan el archivo según su tipo (ver "Parsers").
+  2. El contenido se pasa a **Qwen3.5-4B** (LLM Service), que **razona** sobre el archivo.
+  3. El LLM **extrae los triples en JSON** (sujeto-predicado-objeto + metadata) tras razonar.
+  4. RAG genera embeddings con **Qwen3-VL-Embedding-2B** y los guarda en Chroma.
 - **Aislamiento**: cada documento y embedding está vinculado a un `user_id`. Un usuario solo accede a sus datos.
 - **Encriptación**: datos en RAG encriptados a nivel de aplicación (Fernet o similar)
-- **TLS**: manejado por AWS API Gateway (certificado managed, sin costo adicional)
+- **TLS**: en local no aplica API Gateway; TLS se maneja en producción futura (AWS managed)
+
+## Modelos de IA
+
+### Modelo de inferencia — Qwen3.5-4B (multimodal)
+
+- **Único modelo** para todo: **Qwen3.5-4B** (dense, nativo multimodal — **texto, imagen y
+  video**; 262K de contexto; Apache 2.0; ~8 GB en BF16, ~2.5–3 GB en Q4).
+- **"Cloud" = contenedor Docker local** (LLM Service, puerto 8003): sirve **Qwen3.5-4B base**
+  (sin fine-tuning, precisión completa) solo para usuarios **Premium**, con RAG.
+- **On-device (React Native / Neural Engine / Metal):**
+  - **Free:** Qwen3.5-4B **base** cuantizado (Q4) — out of the box, **sin** fine-tuning;
+    **sin** acceso al cloud.
+  - **Premium:** Qwen3.5-4B **fine-tuneado** + cuantizado (Q4) on-device, **y además**
+    acceso al cloud (contenedor base + RAG + archivos + web dashboard).
+- **Inferencia multimodal**: el modelo procesa **texto, imagen y video** para responder.
+- Sustituye por completo a AWS Bedrock (Llama 3 8B) y a llama.rn (Llama 3.2 3B): **fuera de alcance**.
+
+### Modelo de embeddings — Qwen3-VL-Embedding-2B (2048-dim)
+
+- **Se usa Qwen3-VL-Embedding-2B (2048 dimensiones), no all-MiniLM (384-dim).**
+- **Por qué 2048 / familia Qwen y no 384:**
+  1. **Alineación de familia** con el modelo de inferencia Qwen3.5-4B (mismo tokenizer/espacio
+     conceptual, misma cadena de herramientas de fine-tuning).
+  2. **Multimodal real**: MiniLM (384-dim) es solo texto; Qwen3-VL-Embedding-2B embebe
+     **texto, imágenes, screenshots y video** en un **único espacio compartido**.
+  3. Mayor capacidad semántica y **retrieval cross-modal** (buscar imágenes con una consulta
+     de texto, etc.).
+- **¿Embebe solo texto o también imágenes/video?** → **Las tres modalidades** (texto, imagen,
+  video) en el **mismo espacio de 2048-dim** → una sola colección de Chroma sirve para
+  búsqueda cross-modal.
+- **Matryoshka (MRL)**: los vectores 2048-dim se pueden truncar a 1024/512/256 con pérdida
+  mínima si hace falta ahorrar almacenamiento/latencia (dentro del presupuesto de 1 GB).
+  **Default: 2048.**
+
+### Fine-tuning (local)
+
+- **LoRA local** (PEFT / ms-swift / Unsloth) sobre Qwen3.5-4B, ejecutado en la laptop
+  (o Colab free). Produce un **adapter** que se **fusiona + cuantiza** para el build
+  **Premium on-device** (React Native / iPhone). El contenedor cloud **no** usa el adapter
+  (permanece base). Disparo **manual** vía `POST /api/finetune`.
+
+## Extracción de triples y parsers (ETL)
+
+### Parsers = loaders LangChain out-of-the-box
+
+- **Todos los parsers, en Frame 2 y en cualquier frame, usan loaders de LangChain
+  out-of-the-box** (`langchain_community.document_loaders`), que soportan cualquier tipo de
+  documento: `PyPDFLoader`/`PDFPlumberLoader` (PDF), `TextLoader` (texto), `Unstructured*`
+  (HTML, EML, DOCX, imágenes con OCR), `UnstructuredImageLoader`, loaders de video, etc.
+- **No** se escriben parsers a mano salvo que ningún loader de LangChain cubra el formato.
+
+### Extracción de triples por LLM (no reglas)
+
+- La extracción de triples **acepta cualquier archivo**, lo carga con un loader LangChain,
+  y **lo pasa por el LLM (Qwen3.5-4B)**. El modelo **razona** sobre el contenido y **recién
+  entonces emite los triples en JSON** (sujeto-predicado-objeto + metadata).
+- Es un proceso **LLM-first** (razonamiento → extracción), no extracción por reglas/regex.
+- **Implicación de dependencia:** Frame 4 (LLM Service, modelo **base** Qwen3.5-4B)
+  se construye **antes** de Frame 2. ETL invoca ese servicio para extraer triples.
+  El Fine-Tune Service (también Frame 4) se implementa junto con la inferencia, pero
+  el **entrenamiento** LoRA consume triples de Frame 2 en **runtime** (sin dependencia
+  circular de build).
+
+## MCP — herramientas y protocolo
+
+Para el MVP **implementamos nuestras propias herramientas MCP** (tool contracts) expuestas
+por el **Agents Service (Frame 5)**; **no** integramos servidores MCP de terceros (mantiene
+todo local y $0). Los nodos de LangGraph invocan estas tools; cada tool envuelve un servicio
+interno vía HTTP.
+
+| MCP tool | Agente / dueño | Envuelve | Uso |
+|----------|----------------|----------|-----|
+| `rag_search` | Razonador | RAG Service (8002) | Retrieval Top-k multimodal desde Chroma |
+| `llm_generate` | Razonador | LLM Service (8003) | Inferencia multimodal Qwen3.5-4B |
+| `ingest_turn` | Ingestor | MongoDB (`agent_interactions`) | Persistir el turno de la conversación |
+| `evaluate_turn` | Evaluador | MongoDB (`agent_feedback`, `finetune_batches`) | Puntuar turno + armar lote semanal |
+| `finetune_trigger` | (manual) | Fine-Tune Service (8004) | Disparar LoRA local (solo `POST /api/finetune`) |
+
+Frames posteriores pueden **registrar sus propias tools MCP** con el mismo patrón:
+`simulate_whatif` (Frame 6), `analytics_query` (Frame 7), `scan_message` (Frame 8). Todas
+siguen el contrato MCP y se llaman por HTTP; no hay acceso directo a Chroma/LLM desde Agents.
 
 ## Módulos de valor (del anteproyecto)
 
@@ -238,7 +350,7 @@ El entrenamiento LoRA se dispara solo con `POST /api/finetune` (manual).
 Free tier no usa este bucle (sin archivos, sin contexto RAG).
 
 Los nodos llaman a RAG (8002), LLM (8003) y Fine-Tune (8004) por HTTP. No hay
-acceso directo a Bedrock ni a Chroma desde Agents Service.
+acceso directo al LLM (Qwen3.5-4B) ni a Chroma desde Agents Service.
 
 ### Decision-Support Simulator
 Módulo "what-if" que genera 3-5 escenarios con supuestos explícitos y trazabilidad.
@@ -259,18 +371,22 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 
 ## Despliegue
 
+> **MVP = solo local.** No hay despliegue en la nube por ahora. Todo corre en Docker
+> Compose en la laptop, incluido el LLM (contenedor Qwen3.5-4B). La columna Producción es
+> **trabajo futuro** y no forma parte del alcance actual.
+
 | Entorno | Infraestructura | Propósito |
 |---------|-----------------|-----------|
-| **Local** | Docker Compose | Desarrollo y pruebas. Clientes → API Router directo (sin AWS API GW) |
-| **Producción** | AWS ECS Fargate | Escalado, disponibilidad, load. AWS API Gateway para routing externo |
+| **Local (MVP)** | Docker Compose | Desarrollo y pruebas. Clientes → API Router directo (sin AWS API GW). LLM en contenedor local. |
+| **Producción (futuro)** | AWS ECS Fargate | Escalado, disponibilidad, load. AWS API Gateway para routing externo |
 
 ### Decisiones de infraestructura
 
-- **Docker** para todos los servicios (consistencia local ↔ prod)
-- **ECS Fargate** para producción (serverless containers, sin managing EC2)
+- **Docker** para todos los servicios (incluido el contenedor Qwen3.5-4B)
+- **LLM "cloud" = contenedor local (base, sin fine-tuning)**; on-device Free = base cuantizado; on-device Premium = fine-tuneado cuantizado (React Native / Neural Engine / Metal)
 - **Cada servicio** tiene su propio Dockerfile y se despliega independientemente
 - **Kafka**: Self-hosted en Docker (local) / AWS MSK (producción futura)
-- **AWS API Gateway**: Solo en producción; en local se accede directo al API Router
+- **ECS Fargate / AWS API Gateway**: producción futura; en el MVP se accede directo al API Router
 
 ## Stack tecnológico
 
@@ -279,19 +395,20 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 | API Router | Python 3.13, FastAPI |
 | Microservicios | Python 3.13, FastAPI (cada servicio) |
 | Message Queue | Apache Kafka (async communication) |
-| Fine-Tuning | AWS Bedrock (LoRA, managed) |
-| RAG | LangChain, Chroma/Pinecone |
+| Parsers / Loaders | LangChain document loaders out-of-the-box (cualquier formato) |
+| Fine-Tuning | LoRA local (PEFT / ms-swift / Unsloth) → **Premium on-device** only (cloud stays base) |
+| Embeddings | Qwen3-VL-Embedding-2B (2048-dim, multimodal: texto/imagen/video) |
+| RAG | LangChain, Chroma |
 | Agents / bucle simbiótico | LangGraph (orquestación) + MCP tool contracts; nodos HTTP hacia RAG/LLM/Fine-Tune |
-| Document Store | MongoDB Atlas (GridFS para archivos binarios) |
-| LLM Local | llama.rn (Llama 3.2 3B, Q4_K_M) — mobile only |
-| LLM Cloud | AWS Bedrock (Llama 3 8B fine-tuned + inference) |
+| Document Store | MongoDB (GridFS para binarios) — contenedor local |
+| LLM (inferencia) | Cloud: Qwen3.5-4B **base** (contenedor). On-device Free: base cuantizado. On-device Premium: fine-tuneado cuantizado |
 | Web | React + Chart.js |
-| Mobile | React Native (con llama.rn on-device) |
-| Infra Local | Docker Compose (todos los servicios) |
-| Infra Prod | AWS ECS Fargate (servicios) + AWS API Gateway |
+| Móvil | React Native (iPhone) + Neural Engine / Metal |
+| Infra Local (MVP) | Docker Compose (todos los servicios + LLM) |
+| Infra Prod (futuro) | AWS ECS Fargate (servicios) + AWS API Gateway |
 | CI/CD | GitHub Actions |
 | Seguridad | Snyk (dependency scan + SAST en CI) |
-| Encriptación | Fernet (datos), TLS (conexión — AWS managed) |
+| Encriptación | Fernet (datos); TLS solo en producción futura (AWS managed) |
 | Trazabilidad | Correlation ID (X-Request-ID) en headers + logs |
 
 ## Seguridad — Shift Left + Shift Right
@@ -323,12 +440,13 @@ DESARROLLO                                          PRODUCCIÓN
 - **Fuera de alcance**: UI Multilingüe
 
 ### Plataformas
-- **Incluido**: Web app; proxy LLM corre en smartphone/laptop personal (CPU/GPU modesta)
-- **Fuera de alcance**: Asistentes de voz
+- **Incluido**: Web app (React) + **React Native (iPhone)** con Qwen3.5-4B on-device vía Neural Engine / Metal; todo local
+- **Fuera de alcance**: PWA / WebGPU en navegador, asistentes de voz, despliegue en la nube
 
 ### Tipos de datos
-- **Incluido**: Texto, PDF, imágenes estáticas
-- **Fuera de alcance**: Audio streaming en vivo, video
+- **Incluido**: Texto, PDF, imágenes y **video** (Qwen3.5-4B es multimodal en inferencia y
+  Qwen3-VL-Embedding-2B en embeddings)
+- **Fuera de alcance**: Audio streaming en vivo
 
 ### Seguridad
 - **Incluido**: Autenticación JWT + bcrypt (register, login, verify_token, get_current_user)
@@ -367,11 +485,11 @@ Cada paso indica qué se hará, cómo se ejecutará y para qué contribuye al lo
 
 1. **Planificación y arquitectura**: Reunión de arranque, modelo C4, diagramas de agentes/contexto/flujo, repositorio Git. Resultado: arquitectura aprobada y hoja de ruta técnica.
 
-2. **Pipeline "One-Tap Memory Distillation"**: ETL con Python + Tesseract OCR + parsers PDF/HTML. Cada ítem produce JSON con triples (sujeto-predicado-objeto) + metadatos normalizados. Meta: 100 documentos transformados.
+2. **Pipeline "One-Tap Memory Distillation"**: ETL con **loaders LangChain out-of-the-box** (cualquier archivo: texto, PDF, HTML, imágenes con OCR, video). El contenido se pasa a **Qwen3.5-4B**, que **razona** y **extrae los triples en JSON** (sujeto-predicado-objeto) + metadatos. Meta: 100 documentos transformados.
 
-3. **Almacén híbrido y RAG**: MongoDB Atlas Free para documentos, Chroma/MongoDB/Pinecone para embeddings. LangChain para búsqueda Top-k y recuperación semántica.
+3. **Almacén híbrido y RAG**: **MongoDB local** (GridFS) para binarios y registros, **Chroma** para embeddings 2048-dim + chunk_text. Embeddings **multimodales** con **Qwen3-VL-Embedding-2B**. LangChain para búsqueda Top-k y recuperación semántica (cross-modal).
 
-4. **LLM principal on-cloud + LLM on-device**: Fine-tuning LoRA (5 épocas) en AWS Bedrock (Llama 3 8B). Inferencia premium en AWS Bedrock. On-device con llama.rn (Llama 3.2 3B Q4_K_M) para free tier. Latencia objetivo: ≤2s on-device (>18 tok/s).
+4. **LLM principal (contenedor local) + LLM on-device**: **Qwen3.5-4B base** servido en un **contenedor Docker local** para Premium (multimodal + RAG, **sin** fine-tuning). **Fine-tuning LoRA local** (PEFT/ms-swift) produce el build **Premium on-device**. Free: mismo Qwen3.5-4B **base** cuantizado en **React Native (iPhone)** vía **Neural Engine / Metal** (sin cloud). Latencia objetivo: ≤2s on-device (>18 tok/s).
 
 5. **Bucle de aprendizaje simbiótico**: Agents Service (puerto 8006) con LangGraph
    (`reason_graph` + `learn_graph`) y tres agentes MCP (Ingestor, Razonador, Evaluador).
@@ -468,9 +586,12 @@ En caso de conflicto entre documentos, se sigue este orden de precedencia:
 ```
 Frame 1 (Architecture) ──────→ Frame 1.1 (API Router) ──┐
     │                                                     │
-    ├──→ Frame 2 (ETL) ──────────→ Frame 4 (LLM) ────────┤
-    │       │                        │                     │
-    │       └──→ Frame 3 (RAG) ─────┤                     │
+    │                      ┌──→ Frame 4 (LLM) ────────────┤
+    │                      │       ▲                      │
+    │                      │       │ (base inference)     │
+    ├──→ Frame 2 (ETL) ────┘       │                      │
+    │       │                      │                      │
+    │       └──→ Frame 3 (RAG) ────┘                      │
     │               │               │                     │
     │               ├──→ Frame 5 (Agents) ←──── (2+3+4)  │
     │               │                                   │
@@ -484,15 +605,21 @@ Frame 1 (Architecture) ──────→ Frame 1.1 (API Router) ──┐
     └──→ Frame 9 (Validation) ←── TODOS los frames ──────┘
 ```
 
+> **Nota de dependencia (ETL ↔ LLM):** Frame 4 se construye **antes** de Frame 2
+> porque ETL necesita el modelo **base** Qwen3.5-4B para extraer triples. El
+> Fine-Tune Service (parte de Frame 4) se **implementa** junto con la inferencia,
+> pero el **entrenamiento** LoRA es una dependencia de datos en runtime (necesita
+> triples de Frame 2) — no bloquea el orden de build.
+
 ### Dependencias por frame
 
 | Frame | Depende de | Puede correr en paralelo con |
 |-------|-----------|------------------------------|
 | **1. Architecture** | Ninguno (base) | — |
 | **1.1. API Router** | Frame 1 | — |
-| **2. ETL** | Frame 1.1 | Frame 3 |
+| **4. LLM** | Frame 1.1 | — (antes de ETL; Fine-Tune entrena después, en runtime) |
+| **2. ETL** | Frame 1.1, Frame 4 | Frame 3 |
 | **3. RAG** | Frame 1.1 | Frame 2 |
-| **4. LLM** | Frame 2 | — |
 | **5. Agents** | Frame 2, 3, 4 | — |
 | **6. Simulator** | Frame 1.1, 3 | Frame 8 |
 | **7. Analytics** | Frame 6, 8 | — |
@@ -505,8 +632,8 @@ Frame 1 (Architecture) ──────→ Frame 1.1 (API Router) ──┐
 ```
 Fase 1: Frame 1 (Architecture)              ← Secuencial, es la base
 Fase 2: Frame 1.1 (API Router)              ← Secuencial (depende de Frame 1)
-Fase 3: Frame 2 + Frame 3                   ← Paralelo (ambos dependen de Frame 1.1)
-Fase 4: Frame 4 (LLM)                       ← Secuencial (depende de Frame 2)
+Fase 3: Frame 4 (LLM)                       ← Contenedor Qwen3.5-4B + Fine-Tune service
+Fase 4: Frame 2 + Frame 3                   ← Paralelo (ETL necesita Frame 4 base)
 Fase 5: Frame 5 (Agents)                    ← Secuencial (depende de 2, 3, 4)
 Fase 6: Frame 6 + Frame 8                   ← Paralelo (ambos dependen de 1.1, 3)
 Fase 7: Frame 10 (Mobile)                   ← Secuencial (depende de Frame 4)
@@ -516,8 +643,9 @@ Fase 9: Frame 9 (Validation)                ← Último, depende de todos
 
 ### Reglas de dependencia
 
-- **Secuencial obligatorio**: Frame 1 → Frame 1.1 → todo lo demás. Frame 9 → después de todo.
-- **Paralelo permitido**: Frame 2 ∥ Frame 3, Frame 6 ∥ Frame 8.
+- **Secuencial obligatorio**: Frame 1 → Frame 1.1 → Frame 4 → Frame 2. Frame 9 → después de todo.
+- **Paralelo permitido**: Frame 2 ∥ Frame 3 (tras Frame 4), Frame 6 ∥ Frame 8.
+- **ETL ↔ LLM**: Frame 4 (inferencia base) antes de Frame 2. Fine-tuning **usa** triples de Frame 2 en runtime, sin circularidad de build.
 - **Integración**: Frame 5 (Agents) integra los resultados de Frames 2, 3 y 4.
 - **Mobile**: Frame 10 solo necesita Frame 4 (LLM on-device). No necesita RAG ni ETL.
 - **API Router**: Frame 1.1 es el punto de entrada para todos los servicios (ETL, RAG, LLM).

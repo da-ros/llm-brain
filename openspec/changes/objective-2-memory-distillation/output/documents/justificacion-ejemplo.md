@@ -4,24 +4,30 @@ Explicación de los componentes clave del módulo ETL.
 
 ## El problema que resuelve
 
-El usuario sube documentos (PDFs de recetas médicas, facturas, fotos) y el sistema debe **entender** qué hay ahí dentro para que el LLM pueda razonar sobre eso. No puedes pasar un PDF entero a un LLM — necesitas convertirlo en datos estructurados.
+El usuario sube documentos (texto, PDFs de recetas médicas, facturas, fotos, videos) y el sistema debe **entender** qué hay ahí dentro para que el LLM pueda razonar sobre eso. No puedes pasar un binario entero a un vector store — primero **cargas** el contenido con un loader de LangChain y luego dejas que el **LLM razone** y lo convierta en datos estructurados (triples).
 
 ---
 
-## 📋 base.py — El contrato (Protocol)
+## 📋 base.py — Selección de loaders LangChain
 
 ```python
-class DocumentParser(Protocol):
-    def supports(self, file_path: str) -> bool: ...
-    def parse(self, file_path: str) -> list[Triple]: ...
+# Loaders out-of-the-box de langchain_community.document_loaders
+LOADERS = {
+    "application/pdf": PyPDFLoader,          # o PDFPlumberLoader
+    "text/plain":      TextLoader,
+    "text/html":       UnstructuredHTMLLoader,
+    "message/rfc822":  UnstructuredEmailLoader,
+    "image/*":         UnstructuredImageLoader,  # OCR out-of-the-box
+    "video/*":         <video loader>,
+}
+
+def select(file_path: str): ...   # elige el loader por MIME type
+def load(file_path: str): ...     # devuelve el contenido cargado
 ```
 
-Esto es como una **interfaz** en Python. Dice: "Cualquier parser que quieras crear, DEBE tener estos dos métodos".
+**Regla clave**: **todos los parsers usan loaders de LangChain out-of-the-box** (`langchain_community.document_loaders`). **No** se escriben parsers a mano salvo que ningún loader cubra el formato. El OCR lo hacen los loaders `Unstructured*`, **no** un pipeline propio de Tesseract.
 
-- `supports()` → ¿Puedo manejar este archivo? (devuelve True/False)
-- `parse()` → Extráeme el contenido y dame triples
-
-**¿Por qué?** Porque así puedes agregar un parser nuevo (ej: parser de Word) sin tocar el resto del código. Solo creas una clase que implemente estos dos métodos. Es el **Open/Closed Principle** — abierto para extensión, cerrado para modificación.
+**¿Por qué?** Porque así puedes agregar un tipo de archivo nuevo (ej: DOCX) registrando otro loader — sin tocar el resto del código. Es el **Open/Closed Principle** — abierto para extensión, cerrado para modificación.
 
 ---
 
@@ -33,19 +39,24 @@ Usuario sube archivo
         ▼
    distill(file_path)
         │
-        ├─ pdf_parser.supports("doc.pdf")? → SÍ → pdf_parser.parse()
-        ├─ html_parser.supports("page.html")? → SÍ → html_parser.parse()
-        ├─ eml_parser.supports("email.eml")? → SÍ → eml_parser.parse()
-        └─ ocr_parser.supports("foto.png")? → SÍ → ocr_parser.parse()
+        ├─ MIME application/pdf   → PyPDFLoader.load()
+        ├─ MIME text/plain        → TextLoader.load()
+        ├─ MIME text/html         → UnstructuredHTMLLoader.load()
+        ├─ MIME message/rfc822    → UnstructuredEmailLoader.load()
+        ├─ MIME image/*           → UnstructuredImageLoader.load()  (OCR)
+        └─ MIME video/*           → video loader .load()
         │
         ▼
-   Recolecta todos los triples
+   Contenido cargado (texto / multimodal)
+        │
+        ▼
+   POST LLM Service (8003, Qwen3.5-4B base) → el modelo RAZONA → emite triples JSON
         │
         ▼
    Escribe archivo JSONL
 ```
 
-El orquestador **no sabe** cómo parsear cada tipo — solo sabe **enrutar** al parser correcto. Es como un switch case inteligente.
+El orquestador **no sabe** cómo cargar cada tipo — solo **selecciona** el loader de LangChain correcto y luego delega el razonamiento al **LLM Service**. Es un switch case inteligente sobre loaders + una llamada al LLM.
 
 ---
 
@@ -62,7 +73,9 @@ Es como una oración simplificada:
 - **Predicado**: ¿Qué relación tiene? → "tiene"
 - **Objeto**: ¿Qué cosa? → "diabetes"
 
-Esto es lo que el LLM puede razonar. Si tienes 100 triples de un paciente, el LLM puede decir "Este paciente tiene diabetes, toma metformina, y su presión es alta".
+**¿Quién los crea?** El **LLM (Qwen3.5-4B base)**: recibe el contenido cargado, **razona** sobre él y **recién entonces emite los triples en JSON** (proceso LLM-first, no reglas/regex). Si tienes 100 triples de un paciente, el LLM puede decir "Este paciente tiene diabetes, toma metformina, y su presión es alta".
+
+> **Dependencia entre frames:** ETL (Frame 2) llama al **LLM Service (Frame 4)** con el modelo **base** Qwen3.5-4B (no requiere fine-tuning). El fine-tuning sí depende de los triples que ETL acumula, pero ETL solo necesita inferencia base.
 
 ---
 
@@ -115,13 +128,13 @@ Es el **punto de entrada** — el único lugar donde el usuario interactúa con 
 2. JWT validado (¿está autenticado?)
 3. python-magic detecta: application/pdf
 4. distill("receta.pdf") se ejecuta
-5. pdf_parser.supports() → True
-6. pdf_parser.parse() extrae texto del PDF
-7. Si el PDF tiene imágenes escaneadas → fallback a OCR (Tesseract)
-8. Triple extraction: "Paciente tiene diabetes" → triple
+5. Se selecciona el loader LangChain: PyPDFLoader
+6. PyPDFLoader.load() carga el contenido del PDF (OCR vía Unstructured si es escaneado)
+7. El contenido se envía al LLM Service (8003, Qwen3.5-4B base)
+8. El LLM razona y emite triples JSON: "Paciente tiene diabetes" → triple
 9. Metadata enrichment: agrega source_file, page, timestamp
 10. Escribe: data/triples/{user_id}/receta_123.jsonl
-11. Guarda metadata del documento en MongoDB
+11. El binario original ya vive en MongoDB GridFS (local); se guarda metadata del documento en MongoDB
 12. Retorna HTTP 201 {triples_count: 15}
 ```
 
@@ -130,26 +143,28 @@ Es el **punto de entrada** — el único lugar donde el usuario interactúa con 
 ## 📐 Arquitectura resumida
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    FASTAPI BACKEND                       │
-│                                                         │
-│  POST /api/upload ──→ distill() ──→ Parser Protocol     │
-│       │                   │              │              │
-│       │                   │         ┌────┼────┐        │
-│       │                   │         │    │    │        │
-│       │                   │       PDF  HTML  EML  OCR  │
-│       │                   │         │    │    │    │    │
-│       │                   │         └────┼────┘        │
-│       │                   │              │              │
-│       │                   │         Triple Extraction  │
-│       │                   │              │              │
-│       │                   │         JSONL Output       │
-│       │                   │              │              │
-│       ▼                   ▼              ▼              │
-│    MongoDB          data/triples/{user_id}/             │
-│  (doc metadata)     {doc_id}.jsonl                      │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                    ETL SERVICE (8001)                          │
+│                                                               │
+│  Kafka file.uploaded ──→ distill() ──→ LangChain Loaders      │
+│       │                      │              │                  │
+│       │                      │      ┌───────┼───────┐         │
+│       │                      │      │   │   │   │   │         │
+│       │                      │    PDF Text HTML EML Img/Vid   │
+│       │                      │      └───────┼───────┘         │
+│       │                      │              │                  │
+│       │                      │      contenido cargado         │
+│       │                      │              │                  │
+│       │                      │   ──→ LLM Service (8003)        │
+│       │                      │        Qwen3.5-4B base RAZONA   │
+│       │                      │              │                  │
+│       │                      │      Triples JSON (LLM-first)   │
+│       │                      │              │                  │
+│       ▼                      ▼              ▼                  │
+│  MongoDB GridFS (local)   data/triples/{user_id}/             │
+│  (binario original)       {doc_id}.jsonl                      │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -160,30 +175,36 @@ Es el **punto de entrada** — el único lugar donde el usuario interactúa con 
 
 #### Strategy (Estrategia)
 
-Cada parser es una **estrategia** diferente para extraer texto:
+Cada loader de LangChain es una **estrategia** diferente para cargar contenido:
 
 ```
-DocumentParser (Protocol)
-    ├── PdfParser      → Estrategia para PDFs
-    ├── HtmlParser     → Estrategia para HTML
-    ├── EmlParser      → Estrategia para emails
-    └── OcrParser      → Estrategia para imágenes
+LangChain loaders (langchain_community.document_loaders)
+    ├── PyPDFLoader / PDFPlumberLoader → Estrategia para PDFs
+    ├── TextLoader                     → Estrategia para texto
+    ├── UnstructuredHTMLLoader         → Estrategia para HTML
+    ├── UnstructuredEmailLoader        → Estrategia para emails
+    ├── UnstructuredImageLoader        → Estrategia para imágenes (OCR)
+    └── video loader                   → Estrategia para video
 ```
 
-`distill()` **selecciona** la estrategia correcta en runtime sin saber cómo funciona internamente. Si mañana agregas un parser de Word, solo creas la clase — `distill()` no cambia.
+`distill()` **selecciona** la estrategia correcta en runtime por MIME type. Si mañana agregas un tipo (ej: DOCX), solo registras otro loader — `distill()` no cambia.
 
 #### Factory Method (Método Factory)
 
-`distill()` actúa como un **factory**: dado un archivo, crea (o selecciona) el parser correcto:
+`distill()` actúa como un **factory**: dado un archivo, selecciona el loader de LangChain correcto por MIME type:
 
 ```python
 def distill(file_path: str) -> list[Triple]:
-    for parser in [pdf_parser, html_parser, eml_parser, ocr_parser]:
-        if parser.supports(file_path):
-            return parser.parse(file_path)
+    loader = select_loader(file_path)        # elige loader LangChain por MIME
+    content = loader(file_path).load()       # carga el contenido
+    return llm_client.extract_triples(content)  # el LLM razona y emite triples
 ```
 
-No dice `PdfParser()` directamente — pregunta "¿quién puede con esto?" y usa al que responda.
+No instancia `PyPDFLoader()` directamente en todos lados — pregunta "¿qué loader va con este MIME?" y usa el que corresponda.
+
+#### Adapter (Adaptador)
+
+El **cliente del LLM Service** (`llm_client`) envuelve la API HTTP del LLM Service (8003) detrás de un método simple `extract_triples(content)`. El resto del ETL no sabe de HTTP ni de prompts — solo pide triples y el adapter se encarga de hablar con Qwen3.5-4B (modelo base).
 
 #### Facade (Fachada)
 
@@ -191,10 +212,10 @@ No dice `PdfParser()` directamente — pregunta "¿quién puede con esto?" y usa
 
 ```
 Usuario solo ve:    POST /api/upload
-Lo que pasa adentro: validación → MIME detection → routing → parsing → extraction → storage
+Lo que pasa adentro: validación → MIME detection → loader LangChain → load → LLM razona → triples → storage
 ```
 
-El usuario no necesita saber qué es un parser, un triple, o JSONL. Solo sube un archivo.
+El usuario no necesita saber qué es un loader, un triple, o JSONL. Solo sube un archivo.
 
 ---
 
@@ -206,66 +227,55 @@ Cada módulo hace **UNA sola cosa**:
 
 | Módulo | Responsabilidad |
 |--------|-----------------|
-| `upload.py` | Solo maneja HTTP (recibe archivo, retorna respuesta) |
-| `pipeline.py` | Solo enruta al parser correcto |
-| `pdf_parser.py` | Solo extrae texto de PDFs |
-| `triples.py` | Solo extrae triples del texto |
+| `upload.py` (API Router) | Solo maneja HTTP (recibe archivo, retorna respuesta) |
+| `pipeline.py` | Solo selecciona el loader LangChain y orquesta la extracción |
+| `base.py` | Solo mapea MIME → loader LangChain y carga contenido |
+| `llm_client.py` | Solo habla con el LLM Service para extraer triples |
 
-Si el parser de PDF falla, solo tocas `pdf_parser.py`. No tocas el upload, ni el orquestador, ni los triples.
+Si un loader falla, solo tocas el mapeo del loader. No tocas el upload, ni el orquestador, ni el cliente del LLM.
 
 #### O — Open/Closed (Abierto para extensión, cerrado para modificación)
 
-Para agregar un parser nuevo (ej: Word .docx):
+Para agregar un tipo nuevo (ej: Word .docx):
 
 ```
-1. Creas: services/etl/parsers/docx.py
-2. Implementas: supports() y parse()
-3. Agregas: una línea en distill() para registrar el parser
+1. Registras el loader de LangChain (ej: UnstructuredWordDocumentLoader)
+2. Agregas: una línea en el mapeo MIME → loader
 ```
 
-**NO** modificas `pdf_parser.py`, `html_parser.py`, ni `triples.py`. El código existente no cambia — solo agregas.
+**NO** modificas los loaders existentes ni el `llm_client`. El código existente no cambia — solo agregas.
 
 #### L — Liskov Substitution (Sustitución de Liskov)
 
-Cualquier implementación de `DocumentParser` puede reemplazar a otra sin romper el sistema:
+Cualquier loader de LangChain puede reemplazar a otro detrás de la capa de selección sin romper el sistema:
 
 ```python
-# Esto funciona con CUALQUIER parser
-def process(parser: DocumentParser, file: str) -> list[Triple]:
-    if parser.supports(file):
-        return parser.parse(file)
+# Esto funciona con CUALQUIER loader LangChain
+def load_content(loader_cls, file: str):
+    return loader_cls(file).load()
 ```
 
-No importa si es `PdfParser`, `OcrParser`, o uno futuro — todos son intercambiables.
+No importa si es `PyPDFLoader`, `UnstructuredImageLoader`, o uno futuro — todos exponen `.load()`.
 
 #### I — Interface Segregation (Segregación de Interfaz)
 
-El `DocumentParser` protocol tiene solo **2 métodos**:
-
-```python
-class DocumentParser(Protocol):
-    def supports(self, file_path: str) -> bool: ...
-    def parse(self, file_path: str) -> list[Triple]: ...
-```
-
-No fuerza a los parsers a implementar métodos que no necesitan. Si un parser no necesita `supports()` (ej: un parser que siempre procesa), igual puede implementarlo como `return True`.
+La capa de selección expone una interfaz mínima (`select` + `load`), y el cliente del LLM expone solo `extract_triples(content)`. Nadie está forzado a depender de métodos que no usa.
 
 #### D — Dependency Inversion (Inversión de Dependencia)
 
-`distill()` depende de la **abstracción** (`DocumentParser`), no de las **clases concretas**:
+`distill()` depende de **abstracciones** (la capa de loaders y el cliente del LLM), no de clases concretas:
 
 ```python
-# distill() NO hace esto:
-from services.etl.parsers.pdf import PdfParser  # ❌ Dependencia concreta
+# distill() NO acopla a un loader concreto en todo el flujo:
+from langchain_community.document_loaders import PyPDFLoader  # ❌ acoplamiento directo
 
 # distill() SÍ hace esto:
-def distill(parsers: list[DocumentParser], file: str):  # ✅ Depende de la abstracción
-    for parser in parsers:
-        if parser.supports(file):
-            return parser.parse(file)
+def distill(select_loader, llm_client, file: str):  # ✅ depende de abstracciones
+    content = select_loader(file)(file).load()
+    return llm_client.extract_triples(content)
 ```
 
-Esto permite cambiar los parsers sin tocar el orquestador.
+Esto permite cambiar loaders o el backend del LLM sin tocar el orquestador.
 
 ---
 
@@ -308,13 +318,14 @@ def log_with_correlation(correlation_id: str, level: str, message: str):
 ### Consumer: procesamiento exitoso
 
 ```
-2026-08-31T10:00:01 [abc-123] INFO etl-service: Fetching file from MongoDB GridFS
+2026-08-31T10:00:01 [abc-123] INFO etl-service: Fetching file from MongoDB GridFS (local)
 2026-08-31T10:00:01 [abc-123] INFO etl-service: File fetched successfully
 2026-08-31T10:00:02 [abc-123] INFO etl-service: Starting ETL pipeline
-2026-08-31T10:00:02 [abc-123] INFO etl-service: PDF parser selected (supports: True)
-2026-08-31T10:00:03 [abc-123] INFO etl-service: Extracted text from page 1 (1250 chars)
-2026-08-31T10:00:03 [abc-123] INFO etl-service: Extracted text from page 2 (980 chars)
-2026-08-31T10:00:03 [abc-123] INFO etl-service: Triple extraction: 15 triples found
+2026-08-31T10:00:02 [abc-123] INFO etl-service: LangChain loader selected: PyPDFLoader (mime=application/pdf)
+2026-08-31T10:00:03 [abc-123] INFO etl-service: Loaded content from page 1 (1250 chars)
+2026-08-31T10:00:03 [abc-123] INFO etl-service: Loaded content from page 2 (980 chars)
+2026-08-31T10:00:03 [abc-123] INFO etl-service: Calling LLM Service (8003, Qwen3.5-4B base) for triple extraction
+2026-08-31T10:00:03 [abc-123] INFO etl-service: LLM returned 15 triples
 2026-08-31T10:00:03 [abc-123] INFO etl-service: Saved 15 triples to data/triples/user1/abc-123.jsonl
 2026-08-31T10:00:03 [abc-123] INFO etl-service: Published to Kafka: task.response (success)
 ```
@@ -326,10 +337,10 @@ def log_with_correlation(correlation_id: str, level: str, message: str):
 2026-08-31T10:00:01 [abc-789] INFO etl-service: Processing file: scanned.pdf (user_id=user2)
 2026-08-31T10:00:01 [abc-789] INFO etl-service: Fetching file from MongoDB GridFS
 2026-08-31T10:00:02 [abc-789] INFO etl-service: Starting ETL pipeline
-2026-08-31T10:00:02 [abc-789] INFO etl-service: PDF parser selected (supports: True)
-2026-08-31T10:00:02 [abc-789] WARNING etl-service: No text extracted from page 1 — attempting OCR
-2026-08-31T10:00:05 [abc-789] INFO etl-service: OCR extracted 850 chars from page 1
-2026-08-31T10:00:05 [abc-789] INFO etl-service: Triple extraction: 8 triples found
+2026-08-31T10:00:02 [abc-789] INFO etl-service: LangChain loader selected: UnstructuredPDFLoader (scanned PDF, OCR out-of-the-box)
+2026-08-31T10:00:05 [abc-789] INFO etl-service: Loader extracted 850 chars via Unstructured OCR
+2026-08-31T10:00:05 [abc-789] INFO etl-service: Calling LLM Service (8003, Qwen3.5-4B base) for triple extraction
+2026-08-31T10:00:05 [abc-789] INFO etl-service: LLM returned 8 triples
 2026-08-31T10:00:05 [abc-789] INFO etl-service: Published to Kafka: task.response (success)
 ```
 
@@ -363,54 +374,48 @@ def log_with_correlation(correlation_id: str, level: str, message: str):
 
 ---
 
-## 🔍 Logs por Parser
+## 🔍 Logs por LangChain Loader
 
-### PDF Parser
-
-```
-2026-08-31T10:00:02 [abc-123] DEBUG pdf-parser: Opening PDF: receta.pdf
-2026-08-31T10:00:02 [abc-123] DEBUG pdf-parser: Page 1: 1250 chars extracted
-2026-08-31T10:00:02 [abc-123] DEBUG pdf-parser: Page 2: 980 chars extracted
-2026-08-31T10:00:02 [abc-123] DEBUG pdf-parser: Total: 2230 chars from 2 pages
-```
-
-### HTML Parser
+### PyPDFLoader
 
 ```
-2026-08-31T10:00:02 [abc-123] DEBUG html-parser: Opening HTML: page.html
-2026-08-31T10:00:02 [abc-123] DEBUG html-parser: Stripped 15 tags, 3 scripts
-2026-08-31T10:00:02 [abc-123] DEBUG html-parser: Extracted 1800 chars
+2026-08-31T10:00:02 [abc-123] DEBUG etl-loader: PyPDFLoader.load(): receta.pdf
+2026-08-31T10:00:02 [abc-123] DEBUG etl-loader: Page 1: 1250 chars loaded
+2026-08-31T10:00:02 [abc-123] DEBUG etl-loader: Page 2: 980 chars loaded
+2026-08-31T10:00:02 [abc-123] DEBUG etl-loader: Total: 2230 chars from 2 pages
 ```
 
-### EML Parser
+### UnstructuredHTMLLoader
 
 ```
-2026-08-31T10:00:02 [abc-123] DEBUG eml-parser: Opening EML: email.eml
-2026-08-31T10:00:02 [abc-123] DEBUG eml-parser: Headers: From, To, Subject, Date
-2026-08-31T10:00:02 [abc-123] DEBUG eml-parser: Body: 950 chars (text/plain)
-2026-08-31T10:00:02 [abc-123] DEBUG eml-parser: Attachments: 2 files
+2026-08-31T10:00:02 [abc-123] DEBUG etl-loader: UnstructuredHTMLLoader.load(): page.html
+2026-08-31T10:00:02 [abc-123] DEBUG etl-loader: Loaded 1800 chars of text content
 ```
 
-### OCR Parser
+### UnstructuredEmailLoader
 
 ```
-2026-08-31T10:00:02 [abc-123] DEBUG ocr-parser: Opening image: foto.png
-2026-08-31T10:00:02 [abc-123] DEBUG ocr-parser: Preprocessing: grayscale + contrast + sharpen
-2026-08-31T10:00:04 [abc-123] DEBUG ocr-parser: OCR extracted 850 chars (confidence: 0.92)
+2026-08-31T10:00:02 [abc-123] DEBUG etl-loader: UnstructuredEmailLoader.load(): email.eml
+2026-08-31T10:00:02 [abc-123] DEBUG etl-loader: Headers + body loaded: 950 chars
+```
+
+### UnstructuredImageLoader (OCR out-of-the-box)
+
+```
+2026-08-31T10:00:02 [abc-123] DEBUG etl-loader: UnstructuredImageLoader.load(): foto.png
+2026-08-31T10:00:04 [abc-123] DEBUG etl-loader: Loaded 850 chars via Unstructured OCR
 ```
 
 ---
 
-## 🔗 Logs por Triple Extraction
+## 🔗 Logs por Triple Extraction (LLM Service, Qwen3.5-4B base)
 
 ```
-2026-08-31T10:00:03 [abc-123] DEBUG triple-extraction: Processing 2230 chars
-2026-08-31T10:00:03 [abc-123] DEBUG triple-extraction: Pattern "is": 5 matches
-2026-08-31T10:00:03 [abc-123] DEBUG triple-extraction: Pattern "has": 4 matches
-2026-08-31T10:00:03 [abc-123] DEBUG triple-extraction: Pattern "takes": 3 matches
-2026-08-31T10:00:03 [abc-123] DEBUG triple-extraction: Pattern "performs": 2 matches
-2026-08-31T10:00:03 [abc-123] DEBUG triple-extraction: Pattern "diagnosed_with": 1 match
-2026-08-31T10:00:03 [abc-123] DEBUG triple-extraction: Total: 15 triples extracted
+2026-08-31T10:00:03 [abc-123] DEBUG etl-llm-client: POST LLM Service (8003) /extract — model=Qwen3.5-4B (base)
+2026-08-31T10:00:03 [abc-123] DEBUG etl-llm-client: Sent 2230 chars of loaded content for reasoning
+2026-08-31T10:00:03 [abc-123] INFO  llm-service: Reasoning over content and extracting triples
+2026-08-31T10:00:03 [abc-123] DEBUG etl-llm-client: LLM responded with JSON array (15 triples)
+2026-08-31T10:00:03 [abc-123] DEBUG etl-llm-client: Total: 15 triples extracted (LLM-first)
 ```
 
 ---
@@ -420,9 +425,9 @@ def log_with_correlation(correlation_id: str, level: str, message: str):
 ```
 2026-08-31T10:00:02 [abc-123] DEBUG pipeline: File: receta.pdf (2.5 MB)
 2026-08-31T10:00:02 [abc-123] DEBUG pipeline: MIME type: application/pdf
-2026-08-31T10:00:02 [abc-123] DEBUG pipeline: Selecting parser: PdfParser
-2026-08-31T10:00:02 [abc-123] DEBUG pipeline: Parser supports: True
-2026-08-31T10:00:03 [abc-123] DEBUG pipeline: Parser returned: 15 triples
+2026-08-31T10:00:02 [abc-123] DEBUG pipeline: Selecting LangChain loader: PyPDFLoader
+2026-08-31T10:00:02 [abc-123] DEBUG pipeline: Content loaded: 2230 chars
+2026-08-31T10:00:03 [abc-123] DEBUG pipeline: LLM Service returned: 15 triples
 2026-08-31T10:00:03 [abc-123] DEBUG pipeline: Output: data/triples/user1/abc-123.jsonl
 ```
 
@@ -439,11 +444,11 @@ T+0.002s  [abc-123] INFO  api-gateway: File saved to GridFS: receta.pdf
 T+0.003s  [abc-123] INFO  api-gateway: Published to Kafka: file.uploaded
 T+0.004s  [abc-123] INFO  api-gateway: Response: 202 Accepted
 T+1.000s  [abc-123] INFO  etl-service: Consumed from Kafka: file.uploaded
-T+1.001s  [abc-123] INFO  etl-service: Fetching file from GridFS
-T+1.500s  [abc-123] DEBUG pipeline: Selecting parser: PdfParser
-T+2.000s  [abc-123] DEBUG pdf-parser: Page 1: 1250 chars
-T+2.500s  [abc-123] DEBUG pdf-parser: Page 2: 980 chars
-T+3.000s  [abc-123] DEBUG triple-extraction: 15 triples extracted
+T+1.001s  [abc-123] INFO  etl-service: Fetching file from GridFS (local)
+T+1.500s  [abc-123] DEBUG pipeline: Selecting LangChain loader: PyPDFLoader
+T+2.000s  [abc-123] DEBUG etl-loader: Page 1: 1250 chars
+T+2.500s  [abc-123] DEBUG etl-loader: Page 2: 980 chars
+T+3.000s  [abc-123] DEBUG etl-llm-client: LLM Service (Qwen3.5-4B base) returned 15 triples
 T+3.001s  [abc-123] INFO  etl-service: Published to Kafka: task.response (success)
 T+3.500s  [abc-123] INFO  api-gateway: Task completed successfully
 ```
@@ -454,11 +459,9 @@ T+3.500s  [abc-123] INFO  api-gateway: Task completed successfully
 T+0.000s  [abc-456] INFO  api-gateway: POST /api/upload
 T+0.003s  [abc-456] INFO  api-gateway: Published to Kafka: file.uploaded
 T+1.000s  [abc-456] INFO  etl-service: Consumed from Kafka: file.uploaded
-T+1.500s  [abc-456] DEBUG pipeline: Selecting parser: PdfParser
-T+2.000s  [abc-456] WARNING pdf-parser: No text on page 1 — OCR fallback
-T+2.001s  [abc-456] DEBUG ocr-parser: Preprocessing: grayscale + contrast
-T+4.000s  [abc-456] DEBUG ocr-parser: OCR extracted 850 chars (confidence: 0.92)
-T+4.500s  [abc-456] DEBUG triple-extraction: 8 triples extracted
+T+1.500s  [abc-456] DEBUG pipeline: Selecting LangChain loader: UnstructuredPDFLoader (scanned)
+T+4.000s  [abc-456] DEBUG etl-loader: Loaded 850 chars via Unstructured OCR
+T+4.200s  [abc-456] DEBUG etl-llm-client: LLM Service (Qwen3.5-4B base) returned 8 triples
 T+4.501s  [abc-456] INFO  etl-service: Published to Kafka: task.response (success)
 ```
 
@@ -468,8 +471,8 @@ T+4.501s  [abc-456] INFO  etl-service: Published to Kafka: task.response (succes
 T+0.000s  [abc-789] INFO  api-gateway: POST /api/upload
 T+0.003s  [abc-789] INFO  api-gateway: Published to Kafka: file.uploaded
 T+1.000s  [abc-789] INFO  etl-service: Consumed from Kafka: file.uploaded
-T+1.500s  [abc-789] DEBUG pipeline: Selecting parser: PdfParser
-T+2.000s  [abc-789] ERROR etl-service: Processing failed: PDF is corrupted
+T+1.500s  [abc-789] DEBUG pipeline: Selecting LangChain loader: PyPDFLoader
+T+2.000s  [abc-789] ERROR etl-service: Processing failed: PDF is corrupted (loader error)
 T+2.001s  [abc-789] ERROR etl-service: Published error response (http_code=500)
 T+2.500s  [abc-789] WARNING api-gateway: Retrying (1/3)
 ```

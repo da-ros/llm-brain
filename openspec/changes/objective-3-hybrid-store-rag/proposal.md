@@ -1,8 +1,9 @@
 ## Why
 
-The platform needs a hybrid storage layer that combines document storage (MongoDB Atlas)
-with vector embeddings (Chroma/Pinecone) to enable semantic retrieval. The RAG service
-uses LangChain to perform Top-k retrieval and inject relevant context into LLM queries.
+The platform needs a hybrid storage layer that combines binary/document storage (local
+MongoDB with GridFS) with multimodal vector embeddings (Chroma, local) to enable
+cross-modal semantic retrieval. The RAG service uses LangChain to perform Top-k retrieval
+and inject relevant context into LLM queries.
 
 This is **Objetivo Específico 3** of the thesis: the "Almacén híbrido y RAG" that
 allows the LLM to reason over the user's personal knowledge.
@@ -11,8 +12,8 @@ allows the LLM to reason over the user's personal knowledge.
 
 Frame 1 established:
 - **FastAPI backend** with JWT auth, config layer, and LLM provider abstraction
-- **MongoDB** for document storage, **Chroma** for vector embeddings
-- **Docker Compose** with MongoDB 7 and ChromaDB containers
+- **Local MongoDB** (GridFS) for binaries + records, **Chroma** for vector embeddings
+- **Docker Compose** with local MongoDB and ChromaDB containers
 - **Per-user data isolation** via `user_id` scoping
 - **Fernet encryption** for application-level data protection
 
@@ -26,20 +27,22 @@ Frame 2 established:
 
 ## What Changes
 
-### Document Store (MongoDB)
+### Document & Binary Store (local MongoDB + GridFS)
 - MongoDB client in `services/rag/document_store.py`
-- Document schema with `user_id` field for per-user isolation
+- Original binaries (text/pdf/image/video) stored in **MongoDB GridFS** (local container)
+- Records (Documents index, task_status) with `user_id` field for per-user isolation
 - CRUD operations with `user_id` filter on all queries
 
-### Vector Store (Chroma/Pinecone)
+### Vector Store (Chroma, local)
 - Vector store abstraction in `services/rag/vector_store.py`
-- ChromaVectorStore and PineconeVectorStore classes
-- Embedding generation with sentence-transformers
+- ChromaVectorStore class (local Chroma container; Pinecone is future/out of scope)
+- Multimodal embedding generation with **Qwen3-VL-Embedding-2B** (2048-dim)
+- Text chunks stored in Chroma alongside the vector (`document` field) with metadata linking to `gridfs_id`
 - Fernet encryption for stored embeddings
 
 ### RAG Service (LangChain)
 - RAG service in `services/rag/rag_service.py`
-- Semantic search with Top-k retrieval
+- Cross-modal semantic search with Top-k retrieval (text query can retrieve images/video)
 - Document chunking with RecursiveCharacterTextSplitter
 - Context injection for LLM queries
 
@@ -69,8 +72,8 @@ output/
 ## Capabilities
 
 ### New Capabilities
-- `hybrid-store-rag`: Hybrid storage (MongoDB + Chroma/Pinecone) with LangChain RAG
-  for semantic retrieval and context injection
+- `hybrid-store-rag`: Hybrid storage (local MongoDB/GridFS + Chroma) with LangChain RAG
+  for cross-modal semantic retrieval and context injection
 
 ### Modified Capabilities
 - `platform-foundation`: Added RAG configuration to config layer
@@ -79,15 +82,15 @@ output/
 ## Impact
 
 - New code: `services/rag/` (document_store, vector_store, rag_service)
-- New dependencies: langchain, chromadb, sentence-transformers, pinecone-client
+- New dependencies: langchain, chromadb, Qwen3-VL-Embedding-2B (multimodal embeddings)
 - Integrates with: Frame 2 (JSONL triples), Frame 4 (LLM provider for context)
 - No changes to existing auth or ETL layers
 
 ## Execution Order
 
-1. **Document store** — MongoDB client with per-user isolation
-2. **Vector store** — Chroma/Pinecone abstraction with encryption
-3. **Embedding pipeline** — sentence-transformers + chunking
-4. **RAG service** — LangChain retrieval + context injection
+1. **Document store** — local MongoDB/GridFS client with per-user isolation
+2. **Vector store** — Chroma (local) abstraction with encryption
+3. **Embedding pipeline** — Qwen3-VL-Embedding-2B (2048-dim, multimodal) + chunking
+4. **RAG service** — LangChain cross-modal retrieval + context injection
 5. **Wire to FastAPI** — Upload and chat integration
 6. **Test everything** — Unit + integration tests

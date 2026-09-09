@@ -1,7 +1,8 @@
 ## Why
 
 Frames 2–4 already store personal documents, retrieve them with RAG, and generate
-answers with a cloud LLM, but they do not close the Brain–LLM loop: interactions are
+answers with the local Qwen3.5-4B LLM container, but they do not close the Brain–LLM
+loop: interactions are
 not ingested as memory, reasoning is not recorded with explicit assumptions, and
 nothing prepares a weekly fine-tuning batch. Frame 5 adds the symbiotic learning
 loop so the platform can co-evolve with each premium user without auto-retraining
@@ -13,19 +14,25 @@ in real time.
   triples tagged with `user_id`; publishes `task.response`.
 - **Frame 3 (RAG, port 8002)**: MongoDB + Chroma, Fernet-encrypted embeddings,
   Top-k retrieval scoped by `user_id`; HTTP sync used by chat.
-- **Frame 4 (LLM port 8003, Fine-Tune port 8004)**: Bedrock inference for premium
-  users; LoRA jobs submitted only by explicit `POST /train` (manual, not automatic).
+- **Frame 4 (LLM port 8003, Fine-Tune port 8004)**: multimodal Qwen3.5-4B inference
+  in a local Docker container for premium users; local LoRA (PEFT/ms-swift) jobs
+  submitted only by explicit `POST /train` (manual, not automatic).
 - **Frame 1.1 (API Router, port 8000)**: JWT, `X-Request-ID`, `POST /api/chat`
   currently calls RAG then LLM directly.
 
-Frame 5 **integrates** those three services. It does not replace ETL, RAG, or Bedrock.
+Frame 5 **integrates** those three services. It does not replace ETL, RAG, or the
+local Qwen3.5-4B LLM Service.
 
 ## What Changes
 
 - Add **Agents Service** (`services/agents/`, port **8006**) as a FastAPI microservice
   that orchestrates three MCP agents (**Ingestor**, **Razonador**, **Evaluador**) with
-  **LangGraph** state graphs. LangChain remains the RAG stack (Frame 3); it is not
-  the agent runtime.
+  **LangGraph** state graphs. We implement our **own MCP tool contracts** (no
+  third-party MCP servers — keeps it local and $0): `rag_search` (RAG 8002),
+  `llm_generate` (LLM 8003, Qwen3.5-4B), `ingest_turn` (MongoDB `agent_interactions`),
+  `evaluate_turn` (MongoDB `agent_feedback`, `finetune_batches`), and `finetune_trigger`
+  (Fine-Tune 8004, manual only). LangGraph nodes invoke these tools over HTTP.
+  LangChain remains the RAG stack (Frame 3); it is not the agent runtime.
 - **Premium chat routing** (**BREAKING** for premium only): `POST /api/chat` calls
   Razonador instead of RAG+LLM directly. Razonador retrieves context (RAG), generates
   the answer (LLM), and records explicit assumptions. Free-tier chat is unchanged
@@ -73,7 +80,8 @@ openspec/changes/objective-5-symbiotic-learning/
 
 - New service: `services/agents/` (FastAPI + LangGraph, Dockerfile, port 8006).
 - New dependency: `langgraph` (orchestration). Agents call RAG/LLM/Fine-Tune over
-  HTTP; they do not embed Bedrock or LangChain retrievers.
+  HTTP via their own MCP tools; they do not embed the LLM weights (Qwen3.5-4B),
+  Chroma, or LangChain retrievers.
 - API Router: chat router for premium; Kafka producer `session.turn.completed`;
   new routes for session end and manual fine-tune.
 - Kafka: new topic `session.turn.completed` (payload: correlation_id, user_id,

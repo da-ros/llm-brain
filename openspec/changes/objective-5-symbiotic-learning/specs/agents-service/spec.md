@@ -2,9 +2,12 @@
 
 The agents-service capability is the symbiotic learning loop: three MCP agents
 (Ingestor, Razonador, Evaluador) orchestrated with LangGraph state graphs. They
-ingest premium-user interactions, reason with RAG and the cloud LLM while recording
-assumptions, write session feedback, and prepare weekly fine-tune batches that a
-human must trigger.
+ingest premium-user interactions, reason with RAG and the local Qwen3.5-4B LLM
+Service while recording assumptions, write session feedback, and prepare weekly
+fine-tune batches that a human must trigger. The service exposes its own MCP tool
+contracts (`rag_search`, `llm_generate`, `ingest_turn`, `evaluate_turn`,
+`finetune_trigger`) that wrap internal services over HTTP; there is no direct access
+to the LLM weights or Chroma.
 
 ## ADDED Requirements
 
@@ -76,8 +79,9 @@ that user's batch).
 ### Requirement: Razonador reasons with RAG context and records assumptions
 
 On each premium reason request the Razonador agent SHALL retrieve Top-k personal
-context, call the cloud LLM, and return the answer together with an explicit list
-of assumptions used.
+context via the `rag_search` tool, call the local Qwen3.5-4B LLM Service via the
+`llm_generate` tool, and return the answer together with an explicit list of
+assumptions used.
 
 #### Scenario: Successful reason with context
 
@@ -101,7 +105,8 @@ of assumptions used.
 
 The Agents Service SHALL run premium reasoning on a compiled `reason_graph` and
 post-turn learning on a compiled `learn_graph`. Graph nodes SHALL call RAG, LLM,
-and Fine-Tune over HTTP (no direct Bedrock or vector-store access from this service).
+and Fine-Tune over HTTP via the service's own MCP tools (no direct access to the
+LLM weights (Qwen3.5-4B) or the vector store from this service).
 
 #### Scenario: Reason graph on chat
 
@@ -182,16 +187,20 @@ trigger that sends that batch to Fine-Tune Service.
 
 ### Requirement: MCP tool contracts
 
-Each agent SHALL expose a named tool contract (name, description, input schema)
-backed by the corresponding LangGraph node or graph. The host SHALL invoke
-Ingestor, Razonador, and Evaluador through those tools without hard-coding
-another agent's internals.
+The Agents Service SHALL implement its own MCP tool contracts (name, description,
+input schema), each wrapping one internal service over HTTP and invoked by the
+LangGraph nodes: `rag_search` (RAG 8002), `llm_generate` (LLM 8003), `ingest_turn`
+(MongoDB `agent_interactions`), `evaluate_turn` (MongoDB `agent_feedback`,
+`finetune_batches`), and `finetune_trigger` (Fine-Tune 8004, manual only). The host
+SHALL invoke Ingestor, Razonador, and Evaluador through those tools without
+hard-coding another agent's internals, and SHALL NOT integrate third-party MCP
+servers.
 
 #### Scenario: Host lists tools
 
 - **GIVEN** the Agents Service is running
 - **WHEN** `GET /mcp/tools` is called
-- **THEN** the response lists at least `ingest_turn`, `reason`, and `evaluate_turn`
+- **THEN** the response lists at least `rag_search`, `llm_generate`, `ingest_turn`, `evaluate_turn`, and `finetune_trigger`
 
 #### Scenario: Unknown tool is rejected
 

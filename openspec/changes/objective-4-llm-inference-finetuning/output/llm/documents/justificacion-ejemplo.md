@@ -14,7 +14,7 @@
 **Patrón de diseño**: Strategy Pattern — el provider selection es una estrategia que cambia según el tier.
 
 **SOLID**:
-- **S** (Single Responsibility): Cada provider hace una cosa (Bedrock inference)
+- **S** (Single Responsibility): Cada provider hace una cosa (inferencia Qwen3.5-4B en el contenedor local)
 - **O** (Open/Closed): Nuevo provider se agrega sin modificar el resolver
 - **D** (Dependency Inversion): El servicio depende del Protocol, no de la implementación
 
@@ -28,14 +28,14 @@
 - Escalado independiente: inference necesita más instances que training
 - Fault isolation: un error de training no afecta inference
 
-### 1.3 AWS Bedrock (no OpenAI, no self-hosted)
+### 1.3 Qwen3.5-4B en contenedor local (no AWS Bedrock, no OpenAI)
 
-**Decisión**: AWS Bedrock para inference.
+**Decisión**: Qwen3.5-4B servido en un contenedor Docker local ("cloud" = contenedor local) para inference.
 
 **Justificación**:
-- Managed service — sin infraestructura que mantener
-- Free tier 750h/mes para Llama 3 8B
-- Mismo provider para training e inference (consistencia)
+- Un único modelo para todo: Qwen3.5-4B (dense, nativo multimodal — texto, imagen, video; 262K ctx; Apache 2.0; ~8 GB BF16, ~2.5–3 GB Q4)
+- $0 y totalmente local — MVP solo local; AWS Bedrock/ECS/API Gateway quedan como trabajo futuro
+- Misma familia Qwen para on-device (Frame 10) y embeddings (Qwen3-VL-Embedding-2B)
 
 ## 2. Patrones de Diseño Aplicados
 
@@ -45,25 +45,25 @@
 # El resolver selecciona la estrategia (provider) según el tier
 def get_provider(tier: str) -> LLMProvider:
     if tier == "premium":
-        return BedrockProvider(...)  # Estrategia premium
+        return QwenLocalProvider(...)  # Estrategia premium (contenedor local + LoRA)
     else:
-        raise ValueError("Free tier uses on-device LLM (Frame 10)")
+        raise ValueError("Free tier uses on-device base Qwen3.5-4B in the React Native app (Frame 10)")
 ```
 
-### Adapter Pattern (BedrockProvider)
+### Adapter Pattern (QwenLocalProvider)
 
 ```python
-# BedrockProvider adapta la API de boto3/Bedrock a nuestro protocol
-class BedrockProvider:
+# QwenLocalProvider adapta la API del contenedor local Qwen3.5-4B a nuestro protocol
+class QwenLocalProvider:
     def chat(self, messages, context=None) -> str:
-        # Adapta messages → Bedrock API format
-        # Adapta Bedrock response → str
+        # Adapta messages → formato del contenedor Qwen3.5-4B (multimodal: texto/imagen/video)
+        # Adapta la respuesta de Qwen3.5-4B → str
 ```
 
 ### Dependency Inversion
 
 ```python
-# El servicio depende del Protocol (abstracción), no de BedrockProvider (concreción)
+# El servicio depende del Protocol (abstracción), no de QwenLocalProvider (concreción)
 from services.llm.providers.base import LLMProvider  # Protocol
 
 def generate(prompt: str, provider: LLMProvider) -> str:
@@ -86,11 +86,11 @@ def generate(prompt: str, provider: LLMProvider) -> str:
 2026-08-31T10:00:00 [def-456] WARNING llm-service: Invalid tier: free
 ```
 
-### 3.3 POST /generate (error Bedrock)
+### 3.3 POST /generate (error del contenedor local)
 
 ```
 2026-08-31T10:00:00 [ghi-789] INFO llm-service: POST /generate — prompt length: 20 chars, user_id: user3
-2026-08-31T10:00:01 [ghi-789] ERROR llm-service: LLM error: ThrottlingException
+2026-08-31T10:00:01 [ghi-789] ERROR llm-service: LLM error: Qwen3.5-4B container unavailable
 ```
 
 ### 3.4 POST /chat (éxito)
@@ -117,8 +117,8 @@ def generate(prompt: str, provider: LLMProvider) -> str:
 
 | Principio | Aplicación |
 |-----------|-----------|
-| **S** (Single Responsibility) | Cada provider hace una cosa: BedrockProvider solo habla con Bedrock |
-| **O** (Open/Closed) | Nuevo provider (ej: OpenAI) se agrega sin modificar el resolver |
+| **S** (Single Responsibility) | Cada provider hace una cosa: QwenLocalProvider solo habla con el contenedor local Qwen3.5-4B |
+| **O** (Open/Closed) | Nuevo provider (ej: otro backend local) se agrega sin modificar el resolver |
 | **L** (Liskov Substitution) | Cualquier implementación de LLMProvider puede sustituir a otra |
 | **I** (Interface Segregation) | Protocol solo expone `chat()` y `complete()` — no métodos innecesarios |
-| **D** (Dependency Inversion) | El servicio depende del Protocol (abstracción), no de Bedrock (concreción) |
+| **D** (Dependency Inversion) | El servicio depende del Protocol (abstracción), no del contenedor Qwen3.5-4B (concreción) |

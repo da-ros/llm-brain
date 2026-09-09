@@ -119,3 +119,13 @@ The API Router SHALL consume task responses from Kafka and update MongoDB.
 
 The health check endpoint SHALL remain public and include service information.
 The response SHALL include the service name "api-gateway" and version.
+
+#### Scenario: Health check remains public
+
+- **WHEN** a client sends GET /health without authentication
+- **THEN** the router responds with HTTP 200 without requiring a JWT token
+
+#### Scenario: Health check includes service information
+
+- **WHEN** a client sends GET /health
+- **THEN** the response body includes the service name "api-gateway" and version, and no secrets

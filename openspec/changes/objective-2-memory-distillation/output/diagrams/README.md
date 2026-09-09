@@ -6,8 +6,14 @@ Draw.io XML diagrams for the One-Tap Memory Distillation module.
 
 | File | Description |
 |------|-------------|
-| `etl-architecture.drawio` | Architecture base — shows how Frame 2 integrates with Frame 1 (FastAPI backend, MongoDB, Chroma) |
-| `etl-dataflow.drawio` | Data flow — step-by-step flow from file upload to JSONL triples output |
+| `etl-architecture.drawio` | Architecture base — shows how Frame 2 integrates with Frame 1 (ETL Service, local MongoDB GridFS, LLM Service) using LangChain loaders + LLM-based triple extraction |
+| `etl-dataflow.drawio` | Data flow — step-by-step flow: file upload → LangChain loader → LLM Service (Qwen3.5-4B base) reasoning → JSONL triples output |
+
+> **Note:** These `.drawio` XML files still depict stale technology (PyPDF2, Tesseract,
+> BeautifulSoup parsers and rule-based triple extraction). They must be regenerated to
+> reflect LangChain out-of-the-box loaders and LLM-first triple extraction via the LLM
+> Service (port 8003, base Qwen3.5-4B). The `.md` artifacts in this change are the current
+> source of truth until the diagrams are updated.
 
 ## 🔧 How to Open
 

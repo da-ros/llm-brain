@@ -4,13 +4,13 @@
 > Los diagramas definen QUÉ construimos antes de decidir CÓMO.
 
 - [x] A.1 C4 Level 1 (System Context) diagram — `diagrams/c4-context.drawio`
-      — Clients (web/mobile), API Gateway, backends, LLM layers, data stores, external systems
+      — Clients (web/React Native mobile), API Router, backends, LLM layers (local container + on-device), data stores (AWS API Gateway shown as future)
 - [x] A.2 C4 Level 2 (Containers) diagram — `diagrams/c4-container.drawio`
-      — Docker containers: API Backend, Fine-Tuning Service, RAG, MongoDB, Chroma, API Gateway
+      — Docker containers: API Router, Fine-Tuning Service, RAG, LLM Service (Qwen3.5-4B), MongoDB, Chroma (AWS API Gateway shown as future)
 - [x] A.3 C4 Level 3 (Components) diagram — `diagrams/c4-component-api.drawio`
       — Internal structure: FastAPI App, Config, Auth (JWT+bcrypt), LLM Provider Protocol, Routers, Dependencies
-- [x] A.4 Deployment diagram (Docker Compose local + AWS ECS Fargate) — `diagrams/deployment.drawio`
-      — Two views: local dev (direct client → backend) and production (via API Gateway)
+- [x] A.4 Deployment diagram (Docker Compose local MVP; AWS ECS Fargate as future) — `diagrams/deployment.drawio`
+      — Local dev (direct client → API Router); production (via API Gateway) shown as future/out of scope
 - [ ] A.7 Validate architecture with tutor / align on scope before proceeding to code
 
 ## B. Repository Foundation
@@ -37,8 +37,8 @@
 - [x] C.2 Validate required secrets at startup; raise clear error when provider key is missing
 - [x] C.3 Keep `.env.example` in sync with all settings
 - [x] C.4 Define `LLMProvider` protocol (chat/completion interface) in `apps/api/llm/base.py`
-- [x] C.5 Implement llama.rn provider (on-device — Llama 3.2 3B Q4_K_M)
-- [x] C.6 Implement AWS Bedrock provider (cloud — Llama 3 8B fine-tuned + inference)
+- [x] C.5 Implement on-device provider (React Native / Neural Engine / Metal — Free: Qwen3.5-4B base quantized Q4; Premium: fine-tuned quantized Q4)
+- [x] C.6 Implement local containerized "cloud" provider (LLM Service 8003 — Qwen3.5-4B **base**, not fine-tuned)
 - [x] C.7 Implement `get_provider()` resolver that selects by `LLM_PROVIDER` and fails fast on unsupported values
 
 ## D. FastAPI Application

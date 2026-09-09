@@ -1,21 +1,21 @@
 frame: frame-4
-title: "LLM Cloud (Bedrock) + Fine-Tuning Services"
-description: "LLM inference service (port 8003) and LoRA fine-tuning service (port 8004) on AWS Bedrock"
+title: "LLM Inference (local Qwen3.5-4B) + Fine-Tuning Services"
+description: "Multimodal LLM inference service (port 8003) serving Qwen3.5-4B in a local Docker container, and local LoRA fine-tuning service (port 8004)"
 anteproyecto_objectives:
   - "Objetivo Específico 4 (LLM principal)"
 depends_on:
-  - frame-2
+  - frame-1-1
 execution_order: 3
 status: proposed
 services:
   - name: llm-service
     directory: services/llm
     port: 8003
-    description: "AWS Bedrock inference — Llama 3 8B for premium users"
+    description: "Local Qwen3.5-4B multimodal inference (container) — premium users + ETL triple extraction"
   - name: finetune-service
     directory: services/finetune
     port: 8004
-    description: "LoRA fine-tuning pipeline on AWS Bedrock"
+    description: "Local LoRA fine-tuning pipeline (PEFT/ms-swift) over Qwen3.5-4B"
 output:
   diagrams:
     - llm-architecture.drawio
