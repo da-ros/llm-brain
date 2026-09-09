@@ -29,7 +29,7 @@ Draw.io XML diagrams for the API Router (Gateway) service.
 - 🔵 **Blue** (`#dae8fc`): Clients
 - 🟡 **Yellow** (`#fff2cc`): API Router
 - 🟢 **Green** (`#d5e8d4`): Services (ETL, RAG, LLM)
-- 🟣 **Purple** (`#e1d5e7`): AWS API Gateway
+- 🟣 **Purple** (`#e1d5e7`): AWS API Gateway (future/out of scope; local MVP uses the API Router directly)
 - 🔴 **Red** (`#f8cecc`): Kafka (async)
 - ⚪ **Gray** (`#f5f5f5`): Data stores (MongoDB)
 

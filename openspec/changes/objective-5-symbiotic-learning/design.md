@@ -5,7 +5,7 @@ over HTTP sync (30s). ETL (8001) and Fine-Tune (8004) are already separate
 services. There is no session memory of *reasoning*, no assumption log, and no
 weekly batch for manual LoRA. Frame 5 adds Agents Service on port **8006** that
 orchestrates Ingestor / Razonador / Evaluador with **LangGraph** and leaves ETL,
-RAG, and Bedrock in place.
+RAG, and the local Qwen3.5-4B LLM Service in place.
 
 Constraints from `context.txt`: Kafka for heavy/async work, HTTP for chat;
 correlation id on every hop; data isolated by `user_id`; fine-tuning is
@@ -26,10 +26,10 @@ it is not reused as the agent runtime.
 
 **Non-Goals:**
 - Do not use LangChain `AgentExecutor` / ReAct agents as the loop runtime.
-- Do not call Bedrock or Chroma from Agents Service (HTTP to existing services).
+- Do not call the LLM weights (Qwen3.5-4B) or Chroma directly from Agents Service (HTTP to existing services).
 - Do not embed agent logic inside API Router, RAG, or LLM services.
 - Do not run a full MCP stdio subprocess per agent (overkill for MVP).
-- Do not auto-submit Bedrock jobs.
+- Do not auto-submit local LoRA fine-tune jobs.
 - Do not give Free-tier users the loop (no context, no files).
 - Do not implement RLHF, multi-agent debate, or Monte Carlo.
 
@@ -50,8 +50,8 @@ microservice pattern (own Dockerfile, own health, independent scale).
 
 **Decision**: Orchestrate Frame 5 with **LangGraph** (`StateGraph`). Keep
 **LangChain** in the RAG service (retriever, text splitters). Agent nodes call
-RAG / LLM / Fine-Tune over HTTP (`httpx`); they do not construct LangChain
-chains against Bedrock.
+RAG / LLM / Fine-Tune over HTTP (`httpx`) via our own MCP tools; they do not
+construct LangChain chains against the local Qwen3.5-4B LLM.
 
 **Why LangGraph (not LangChain agents):**
 
@@ -101,16 +101,32 @@ Typed state (shared fields, two TypedDicts): `user_id`, `session_id`,
 **Alternatives considered**: One graph that includes ingest on the request path —
 rejected (evaluation must not add chat latency).
 
-### 4. MCP as tool contracts over HTTP, graphs as the implementation
+### 4. Our own MCP tool contracts over HTTP, graphs as the implementation
 
-**Decision**: `GET /mcp/tools` lists `reason`, `ingest_turn`, `evaluate_turn`.
-`POST /mcp/tools/{name}` maps to `reason_graph.invoke` or `learn_graph` nodes.
-FastAPI `POST /reason` is a facade over the same `reason` tool.
+**Decision**: We implement our **own** MCP tool contracts (no third-party MCP
+servers — keeps everything local and $0). Each tool wraps one internal service and
+is invoked over HTTP; LangGraph nodes call these tools. `GET /mcp/tools` lists the
+registry and `POST /mcp/tools/{name}` invokes a tool (404 on unknown name):
 
-**Alternatives considered**: Official MCP SDK + stdio — rejected for MVP.
+| MCP tool | Agent / owner | Wraps | Use |
+|----------|---------------|-------|-----|
+| `rag_search` | Razonador | RAG Service (8002) | Top-k multimodal retrieval from Chroma |
+| `llm_generate` | Razonador | LLM Service (8003) | Multimodal Qwen3.5-4B inference |
+| `ingest_turn` | Ingestor | MongoDB (`agent_interactions`) | Persist the conversation turn |
+| `evaluate_turn` | Evaluador | MongoDB (`agent_feedback`, `finetune_batches`) | Score turn + build weekly batch |
+| `finetune_trigger` | Evaluador (manual) | Fine-Tune Service (8004) | Trigger local LoRA (`POST /api/finetune` only) |
 
-**Rationale**: MCP remains the *contract* (what each agent exposes). LangGraph is
-the *runtime* (how the loop runs).
+`reason_graph` nodes call `rag_search` then `llm_generate`; `learn_graph` nodes call
+`ingest_turn` then `evaluate_turn`; the manual path calls `finetune_trigger`. FastAPI
+`POST /reason` is a facade over `reason_graph.invoke`. Later frames register their own
+tools with the same pattern (`simulate_whatif`, `analytics_query`, `scan_message`).
+
+**Alternatives considered**: Official MCP SDK + stdio, or third-party MCP servers —
+rejected for MVP (extra stack, not local/$0).
+
+**Rationale**: MCP remains the *contract* (what each agent exposes and which service
+it wraps). LangGraph is the *runtime* (how the loop runs). There is no direct access
+to the LLM weights (Qwen3.5-4B) or Chroma from Agents Service.
 
 ### 5. New Kafka topic `session.turn.completed`
 
@@ -123,7 +139,7 @@ Payload is metadata + texts (not files). Existing `file.uploaded` /
 ### 6. Scoring heuristic, not a second LLM judge
 
 **Decision**: Evaluador node uses deterministic heuristics (non-empty answer,
-presence of assumptions) plus `EVAL_SCORE_THRESHOLD`. No extra Bedrock call.
+presence of assumptions) plus `EVAL_SCORE_THRESHOLD`. No extra LLM call.
 
 ### 7. Weekly batch identity
 
@@ -144,15 +160,15 @@ HTTP to Agents Service.
 2. API Router: JWT ✓, tier=premium, X-Request-ID
 3. Router HTTP POST agents-service:8006/reason
 4. reason_graph.invoke(state):
-      retrieve_context  → HTTP RAG (user_id)
-      generate_answer   → HTTP LLM /chat
+      retrieve_context  → rag_search tool   → HTTP RAG 8002 (user_id)
+      generate_answer   → llm_generate tool → HTTP LLM 8003 (Qwen3.5-4B)
       extract_assumptions
 5. Router: HTTP 200 {response, assumptions, sources, tokens_used, session_id}
 6. Router: publish Kafka session.turn.completed
 7. learn_graph.invoke(state):
-      ingest_turn          → upsert agent_interactions
-      evaluate_turn        → agent_feedback (never POST /train)
-      maybe_append_batch   → finetune_batches
+      ingest_turn          → ingest_turn tool   → upsert agent_interactions
+      evaluate_turn        → evaluate_turn tool → agent_feedback (never POST /train)
+      maybe_append_batch   → evaluate_turn tool → finetune_batches
 ```
 
 ### Session end (async)
@@ -169,7 +185,7 @@ HTTP to Agents Service.
 1. Client POST /api/finetune {batch_id}
 2. Router → Agents POST /batches/{id}/trigger
 3. Ready only; else 409
-4. HTTP Fine-Tune POST /train
+4. finetune_trigger tool → HTTP Fine-Tune 8004 POST /train (local LoRA, PEFT/ms-swift)
 5. Batch status=submitted; return job_id
 ```
 
@@ -219,7 +235,7 @@ All queries filter `user_id`. Unique index on `agent_interactions.correlation_id
 | Risk | Mitigation |
 |------|------------|
 | Chat latency (RAG + LLM already tight on 30s) | Only `reason_graph` on the request; `learn_graph` after 200 |
-| LangGraph adds a dependency | `langgraph` is OSS; RAG keeps LangChain; no Bedrock in this service |
+| LangGraph adds a dependency | `langgraph` is OSS; RAG keeps LangChain; no LLM weights in this service |
 | Graph overkill for three nodes | Two small graphs are still easier to test and diagram than ad-hoc if/else |
 | Kafka topic not in original context diagram | Documented as Frame 5 addition in `context.txt` |
 | Heuristic scores are crude | Threshold + manual review of `ready` batches |
@@ -228,7 +244,7 @@ All queries filter `user_id`. Unique index on `agent_interactions.correlation_id
 
 ## Migration Plan
 
-1. Deploy Agents Service beside existing stack (Compose / ECS).
+1. Deploy Agents Service beside existing stack via Docker Compose (local MVP; AWS ECS is future/out of scope).
 2. Switch premium chat route in API Router behind `CHAT_VIA_AGENTS=true`.
 3. Rollback: flag false → previous Router→RAG→LLM path; Kafka consumer can idle.
 

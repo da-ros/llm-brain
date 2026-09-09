@@ -13,24 +13,25 @@
 - Fault isolation: un error de training no afecta inference
 - Training jobs son pesados — no deben bloquear el event loop del inference service
 
-### 1.2 LoRA (Low-Rank Adaptation)
+### 1.2 LoRA local (Low-Rank Adaptation) sobre Qwen3.5-4B
 
-**Decisión**: LoRA para fine-tuning de Llama 3 8B.
+**Decisión**: LoRA **local** (PEFT / ms-swift / Unsloth) para fine-tuning de Qwen3.5-4B.
 
 **Justificación**:
 - Parameter-efficient (<1% of weights trained)
-- Lower compute cost que full fine-tuning
+- Lower compute cost que full fine-tuning — corre en la laptop (o Colab free)
 - Preserva capacidades del modelo base
-- AWS Bedrock soporta LoRA nativamente
+- Produce un adapter; el build **Premium** on-device fusiona + cuantiza (Q4) el modelo para la app React Native (Frame 10). El contenedor cloud permanece base.
+- $0 y local — sin AWS Bedrock managed fine-tuning
 
 ### 1.3 In-Memory Job Store (stubbed)
 
 **Decisión**: Almacenar jobs en un dict en memoria, no en MongoDB.
 
 **Justificación**:
-- Bedrock está stubbed — no hay jobs reales ejecutándose
+- El entrenamiento LoRA local está stubbed — no hay jobs reales ejecutándose
 - Cada instancia del servicio tiene su propio estado
-- Cuando la integración con Bedrock sea real, se reemplaza por MongoDB (matching api-router pattern)
+- Cuando el entrenamiento LoRA local sea real, se reemplaza por MongoDB (matching api-router pattern)
 - Aceptable para MVP y demos
 
 ### 1.4 POST /train returns 202 Accepted
@@ -128,6 +129,6 @@ get_job_status(job_id)  # Paso 3 (polling)
 |-----------|-----------|
 | **S** (Single Responsibility) | El servicio solo hace una cosa: manejar jobs de fine-tuning |
 | **O** (Open/Closed) | Nuevo tipo de training (ej: full fine-tuning) se agrega sin modificar endpoints |
-| **L** (Liskov Substitution) | El pipeline puede cambiar de implementación (Bedrock → otro provider) sin cambiar la interfaz |
+| **L** (Liskov Substitution) | El pipeline puede cambiar de backend LoRA local (PEFT → ms-swift → Unsloth) sin cambiar la interfaz |
 | **I** (Interface Segregation) | Endpoints expuestos: solo /train, /status, /health — no hay métodos innecesarios |
 | **D** (Dependency Inversion) | El servicio depende de abstractions (pipeline functions), no de implementaciones concretas |

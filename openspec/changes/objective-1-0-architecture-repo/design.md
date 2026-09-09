@@ -15,9 +15,9 @@ Architecture: API Router (FastAPI) + Microservices (ETL, RAG, LLM, Fine-Tune) + 
 - Kafka for async communication (file uploads)
 - HTTP sync for queries (chat, RAG)
 - Correlation ID (X-Request-ID) for request tracing
-- Rate limiting via AWS API Gateway (production)
+- Rate limiting at the API Router (local MVP); AWS API Gateway is future/out of scope
 - JWT authentication at API Router level
-- MongoDB for task status and file storage (GridFS)
+- MongoDB (local container) for task status and file storage (GridFS)
 - Docker-based development and deployment
 - CI that runs lint + tests on every push
 
@@ -38,14 +38,14 @@ Architecture: API Router (FastAPI) + Microservices (ETL, RAG, LLM, Fine-Tune) + 
 | API Router | 8000 | JWT validation, correlation ID, routing |
 | ETL Service | 8001 | Document parsing, triple extraction |
 | RAG Service | 8002 | MongoDB, Chroma, semantic search |
-| LLM Service | 8003 | AWS Bedrock inference |
+| LLM Service | 8003 | Qwen3.5-4B inference (local Docker container) |
 | Fine-Tune Service | 8004 | LoRA training (background worker) |
 
 **Rationale**:
 - Independent scaling per service
 - Fault isolation (one service crash doesn't kill others)
 - Easier to test and deploy individually
-- Aligns with AWS ECS Fargate (one task per service)
+- Aligns with a future AWS ECS Fargate deployment (one task per service); out of scope for the MVP
 
 ### 2. Kafka for Async Communication
 
@@ -90,9 +90,10 @@ Logs:    [550e8400-e29b-41d4-a716-446655440000] Processing file...
 - Link task status polling to original request
 - Essential for microservices observability
 
-### 5. Rate Limiting (AWS API Gateway)
+### 5. Rate Limiting (API Router)
 
-**Decision**: Use AWS API Gateway rate limiting in production.
+**Decision**: Enforce rate limiting at the API Router for the local MVP. AWS API Gateway is
+future/out of scope.
 
 | Endpoint | Limit |
 |----------|-------|
@@ -103,7 +104,7 @@ Logs:    [550e8400-e29b-41d4-a716-446655440000] Processing file...
 
 **Rationale**:
 - Protects against abuse and bugs
-- Free tier (1M requests/month)
+- Runs locally with no cloud dependency ($0 budget)
 - Configurable per endpoint
 
 ### 6. Task Status Polling
@@ -177,8 +178,8 @@ Max retries → dlq-max (permanent failure)
 
 | Tier | LLM | Context | Files | Web Access |
 |------|-----|---------|-------|------------|
-| Free | llama.rn (on-device) | No | No | No |
-| Premium | AWS Bedrock + RAG | Yes | Yes | Yes |
+| Free | Qwen3.5-4B **base** quantized on-device (React Native / Neural Engine / Metal); no cloud | No | No | No |
+| Premium | On-device: Qwen3.5-4B **fine-tuned** quantized. Cloud: Qwen3.5-4B **base** container + RAG | Yes | Yes | Yes |
 
 **Rationale**:
 - Demonstrates tiered architecture
@@ -232,15 +233,15 @@ Max retries → dlq-max (permanent failure)
 |-------|------------|-----------|
 | API Router | Python 3.13, FastAPI | Async-friendly, first-class testing |
 | Microservices | Python 3.13, FastAPI | Independent deployment |
-| Message Queue | Apache Kafka | Async communication, retry, DLQ |
-| Document Store | MongoDB Atlas (GridFS) | Flexible schema, file storage |
-| Vector Store | Chroma (local) / Pinecone (prod) | Semantic search |
-| LLM Cloud | AWS Bedrock | Managed, free tier, fine-tuning |
-| LLM Local | llama.rn (mobile only) | On-device inference |
+| Message Queue | Apache Kafka (self-hosted in Docker) | Async communication, retry, DLQ |
+| Document Store | MongoDB (GridFS) — local container | Flexible schema, file storage |
+| Vector Store | Chroma (local) | Semantic search (2048-dim embeddings) |
+| LLM "Cloud" | Qwen3.5-4B **base** (local Docker container, not fine-tuned) | Premium inference + RAG |
+| LLM On-device | Qwen3.5-4B quantized Q4 — Free = base; Premium = fine-tuned (React Native / Neural Engine / Metal) | On-device inference |
+| Mobile | React Native (iPhone) + Neural Engine / Metal | Native on-device inference |
 | Web | React + Chart.js | Dashboard |
-| Mobile | React Native | Cross-platform |
-| Infra Local | Docker Compose | Fast dev iteration |
-| Infra Prod | AWS ECS Fargate + API Gateway | Serverless, managed |
+| Infra Local (MVP) | Docker Compose (all services + LLM) | Fast dev iteration |
+| Infra Prod (future) | AWS ECS Fargate + API Gateway | Serverless, managed — out of scope |
 | CI/CD | GitHub Actions | Free tier |
 | Encryption | Fernet (data), TLS (connection) | Simple, auditable |
 | Trazabilidad | Correlation ID (X-Request-ID) | Request tracing |
@@ -251,7 +252,7 @@ Max retries → dlq-max (permanent failure)
 
 | Pattern | Where | Purpose |
 |---------|-------|---------|
-| **API Gateway** | AWS API Gateway | Rate limiting, HTTPS, routing |
+| **API Gateway / Facade** | API Router (local MVP); AWS API Gateway is future | Rate limiting, routing |
 | **Message Broker** | Kafka | Async communication, retry, DLQ |
 | **CQRS** | Sync queries vs async writes | Different patterns for different operations |
 | **Retry + DLQ** | Task status handling | Transient error recovery |
@@ -263,7 +264,7 @@ Max retries → dlq-max (permanent failure)
 |-----------|-------------|
 | **S** | Each service has ONE responsibility (ETL, RAG, LLM) |
 | **O** | Add new service by creating new Dockerfile — zero changes to Router |
-| **L** | Any service can be replaced (Chroma → Pinecone) without affecting others |
+| **L** | Any service can be replaced (e.g. swap the vector store) without affecting others |
 | **I** | Services expose minimal APIs (ETL: /process, RAG: /search) |
 | **D** | API Router depends on service abstractions (HTTP endpoints), not implementations |
 
@@ -272,7 +273,7 @@ Max retries → dlq-max (permanent failure)
 - Architecture: Microservices (not monolith)
 - Communication: Kafka (async writes) + HTTP (sync reads)
 - Correlation ID: X-Request-ID header + MongoDB task_status
-- Rate Limiting: AWS API Gateway (production)
+- Rate Limiting: API Router (local MVP); AWS API Gateway is future/out of scope
 - Task Status: MongoDB with TTL auto-cleanup
 - Retry: MAX_RETRIES=3, DLQ for permanent failures
 - JWT: API Router only (no service-to-service JWT yet)

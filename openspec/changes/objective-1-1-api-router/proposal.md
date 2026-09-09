@@ -17,8 +17,8 @@ Frame 1 established:
 - **Kafka** for async communication (file uploads)
 - **HTTP** for sync queries (chat, RAG)
 - **Correlation ID** (X-Request-ID) for request tracing
-- **Rate limiting** via AWS API Gateway (production)
-- **MongoDB** for task status and file storage (GridFS)
+- **Rate limiting** at the API Router (local MVP); AWS API Gateway is future/out of scope
+- **MongoDB** (local container) for task status and file storage (GridFS)
 
 ### Context from Frame 2 & 3
 

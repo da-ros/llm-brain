@@ -6,8 +6,14 @@ Draw.io XML diagrams for the Hybrid Store + RAG module.
 
 | File | Description |
 |------|-------------|
-| `rag-architecture.drawio` | Architecture base — shows how Frame 3 integrates with Frame 1 (FastAPI, MongoDB) and Frame 2 (JSONL triples) |
-| `rag-dataflow.drawio` | Data flow — step-by-step ingestion path (JSONL → chunking → embedding → storage) and retrieval path (query → search → context injection) |
+| `rag-architecture.drawio` | Architecture base — shows how Frame 3 integrates with Frame 1 (FastAPI, local MongoDB/GridFS) and Frame 2 (JSONL triples) |
+| `rag-dataflow.drawio` | Data flow — step-by-step ingestion path (JSONL → chunking → embedding → storage) and retrieval path (query → cross-modal search → context injection) |
+
+> ⚠️ **Stale tech to regenerate in the `.drawio` XML** (not editable here): both diagrams still
+> show `MongoDB Atlas` (should be local MongoDB + GridFS), `sentence-transformers` / `384 dimensions`
+> (should be Qwen3-VL-Embedding-2B / 2048-dim, multimodal), `Pinecone` as an active store
+> (should be Chroma-only for the MVP; Pinecone = future), and `AWS Bedrock` (should be the local
+> Qwen3.5-4B container). Regenerate the diagrams to match the updated artifacts.
 
 ## 🔧 How to Open
 

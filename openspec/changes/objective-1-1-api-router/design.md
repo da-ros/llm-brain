@@ -15,7 +15,7 @@ See proposal.md — Why. Depends on Frame 1 (microservices architecture, Kafka, 
 - Kafka producer for file uploads
 - Kafka consumer for task responses
 - Task status polling via MongoDB
-- Rate limiting awareness (AWS API GW in production)
+- Rate limiting at the API Router (local MVP); AWS API Gateway is future/out of scope
 
 **Non-Goals:**
 - No business logic — only routing and auth
@@ -231,7 +231,7 @@ Max retries → dlq-max (permanent failure)
 
 | Pattern | Where | Purpose |
 |---------|-------|---------|
-| **API Gateway** | AWS API Gateway (prod) | Rate limiting, HTTPS, routing |
+| **API Gateway / Facade** | API Router (local MVP); AWS API Gateway is future | Rate limiting, routing |
 | **Facade** | API Router | Single entry point for clients |
 | **Producer/Consumer** | Kafka integration | Async communication |
 | **Middleware** | Correlation ID, JWT | Cross-cutting concerns |

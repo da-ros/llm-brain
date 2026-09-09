@@ -7,7 +7,7 @@
 
 ## 2. MCP host, LangGraph, and data stores
 
-- [ ] 2.1 Define Agent/tool registry (`GET /mcp/tools`, `POST /mcp/tools/{name}`, 404 on unknown tool)
+- [ ] 2.1 Define our own MCP tool registry (`GET /mcp/tools`, `POST /mcp/tools/{name}`, 404 on unknown tool): `rag_search` (RAG 8002), `llm_generate` (LLM 8003, Qwen3.5-4B), `ingest_turn`, `evaluate_turn` (MongoDB), `finetune_trigger` (Fine-Tune 8004, manual); no third-party MCP servers
 - [ ] 2.2 Add LangGraph TypedDict state and compile `reason_graph` (retrieve → generate → assumptions / error END)
 - [ ] 2.3 Compile `learn_graph` (ingest → evaluate → maybe_append_batch); graphs call RAG/LLM/Fine-Tune only via HTTP
 - [ ] 2.4 Create MongoDB collections and indexes: `agent_interactions` (unique `correlation_id`), `agent_feedback`, `finetune_batches`
@@ -15,8 +15,8 @@
 
 ## 3. Razonador (sync reason_graph)
 
-- [ ] 3.1 Implement retrieve node: HTTP RAG with `X-Request-ID` and `user_id`
-- [ ] 3.2 Implement generate node: HTTP LLM `/chat`; map 5xx/timeout to graph error → HTTP 502/504
+- [ ] 3.1 Implement retrieve node via `rag_search` tool: HTTP RAG with `X-Request-ID` and `user_id`
+- [ ] 3.2 Implement generate node via `llm_generate` tool: HTTP LLM `/chat` (Qwen3.5-4B); map 5xx/timeout to graph error → HTTP 502/504
 - [ ] 3.3 Implement assumptions node; include "no personal context" when RAG is empty
 - [ ] 3.4 Expose `POST /reason` as facade over `reason_graph.invoke`; `GET /health` reports `orchestrator: langgraph`
 
@@ -30,7 +30,7 @@
 ## 5. Manual fine-tune trigger
 
 - [ ] 5.1 Implement `POST /batches/{batch_id}/trigger` (409 if not `ready` or empty)
-- [ ] 5.2 Export batch items to JSONL `dataset_path` and call Fine-Tune Service `POST /train`; store `job_id`, status `submitted`
+- [ ] 5.2 Export batch items to JSONL `dataset_path` and call Fine-Tune Service `POST /train` (local LoRA) via the `finetune_trigger` tool; store `job_id`, status `submitted`
 
 ## 6. API Router integration
 

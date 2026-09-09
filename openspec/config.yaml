@@ -10,11 +10,14 @@ context: |
 
   Scope is an MVP (~120h per student, ~8 weeks) covering 9 objectives/modules:
     1. Architecture & repo (C4 docs, MCP diagram, OSS stack, CI).
-    2. One-Tap Memory Distillation: Python ETL (Tesseract OCR, PDF/HTML/EML parsers)
-       -> subject-predicate-object JSON triples + normalized metadata; >=100 items.
-    3. Hybrid store + RAG: MongoDB Atlas (docs) + Chroma/Pinecone (embeddings) linked by
-       unique ID; LangChain Top-k semantic retrieval.
-    4. LLM cloud fine-tune (LoRA on AWS Bedrock) + on-device (llama.rn, Llama 3.2 3B Q4_K_M).
+    2. One-Tap Memory Distillation: Python ETL with LangChain out-of-the-box loaders (any
+       file type) -> content reasoned by Qwen3.5-4B -> JSON triples + metadata; >=100 items.
+    3. Hybrid store + RAG: MongoDB (docs/binaries via GridFS, local container) + Chroma
+       (2048-dim multimodal embeddings via Qwen3-VL-Embedding-2B); LangChain Top-k retrieval.
+    4. LLM: single multimodal Qwen3.5-4B — LOCAL Docker container serves **base** model
+       (Premium cloud + RAG). On-device: Free = base quantized; Premium = fine-tuned
+       quantized (React Native / Neural Engine / Metal). Local LoRA fine-tuning feeds
+       Premium on-device only.
     5. Symbiotic Learning Loop: LangGraph + MCP agents Ingestor / Razonador /
        Evaluador; manual incremental fine-tuning batches. LangChain stays in RAG.
     6. Decision-Support Simulator: deterministic what-if, 3-5 scenarios w/ explicit
@@ -24,19 +27,30 @@ context: |
     9. Alpha validation: pytest, FastAPI+Mongo integration, KPIs (mean latency, RAG Top-3
        precision), video demo.
 
-  Tech stack (OSS, ~$0 budget):
-    - Backend: Python 3.13, FastAPI, LangChain (RAG), LangGraph (agents).
-    - Frontend: React + Chart.js.
-    - Data: MongoDB Atlas M0, Chroma (local Docker) or Pinecone Starter.
-    - LLM: MODEL-AGNOSTIC. On-device: Llama 3.2 3B (Q4_K_M) via llama.rn.
-      Cloud: Llama 3 8B (fine-tuned LoRA) via AWS Bedrock. Selectable through config/env.
-    - Infra: Docker Compose, GitHub Actions CI, AWS ECS Fargate, AWS API Gateway.
-    - Fine-tuning: AWS Bedrock (LoRA, managed) — free tier 750h/mes.
-    - Inference (premium): AWS Bedrock (managed endpoint).
+  Tech stack (OSS, ~$0 budget; LOCAL-ONLY MVP — AWS is future work, not in scope):
+    - Backend: Python 3.13, FastAPI, LangChain (loaders + RAG), LangGraph (agents).
+    - Frontend: React + Chart.js (web); React Native (iPhone) + Neural Engine / Metal
+      (mobile, on-device LLM).
+    - Parsers: LangChain document loaders out-of-the-box (any format, incl. OCR/video).
+    - Data: MongoDB (local Docker, GridFS for binaries), Chroma (local Docker, 2048-dim).
+    - LLM: single multimodal Qwen3.5-4B (text/image/video).
+      Cloud = local Docker container with **base** Qwen3.5-4B (not fine-tuned; Premium + RAG).
+      On-device Free = **base** Qwen3.5-4B quantized (Q4) in React Native on iPhone via
+      Neural Engine / Metal — out of the box, no fine-tuning, no cloud access.
+      On-device Premium = **fine-tuned** Qwen3.5-4B quantized (Q4) in React Native, plus
+      cloud base + RAG + files + web dashboard.
+    - Embeddings: Qwen3-VL-Embedding-2B (2048-dim, multimodal, Matryoshka-truncatable).
+    - Infra: Docker Compose, GitHub Actions CI. (AWS ECS Fargate + API Gateway = future.)
+    - Fine-tuning: LOCAL LoRA (PEFT / ms-swift / Unsloth) over Qwen3.5-4B — output is the
+      **Premium on-device** build only (cloud container stays base).
+    - Inference: local Qwen3.5-4B base container (Premium cloud) / on-device React Native
+      (Free = base; Premium = fine-tuned).
 
   Subscription profiles (multi-tenant):
-    - Free: llama.rn (Llama 3.2 3B Q4_K_M on-device), sin contexto, sin archivos.
-    - Premium: AWS Bedrock (Llama 3 8B fine-tuned) + RAG, archivos, web dashboard.
+    - Free: Qwen3.5-4B base quantized on-device in React Native (iPhone Neural Engine /
+      Metal); no fine-tuning; no cloud access; no context, no files.
+    - Premium: fine-tuned Qwen3.5-4B on-device + cloud base Qwen3.5-4B (container, not
+      fine-tuned) + RAG, files, web dashboard.
     - Each user authenticates (JWT + bcrypt) and has isolated data (user_id).
 
   Frames ↔ Thesis objectives mapping:
@@ -132,14 +146,30 @@ frames:
       documents:
         - justificacion-ejemplo.md
 
+  frame-4:
+    directory: objective-4-llm-inference-finetuning
+    title: "LLM Inference (local Qwen3.5-4B) + Fine-Tuning Services"
+    description: "Multimodal LLM inference service (port 8003) serving **base** Qwen3.5-4B in a local Docker container (Premium cloud + RAG), and local LoRA fine-tuning service (port 8004) that produces the **Premium on-device** build. Free on-device = base quantized (Frame 10). Built BEFORE Frame 2 so ETL can call the base model."
+    anteproyecto_objectives:
+      - "Objetivo Específico 4 (LLM principal)"
+    depends_on: ["frame-1-1"]
+    execution_order: 3
+    services:
+      - name: llm-service
+        directory: services/llm
+        port: 8003
+      - name: finetune-service
+        directory: services/finetune
+        port: 8004
+
   frame-2:
     directory: objective-2-memory-distillation
     title: "One-Tap Memory Distillation"
-    description: "Python ETL (Tesseract OCR, PDF/HTML/EML parsers) -> JSON triples + metadata; >=100 items"
+    description: "Python ETL with LangChain out-of-the-box loaders (any file) -> content reasoned by Qwen3.5-4B -> JSON triples + metadata; >=100 items. ETL calls the LLM Service (Frame 4) base model for extraction."
     anteproyecto_objectives:
       - "Objetivo Específico 2 (ETL pipeline)"
-    depends_on: ["frame-1-1"]
-    execution_order: 3
+    depends_on: ["frame-1-1", "frame-4"]
+    execution_order: 4
     parallel_with: ["frame-3"]
     output:
       diagrams:
@@ -151,11 +181,11 @@ frames:
   frame-3:
     directory: objective-3-hybrid-store-rag
     title: "Hybrid Store + RAG"
-    description: "MongoDB Atlas (docs) + Chroma/Pinecone (embeddings); LangChain Top-k retrieval"
+    description: "MongoDB (docs/binaries via GridFS, local) + Chroma (2048-dim multimodal embeddings via Qwen3-VL-Embedding-2B); LangChain Top-k cross-modal retrieval"
     anteproyecto_objectives:
       - "Objetivo Específico 3 (Hybrid store)"
     depends_on: ["frame-1-1"]
-    execution_order: 3
+    execution_order: 4
     parallel_with: ["frame-2"]
     output:
       diagrams:
@@ -163,22 +193,6 @@ frames:
         - rag-dataflow.drawio
       documents:
         - justificacion-ejemplo.md
-
-  frame-4:
-    directory: objective-4-llm-inference-finetuning
-    title: "LLM Cloud (Bedrock) + Fine-Tuning Services"
-    description: "LLM inference service (port 8003) and LoRA fine-tuning service (port 8004) on AWS Bedrock. On-device LLM (llama.rn) is in Frame 10."
-    anteproyecto_objectives:
-      - "Objetivo Específico 4 (LLM principal)"
-    depends_on: ["frame-2"]
-    execution_order: 3
-    services:
-      - name: llm-service
-        directory: services/llm
-        port: 8003
-      - name: finetune-service
-        directory: services/finetune
-        port: 8004
 
   frame-5:
     directory: objective-5-symbiotic-learning
@@ -236,9 +250,9 @@ frames:
   frame-10:
     directory: objective-10-mobile-app
     title: "Mobile App (React Native)"
-    description: "React Native app structure, auth, navigation, llama.rn integration for free tier"
+    description: "React Native iPhone app with auth, navigation, and on-device Qwen3.5-4B via Neural Engine / Metal — Free uses base (out of the box); Premium uses fine-tuned on-device plus cloud base container"
     anteproyecto_objectives:
       - "Objetivo Específico 1 (mobile foundation)"
-      - "Objetivo Específico 4 (llama.rn on-device)"
+      - "Objetivo Específico 4 (Qwen3.5-4B on-device via React Native / Neural Engine / Metal)"
     depends_on: ["frame-4"]
     execution_order: 8

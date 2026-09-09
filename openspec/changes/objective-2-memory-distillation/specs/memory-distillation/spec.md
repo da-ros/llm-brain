@@ -1,9 +1,10 @@
 ## Purpose
 
 The memory-distillation capability provides the data ingestion pipeline that converts
-raw user documents (PDF, HTML, EML, images) into structured knowledge triples
-(subject-predicate-object) with metadata, ready for RAG ingestion. It runs as a
-FastAPI router within the backend, triggered by authenticated file uploads.
+raw user documents (text, PDF, images, video, HTML, EML) into structured knowledge triples
+(subject-predicate-object) with metadata, ready for RAG ingestion. It loads content with
+**LangChain out-of-the-box document loaders** and extracts triples via **LLM reasoning**
+(base Qwen3.5-4B in the LLM Service). It is triggered by authenticated file uploads.
 
 ## ADDED Requirements
 
@@ -14,7 +15,7 @@ file uploads and processes them into structured triples.
 
 #### Scenario: Successful upload
 
-- **WHEN** an authenticated user sends `POST /api/upload` with a valid file (PDF, HTML, EML, or image)
+- **WHEN** an authenticated user sends `POST /api/upload` with a valid file (text, PDF, image, video, HTML, or EML)
 - **THEN** the system processes the file, extracts triples, and returns HTTP 201 with the number of triples generated
 
 #### Scenario: Unauthenticated upload
@@ -29,57 +30,70 @@ file uploads and processes them into structured triples.
 
 #### Scenario: Unsupported file type
 
-- **WHEN** a client uploads a file with an unsupported MIME type (not PDF, HTML, EML, or image)
+- **WHEN** a client uploads a file with an unsupported MIME type (not text, PDF, image, video, HTML, or EML)
 - **THEN** the system responds with HTTP 422 with a list of supported types
 
 ### Requirement: Document parsing
 
-The system SHALL parse documents using type-specific parsers and extract text content.
+The system SHALL load documents using **LangChain out-of-the-box document loaders**
+(`langchain_community.document_loaders`), selecting the loader by MIME type, without
+hand-rolling parsers unless no loader exists.
 
 #### Scenario: PDF with text
 
 - **WHEN** a PDF file contains extractable text
-- **THEN** the parser extracts text using PyPDF2 and returns it as a list of page strings
+- **THEN** the system loads it with `PyPDFLoader` (or `PDFPlumberLoader`) and returns the page content
 
 #### Scenario: PDF with scanned images
 
 - **WHEN** a PDF file contains scanned images (no extractable text)
-- **THEN** the parser falls back to OCR (Tesseract) and extracts text from each page image
+- **THEN** the system loads it with a LangChain `Unstructured*` loader that performs OCR (no bespoke Tesseract pipeline)
+
+#### Scenario: Plain text document
+
+- **WHEN** a plain-text file is uploaded
+- **THEN** the system loads it with `TextLoader`
 
 #### Scenario: HTML document
 
 - **WHEN** an HTML file is uploaded
-- **THEN** the parser extracts text content using BeautifulSoup, stripping tags and scripts
+- **THEN** the system loads text content with `UnstructuredHTMLLoader`
 
 #### Scenario: Email document
 
 - **WHEN** an EML file is uploaded
-- **THEN** the parser extracts headers (From, To, Subject, Date) and body text
+- **THEN** the system loads headers and body with `UnstructuredEmailLoader`
 
 #### Scenario: Image file
 
 - **WHEN** an image file (PNG, JPG, etc.) is uploaded
-- **THEN** the parser extracts text using Tesseract OCR with preprocessing (grayscale, contrast)
+- **THEN** the system loads it with `UnstructuredImageLoader`, which performs OCR out-of-the-box
+
+#### Scenario: Video file
+
+- **WHEN** a video file is uploaded
+- **THEN** the system loads it with a LangChain video loader for downstream multimodal reasoning
 
 ### Requirement: Triple extraction
 
-The system SHALL extract subject-predicate-object triples from parsed text using
-rule-based pattern matching.
+The system SHALL extract subject-predicate-object triples by passing the loaded content
+to the **base Qwen3.5-4B model in the LLM Service (port 8003)**, which reasons over the
+content and then emits JSON triples. Extraction is LLM-first, not rule-based or regex.
 
-#### Scenario: Simple sentence
+#### Scenario: LLM reasoning over loaded content
 
-- **WHEN** parsed text contains "Alice is a doctor"
-- **THEN** the system extracts triple `{"subject": "Alice", "predicate": "is", "object": "a doctor"}`
+- **WHEN** a document is loaded and its content is sent to the LLM Service (base Qwen3.5-4B)
+- **THEN** the model reasons over the content and returns a JSON array of triples `{"subject", "predicate", "object", "metadata"}`
 
-#### Scenario: Possessive sentence
+#### Scenario: Medical recipe
 
-- **WHEN** parsed text contains "The patient has diabetes"
-- **THEN** the system extracts triple `{"subject": "The patient", "predicate": "has", "object": "diabetes"}`
+- **WHEN** the loaded content describes a patient with diabetes taking metformin
+- **THEN** the LLM emits triples such as `{"subject": "Patient", "predicate": "has", "object": "diabetes"}` and `{"subject": "Patient", "predicate": "takes", "object": "metformin"}`
 
-#### Scenario: Action sentence
+#### Scenario: Multimodal input
 
-- **WHEN** parsed text contains "The clinic performs surgeries"
-- **THEN** the system extracts triple `{"subject": "The clinic", "predicate": "performs", "object": "surgeries"}`
+- **WHEN** the loaded content comes from an image or video
+- **THEN** the multimodal base Qwen3.5-4B reasons over that content and emits JSON triples with metadata
 
 ### Requirement: Triple metadata enrichment
 
@@ -112,7 +126,7 @@ The system SHALL handle errors gracefully and return descriptive error messages.
 #### Scenario: Encoding issues
 
 - **WHEN** a file has encoding issues (non-UTF-8)
-- **THEN** the parser attempts latin-1 fallback and continues processing
+- **THEN** the LangChain loader handles decoding (with its fallback) and processing continues
 
 ## MODIFIED Requirements
 
@@ -120,3 +134,8 @@ The system SHALL handle errors gracefully and return descriptive error messages.
 
 The health check endpoint SHALL remain unchanged. The ETL pipeline does not affect
 service liveness.
+
+#### Scenario: Health check unaffected by ETL
+
+- **WHEN** a client sends `GET /health` while the ETL pipeline is processing documents
+- **THEN** the system responds with HTTP 200 regardless of ETL activity

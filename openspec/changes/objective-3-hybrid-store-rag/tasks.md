@@ -1,20 +1,21 @@
 ## Tasks
 
-### A. Document Store (MongoDB)
+### A. Document & Binary Store (local MongoDB + GridFS)
 
 - [x] A.1 Implement MongoDB client in `services/rag/document_store.py`
       — connect(), insert_document(), get_document(), list_documents(user_id)
-- [x] A.2 Define document schema with user_id field for per-user isolation
+- [x] A.2 Define document schema with user_id field for per-user isolation; store binaries in GridFS (`gridfs_id`)
 - [x] A.3 Implement CRUD operations with user_id filter on all queries
 - [x] A.4 Add connection pooling and error handling
 
-### B. Vector Store (Chroma/Pinecone)
+### B. Vector Store (Chroma, local)
 
 - [x] B.1 Implement vector store abstraction in `services/rag/vector_store.py`
-      — ChromaVectorStore and PineconeVectorStore classes
-- [x] B.2 Implement embedding generation with sentence-transformers
+      — ChromaVectorStore class (local Chroma; Pinecone is future/out of scope)
+- [x] B.2 Implement multimodal embedding generation with Qwen3-VL-Embedding-2B (2048-dim)
 - [x] B.3 Implement Fernet encryption for stored embeddings
-- [x] B.4 Add vector store factory: `create_vector_store(provider)` that selects by config
+- [x] B.4 Store text chunk in Chroma `document` field + metadata linking to `gridfs_id`
+- [x] B.5 Add vector store factory: `create_vector_store(provider)` that selects by config
 
 ### C. RAG Service (LangChain)
 
@@ -33,7 +34,7 @@
 ### E. Testing & Validation
 
 - [x] E.1 Unit tests for document store CRUD with user_id isolation
-- [x] E.2 Unit tests for vector store operations (mock Chroma/Pinecone)
+- [x] E.2 Unit tests for vector store operations (mock Chroma)
 - [x] E.3 Unit tests for RAG retrieval quality (known documents, known queries)
 - [x] E.4 Integration test: upload → distill → embed → retrieve → answer
 - [x] E.5 Validate encryption: embeddings encrypted at rest, decrypted on retrieval
