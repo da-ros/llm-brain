@@ -32,9 +32,15 @@ services:
       - MONGODB_URI=mongodb://mongo:27017
       - MONGODB_DB=llm_brain
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
+      - KAFKA_ENABLED=true
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-local-dev-secret-not-for-production}
       - JWT_ALGORITHM=HS256
       - JWT_EXPIRATION_MINUTES=60
+      - RAG_SERVICE_URL=http://rag-service:8002
+      - LLM_SERVICE_URL=http://llm-service:8003
+      - ETL_SERVICE_URL=http://etl-service:8001
+      - MAX_RETRIES=3
+      - TASK_STATUS_TTL_DAYS=30
       - FERNET_KEY=${FERNET_KEY:-change-me-in-production}
     volumes:
       - ./data:/app/data

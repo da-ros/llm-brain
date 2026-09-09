@@ -1,39 +1,30 @@
-# Frame 1.1 — API Router Architecture Diagrams
+# Frame 1.1 — API Router diagrams
 
-Draw.io XML diagrams for the API Router (Gateway) service.
+Draw.io XML for the API Router (local MVP gateway). AWS API Gateway is future / out of scope.
 
-## 📁 Diagram Files
+## Files
 
 | File | Description |
 |------|-------------|
-| `api-router-architecture.drawio` | Architecture base — shows API Router with JWT, correlation ID, Kafka, MongoDB |
-| `api-router-dataflow.drawio` | Data flow — upload async (Kafka) and query sync (HTTP) flows |
+| `api-router-architecture.drawio` | Router internals: JWT, correlation ID, rate limit, routes, Kafka, MongoDB |
+| `api-router-dataflow.drawio` | Upload (async Kafka), chat (sync HTTP), polling, retry / DLQ |
 
-## 🔧 How to Open
+## Open
 
-### Option 1: Draw.io Desktop (Recommended)
-1. Download from https://www.drawio.com/downloads
-2. Open the `.drawio` file directly
+Draw.io Desktop, [app.diagrams.net](https://app.diagrams.net), or the VS Code Draw.io Integration extension.
 
-### Option 2: Draw.io Web
-1. Go to https://app.diagrams.net
-2. Click "Open Existing Diagram"
-3. Select the `.drawio` file
+## Color scheme
 
-### Option 3: VS Code Extension
-1. Install "Draw.io Integration" extension
-2. Open the `.drawio` file directly in VS Code
+Legend at the bottom of each diagram uses a colored dot (not the color name):
 
-## 🎨 Color Scheme
+- Blue `#dae8fc` — clients
+- Yellow `#fff2cc` — API Router (auth, correlation ID, rate limit)
+- Green `#d5e8d4` — ETL / RAG / LLM
+- Purple `#e1d5e7` (dashed) — AWS future
+- Red `#f8cecc` — Kafka / DLQ
+- Gray `#f5f5f5` — MongoDB (task_status + GridFS)
 
-- 🔵 **Blue** (`#dae8fc`): Clients
-- 🟡 **Yellow** (`#fff2cc`): API Router
-- 🟢 **Green** (`#d5e8d4`): Services (ETL, RAG, LLM)
-- 🟣 **Purple** (`#e1d5e7`): AWS API Gateway (future/out of scope; local MVP uses the API Router directly)
-- 🔴 **Red** (`#f8cecc`): Kafka (async)
-- ⚪ **Gray** (`#f5f5f5`): Data stores (MongoDB)
+## References
 
-## 📚 References
-
-- [C4 Model](https://c4model.com/) — Architecture documentation
-- [Frame 1 Diagrams](../../objective-1-0-architecture-repo/output/diagrams/) — Base architecture
+- [C4 Model](https://c4model.com/)
+- [Frame 1 diagrams](../../objective-1-0-architecture-repo/output/diagrams/)
