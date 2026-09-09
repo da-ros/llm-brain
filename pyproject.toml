@@ -1,6 +1,7 @@
 [tool.ruff]
 target-version = "py313"
 line-length = 100
+extend-exclude = [".venv"]
 
 [tool.ruff.lint]
 select = [
@@ -23,7 +24,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["services"]
+known-first-party = ["apps", "services"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -31,11 +32,11 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.pytest.ini_options]
-testpaths = ["services"]
+testpaths = ["apps", "services"]
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["services"]
+source = ["apps", "services"]
 omit = ["*/test_*", "notebooks/*"]
 
 [tool.coverage.report]
