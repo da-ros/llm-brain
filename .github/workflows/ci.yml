@@ -59,6 +59,8 @@ jobs:
           JWT_EXPIRATION_MINUTES: 60
           FERNET_KEY: test-fernet-key-for-ci
           LLM_PROVIDER: local
+          LLM_SERVICE_URL: http://localhost:8003
+          LLM_MODEL: Qwen3.5-4B
 
   security:
     name: Security Scan

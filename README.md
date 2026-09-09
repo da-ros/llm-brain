@@ -13,14 +13,17 @@
 Integrates PKM with fine-tuned LLMs, RAG, agentic AI coordinated via **MCP**, and explainable
 prompt engineering to help a user **remember, reason, and decide** over their personal data.
 
+Local MVP only: the "cloud" LLM is a **Docker container** serving **Qwen3.5-4B base**.
+AWS (Bedrock, ECS, API Gateway) is future work.
+
 ## Modules (mapped to the thesis objectives)
 
 | # | Module | Path |
 |---|--------|------|
-| 1 | Architecture & repo (C4, MCP diagram, CI) | `docs/architecture/`, `infra/` |
+| 1 | Architecture & repo (C4, MCP, CI, JWT, LLM protocol) | `apps/api/`, `docs/architecture/` |
 | 2 | One-Tap Memory Distillation (ETL → JSON triples) | `services/etl/` |
-| 3 | Hybrid store + RAG (Mongo + Chroma/Pinecone + LangChain) | `services/rag/` |
-| 4 | LLM fine-tune (LoRA) + on-device proxy (GGUF/ollama) | `notebooks/`, `infra/` |
+| 3 | Hybrid store + RAG (Mongo + Chroma + LangChain) | `services/rag/` |
+| 4 | LLM container (Qwen3.5-4B base) + local LoRA | `services/llm/`, `services/finetune/` |
 | 5 | Symbiotic Learning Loop (MCP: Ingestor/Razonador/Evaluador) | `services/agents/` |
 | 6 | Decision-Support Simulator (what-if) | `services/simulator/` |
 | 7 | Life Analytics (React + Chart.js) | `apps/web/` |
@@ -33,17 +36,20 @@ prompt engineering to help a user **remember, reason, and decide** over their pe
 llm-brain/
 ├─ openspec/       # Spec-driven development: specs (truth) + changes (proposals)
 ├─ apps/
-│  ├─ api/         # FastAPI backend
-│  └─ web/         # React + Chart.js dashboard
+│  ├─ api/         # Platform foundation (health, JWT, LLMProvider)
+│  └─ web/         # React + Chart.js dashboard (later frame)
 ├─ services/
+│  ├─ api-router/  # Gateway (JWT, Kafka, routing) — Frame 1.1
 │  ├─ etl/         # One-Tap Memory Distillation
-│  ├─ rag/         # LangChain + vector store
+│  ├─ rag/         # LangChain + Chroma
+│  ├─ llm/         # Qwen3.5-4B base container (port 8003)
+│  ├─ finetune/    # Local LoRA → Premium on-device
 │  ├─ agents/      # MCP Ingestor / Razonador / Evaluador
 │  ├─ simulator/   # Decision-Support Simulator
 │  └─ shield/      # Privacy & Scam Shield
-├─ notebooks/      # Colab LoRA fine-tuning + experiment log
-├─ infra/          # docker-compose, ollama proxy
-└─ docs/           # C4 diagrams, architecture
+├─ notebooks/      # Fine-tune experiment log
+├─ infra/          # Pointers to Docker Compose / Dockerfile
+└─ docs/architecture/  # C4, stack, security, decisions
 ```
 
 ## Spec-driven development (OpenSpec)
@@ -65,7 +71,16 @@ In Cursor, drive the workflow with slash commands: `/opsx-propose`, `/opsx-apply
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env      # then fill in secrets
+cp .env.example .env      # JWT_SECRET_KEY is required
+uvicorn apps.api.main:app --reload --port 8000
+```
+
+Local stack (MongoDB, Chroma, Kafka, services):
+
+```bash
+docker compose up --build
+# Frame 1 foundation API only:
+docker compose --profile foundation up --build api mongo chroma
 ```
 
 ## Conventional Commits
@@ -74,11 +89,13 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/). 
 
 ## Tech stack
 
-Python 3.13 · FastAPI · LangChain · React + Chart.js · MongoDB Atlas · Chroma/Pinecone ·
-AWS Bedrock (Llama 3 8B fine-tuned) · llama.rn (Llama 3.2 3B Q4_K_M on mobile) · Docker Compose · GitHub Actions.
-**Backend**: AWS Bedrock only (premium tier). **Mobile**: llama.rn on-device (free tier).
+Python 3.13 · FastAPI · LangChain / LangGraph · React + Chart.js · React Native (iPhone) ·
+MongoDB (local) · Chroma (local, 2048-dim) · Qwen3.5-4B (local container + on-device Q4) ·
+Docker Compose · GitHub Actions.
 
-**Auth:** JWT + bcrypt (register, login, verify_token, get_current_user) with per-user data isolation.
+**Auth:** JWT + bcrypt (register, login, `get_current_user`) with per-user data isolation.
+
+**LLM_PROVIDER:** `ondevice` | `qwen_local` (alias `local`). Unsupported values fail at startup.
 
 ## Security
 
@@ -90,14 +107,14 @@ AWS Bedrock (Llama 3 8B fine-tuned) · llama.rn (Llama 3.2 3B Q4_K_M on mobile) 
 
 ### Shift Right (Detect in Production)
 
-- **CloudWatch**: Logs, metrics, alarms (future modules)
-- **Rate limiting**: API Gateway rate limiting in production
+- **CloudWatch**: Logs, metrics, alarms (future)
+- **Rate limiting**: API Router locally; API Gateway in a future AWS deploy
 
 ### Data Encryption
 
-- **Application-level**: Fernet encryption for embeddings
-- **Transport**: TLS (AWS API Gateway managed)
+- **Application-level**: Fernet for embeddings (later frames)
+- **Transport**: TLS when API Gateway exists (future)
 
 ## Budget
 
-Targets **$0** using OSS + free tiers; max pre-authorized ~$40 (Colab Pro + contingency).
+Targets **$0** using OSS; max pre-authorized ~$40 (Colab Pro + contingency).

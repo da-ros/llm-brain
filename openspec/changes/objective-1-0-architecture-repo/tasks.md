@@ -3,15 +3,18 @@
 > La arquitectura es el artefacto principal de defensa (cuarto nivel).
 > Los diagramas definen QUÉ construimos antes de decidir CÓMO.
 
-- [x] A.1 C4 Level 1 (System Context) diagram — `diagrams/c4-context.drawio`
+- [x] A.1 C4 Level 1 (System Context) diagram — `output/diagrams/c4-context.drawio`
       — Clients (web/React Native mobile), API Router, backends, LLM layers (local container + on-device), data stores (AWS API Gateway shown as future)
-- [x] A.2 C4 Level 2 (Containers) diagram — `diagrams/c4-container.drawio`
+- [x] A.2 C4 Level 2 (Containers) diagram — `output/diagrams/c4-container.drawio`
       — Docker containers: API Router, Fine-Tuning Service, RAG, LLM Service (Qwen3.5-4B), MongoDB, Chroma (AWS API Gateway shown as future)
-- [x] A.3 C4 Level 3 (Components) diagram — `diagrams/c4-component-api.drawio`
+- [x] A.3 C4 Level 3 (Components) diagram — `output/diagrams/c4-component-api.drawio`
       — Internal structure: FastAPI App, Config, Auth (JWT+bcrypt), LLM Provider Protocol, Routers, Dependencies
-- [x] A.4 Deployment diagram (Docker Compose local MVP; AWS ECS Fargate as future) — `diagrams/deployment.drawio`
+- [x] A.4 Deployment diagram (Docker Compose local MVP; AWS ECS Fargate as future) — `output/diagrams/deployment.drawio`
       — Local dev (direct client → API Router); production (via API Gateway) shown as future/out of scope
-- [ ] A.7 Validate architecture with tutor / align on scope before proceeding to code
+- [x] A.5 MCP agent-flow diagram — `output/diagrams/mcp-agent-flow.drawio`
+- [x] A.6 OSS stack decision record — `docs/architecture/stack.md` and `output/documents/oss-stack.md`
+- [x] A.7 Validate architecture with tutor / align on scope before proceeding to code
+      — Scope aligned to `context.txt` (local Qwen3.5-4B, no Bedrock/Atlas). Record: `output/documents/tutor-alignment.md`
 
 ## B. Repository Foundation
 
@@ -67,3 +70,4 @@
 - [x] F.2 Validate Docker Compose starts all services correctly
 - [x] F.3 Run full test suite and confirm CI pipeline works end-to-end
 - [x] F.4 Document any deviations from original architecture in `docs/architecture/decisions.md`
+- [x] F.5 Frame output package: `output/diagrams/` (C4 + deployment + MCP) and `output/documents/`
