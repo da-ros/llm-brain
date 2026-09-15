@@ -39,6 +39,10 @@ models/
 data/raw/
 data/staging/
 data/processed/
+data/models/
+data/training_logs/
+data/chroma/
+data/chroma_test/
 chroma/
 .chroma/
 *.sqlite3
