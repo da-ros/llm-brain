@@ -1,10 +1,20 @@
 """LLM Provider Protocol.
 
-Defines the interface for all LLM providers.
-All providers must implement this protocol to be used by the application.
+Structural subtyping — any class with chat() and complete() is a provider.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
+
+
+@dataclass(frozen=True)
+class LLMResult:
+    """Inference result with token accounting."""
+
+    text: str
+    tokens_used: int
 
 
 @runtime_checkable
@@ -12,29 +22,30 @@ class LLMProvider(Protocol):
     """Protocol for LLM providers.
 
     All providers must implement:
-    - chat(): Send messages and receive a response
-    - complete(): Complete a prompt
+    - chat(): send messages (optionally multimodal) and receive a response
+    - complete(): complete a prompt
     """
 
-    def chat(self, messages: list[dict], context: str | None = None) -> str:
+    def chat(self, messages: list[dict], context: str | None = None) -> LLMResult:
         """Send chat messages and receive a response.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
-            context: Optional RAG context to inject
+                      (content may be a string or multimodal parts).
+            context: Optional RAG context to inject.
 
         Returns:
-            The model's response as a string
+            LLMResult with response text and tokens_used.
         """
         ...
 
-    def complete(self, prompt: str) -> str:
+    def complete(self, prompt: str) -> LLMResult:
         """Complete a prompt.
 
         Args:
-            prompt: The prompt to complete
+            prompt: The prompt to complete.
 
         Returns:
-            The completion as a string
+            LLMResult with completion text and tokens_used.
         """
         ...

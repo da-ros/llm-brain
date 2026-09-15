@@ -1,134 +1,86 @@
-# Justificación Técnica — Fine-Tune Service
+# Justificación — Fine-Tune Service (Frame 4)
 
-## 1. Decisiones de Diseño
+El Fine-Tune Service corre **LoRA local** sobre **Qwen3.5-4B** en el puerto 8004.
+El producto es un **adapter** para el build Premium on-device (Frame 10). El
+contenedor LLM :8003 **permanece base**. No hay AWS Bedrock managed fine-tuning.
 
-### 1.1 Servicio separado de Inference
+## El problema que resuelve
 
-**Decisión**: Fine-tuning en microservicio independiente del LLM Service.
+1. **Trigger manual** — `POST /train` (el API Router lo expondrá como
+   `POST /api/finetune` en Frame 5). Sin request, no hay job.
+2. **Dataset de triples** — JSONL de ETL (`data/triples/{user_id}/`) convertido a
+   formato instrucción `{instruction, input, output}`.
+3. **Job asíncrono** — 202 + `job_id`. Polling en `GET /status/:job_id`.
+4. **Artefactos** — adapter en `data/models/{user_id}/adapter/` + log Markdown
+   (dataset, hyperparams, metrics, `model_version`).
 
-**Justificación**:
-- **Inferencia** (port 8003): Requests síncronos, timeout 30s, alta disponibilidad
-- **Fine-Tuning** (port 8004): Jobs asíncronos, pueden durar horas, baja frecuencia
-- Escalado independiente: inference necesita más instances que training
-- Fault isolation: un error de training no afecta inference
-- Training jobs son pesados — no deben bloquear el event loop del inference service
+## Módulos (SRP)
 
-### 1.2 LoRA local (Low-Rank Adaptation) sobre Qwen3.5-4B
+| Módulo | Responsabilidad |
+|--------|-----------------|
+| `main.py` | App FastAPI, correlation ID, routers |
+| `config.py` | `BASE_MODEL_ID`, `LORA_BACKEND`, epochs, lr, max hours |
+| `logging_setup.py` | Correlation ID en cada línea |
+| `pipeline.py` | Job store, submit, poll, cancel, training log |
+| `lora.py` | Backends PEFT / ms-swift / Unsloth (`LORA_MOCK` en CI) |
+| `routers/health.py` | `GET /health` + `active_jobs` |
+| `routers/training.py` | `POST /train` (202), `GET /status/:job_id` |
 
-**Decisión**: LoRA **local** (PEFT / ms-swift / Unsloth) para fine-tuning de Qwen3.5-4B.
-
-**Justificación**:
-- Parameter-efficient (<1% of weights trained)
-- Lower compute cost que full fine-tuning — corre en la laptop (o Colab free)
-- Preserva capacidades del modelo base
-- Produce un adapter; el build **Premium** on-device fusiona + cuantiza (Q4) el modelo para la app React Native (Frame 10). El contenedor cloud permanece base.
-- $0 y local — sin AWS Bedrock managed fine-tuning
-
-### 1.3 In-Memory Job Store (stubbed)
-
-**Decisión**: Almacenar jobs en un dict en memoria, no en MongoDB.
-
-**Justificación**:
-- El entrenamiento LoRA local está stubbed — no hay jobs reales ejecutándose
-- Cada instancia del servicio tiene su propio estado
-- Cuando el entrenamiento LoRA local sea real, se reemplaza por MongoDB (matching api-router pattern)
-- Aceptable para MVP y demos
-
-### 1.4 POST /train returns 202 Accepted
-
-**Decisión**: Retornar 202 en lugar de 200 para el endpoint de training.
-
-**Justificación**:
-- Pattern consistente con el upload del api-router (que también retorna 202)
-- El training es asíncrono — puede durar horas
-- El cliente debe hacer polling via GET /status/:job_id
-- HTTP 202 indica "aceptado pero no completado"
-
-## 2. Patrones de Diseño Aplicados
-
-### Command Pattern (Training Job)
-
-```python
-# Cada job encapsula una operación de training
-@dataclass
-class TrainingJob:
-    job_id: str
-    status: str  # submitted, in_progress, completed, failed, cancelled
-    user_id: str
-    triples_count: int
-    config: dict
-```
-
-### Repository Pattern (Job Store)
-
-```python
-# El pipeline actúa como repositorio para jobs
-def submit_training_job(user_id, triples_path, config) -> str:
-    # Crea job y almacena
-def get_job_status(job_id) -> TrainingJob | None:
-    # Consulta job
-def cancel_job(job_id) -> TrainingJob | None:
-    # Cancela job
-```
-
-### Pipeline Pattern (ETL → Training)
-
-```python
-# Flujo secuencial: Triples → Conversión → Submit → Status
-convert_triples_to_training_format(triples_path)  # Paso 1
-submit_training_job(user_id, triples_path, config)  # Paso 2
-get_job_status(job_id)  # Paso 3 (polling)
-```
-
-## 3. Ejemplos de Logs
-
-### 3.1 POST /train (éxito)
+## Pipeline
 
 ```
-2026-08-31T10:00:00 [abc-123] INFO finetune-service: POST /train — dataset: data/triples/user-123/receta.jsonl, user_id: user-123
-2026-08-31T10:00:01 [abc-123] INFO finetune-service: Job submitted: ft-job-a1b2c3d4
+POST /train (manual)
+  → dataset existe? no → 404
+  → triples JSONL → LoRA examples
+  → job status=submitted, thread worker
+  → 202 {job_id, status}
+worker:
+  → in_progress
+  → LoRA over Qwen3.5-4B
+  → save adapter + Markdown log
+  → completed {epochs, final_loss, training_time_hours, model_version, adapter_path}
 ```
 
-### 3.2 POST /train (dataset no encontrado)
+## Logging estructurado
 
 ```
-2026-08-31T10:00:00 [def-456] INFO finetune-service: POST /train — dataset: /fake/path.jsonl, user_id: user-456
-2026-08-31T10:00:00 [def-456] ERROR finetune-service: Dataset not found: /fake/path.jsonl
+2026-08-31T10:00:00 [abc-123] INFO finetune-service: POST /train — dataset: data/triples/user-123/receta.jsonl
+2026-08-31T10:00:00 [abc-123] INFO finetune-service: Job submitted: ft-job-abc-123
+2026-08-31T10:00:01 [abc-123] INFO finetune-service: Starting local LoRA job over Qwen3.5-4B (peft)
+2026-08-31T12:00:00 [abc-123] INFO finetune-service: Job ft-job-abc-123 completed — loss: 0.15
 ```
 
-### 3.3 POST /train (dataset inválido)
+Dataset ausente:
 
 ```
-2026-08-31T10:00:00 [ghi-789] INFO finetune-service: POST /train — dataset: empty.jsonl, user_id: user-789
-2026-08-31T10:00:00 [ghi-789] ERROR finetune-service: Invalid dataset: No valid triples found
+2026-08-31T10:00:00 [def-456] ERROR finetune-service: Dataset not found: Dataset not found: /missing.jsonl
 ```
 
-### 3.4 GET /status (éxito)
+## Patrones
 
-```
-2026-08-31T10:00:00 [jkl-012] INFO finetune-service: GET /status/ft-job-a1b2c3d4
-2026-08-31T10:00:00 [jkl-012] INFO finetune-service: Job status: submitted
-```
+| Pattern | Where | Purpose |
+|---------|-------|---------|
+| Command | `TrainingJob` | Job encapsula una corrida LoRA |
+| Repository | in-memory `jobs` | Submit / get / cancel |
+| Strategy | `LORA_BACKEND` | peft / ms-swift / unsloth |
+| Pipeline | convert → train → save adapter | ETL triples → artifact on-device |
 
-### 3.5 GET /status (job no encontrado)
-
-```
-2026-08-31T10:00:00 [mno-345] INFO finetune-service: GET /status/nonexistent
-2026-08-31T10:00:00 [mno-345] WARNING finetune-service: Job not found: nonexistent
-```
-
-### 3.6 GET /health
-
-```
-2026-08-31T10:00:00 [pqr-678] INFO finetune-service: GET /health
-```
-
-## 4. Principios SOLID Aplicados
+## SOLID
 
 | Principio | Aplicación |
 |-----------|-----------|
-| **S** (Single Responsibility) | El servicio solo hace una cosa: manejar jobs de fine-tuning |
-| **O** (Open/Closed) | Nuevo tipo de training (ej: full fine-tuning) se agrega sin modificar endpoints |
-| **L** (Liskov Substitution) | El pipeline puede cambiar de backend LoRA local (PEFT → ms-swift → Unsloth) sin cambiar la interfaz |
-| **I** (Interface Segregation) | Endpoints expuestos: solo /train, /status, /health — no hay métodos innecesarios |
-| **D** (Dependency Inversion) | El servicio depende de abstractions (pipeline functions), no de implementaciones concretas |
+| **S** | El servicio solo gestiona jobs LoRA |
+| **O** | Nuevo backend LoRA en `lora.py` sin cambiar routers |
+| **L** | Cualquier backend cumple `run_lora_training` |
+| **I** | Solo `/train`, `/status`, `/health` |
+| **D** | Routers → pipeline, no → PEFT concreto |
+
+## Errores HTTP
+
+| Caso | Código |
+|------|--------|
+| `dataset_path` / `user_id` faltante | 400 |
+| Dataset inexistente | 404 |
+| JSONL sin triples válidos | 400 |
+| Job desconocido | 404 |
+| Error de training | job `failed` + 500 si falla el submit |

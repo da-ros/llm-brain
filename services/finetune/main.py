@@ -1,80 +1,47 @@
-"""Fine-Tune Service — FastAPI Application.
+"""Fine-Tune Service — FastAPI application.
 
-Provides LoRA fine-tuning endpoints for AWS Bedrock.
-Handles training job submission and status polling.
+Local LoRA over Qwen3.5-4B. Manual trigger only (POST /train).
 """
 
-import logging
+from __future__ import annotations
 
+from config import get_settings
 from fastapi import FastAPI, Request
-
-from config import settings
-
-# --- Structured Logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(correlation_id)s] %(levelname)s %(name)s: %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-)
-logger = logging.getLogger("finetune-service")
+from logging_setup import correlation_id_var, log_with_correlation, logger
+from routers import health, training
 
 
-class CorrelationFilter(logging.Filter):
-    """Add correlation_id to all log records."""
-
-    def filter(self, record):
-        record.correlation_id = getattr(record, "correlation_id", "no-id")
-        return True
-
-
-logger.addFilter(CorrelationFilter())
-
-
-def log_with_correlation(correlation_id: str, level: str, message: str):
-    """Log a message with correlation_id context."""
-    extra = {"correlation_id": correlation_id}
-    getattr(logger, level)(message, extra=extra)
-
-
-app = FastAPI(
-    title="Fine-Tune Service",
-    description="LLM Fine-Tuning — Bedrock training jobs",
-    version="0.1.0",
-)
-
-
-# --- Correlation ID Middleware ---
-@app.middleware("http")
 async def add_correlation_id(request: Request, call_next):
-    """Read correlation ID from X-Request-ID header.
-
-    Do NOT generate a new UUID — the api-router already provides one.
-    """
+    """Propagate X-Request-ID from the API Router. Do not mint a new UUID."""
     correlation_id = request.headers.get("X-Request-ID", "no-id")
     request.state.correlation_id = correlation_id
-
+    token = correlation_id_var.set(correlation_id)
     log_with_correlation(correlation_id, "info", f"{request.method} {request.url.path}")
-
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    finally:
+        correlation_id_var.reset(token)
     response.headers["X-Request-ID"] = correlation_id
     return response
 
 
-# --- Health endpoint ---
-@app.get("/health")
-async def health_check():
-    """Public health check endpoint."""
-    import pipeline
+def create_app() -> FastAPI:
+    """Build the FastAPI application (used by tests and uvicorn)."""
+    settings = get_settings()
+    application = FastAPI(
+        title="Fine-Tune Service",
+        description="Local LoRA fine-tuning over Qwen3.5-4B (PEFT / ms-swift / Unsloth)",
+        version=settings.SERVICE_VERSION,
+    )
+    application.middleware("http")(add_correlation_id)
+    application.include_router(health.router)
+    application.include_router(training.router)
+    logger.info(
+        "Fine-Tune Service ready — backend=%s model=%s",
+        settings.LORA_BACKEND,
+        settings.BASE_MODEL_ID,
+    )
+    return application
 
-    return {
-        "status": "ok",
-        "service": "finetune-service",
-        "active_jobs": pipeline.get_active_jobs_count(),
-        "version": "0.1.0",
-    }
 
-
-# --- Import routers ---
-from routers import training
-
-app.include_router(training.router)
+app = create_app()

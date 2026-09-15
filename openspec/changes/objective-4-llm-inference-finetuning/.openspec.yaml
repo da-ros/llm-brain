@@ -1,3 +1,5 @@
+schema: spec-driven
+created: 2026-08-31
 frame: frame-4
 title: "LLM Inference (local Qwen3.5-4B) + Fine-Tuning Services"
 description: "Multimodal LLM inference service (port 8003) serving Qwen3.5-4B in a local Docker container, and local LoRA fine-tuning service (port 8004)"

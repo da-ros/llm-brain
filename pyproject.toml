@@ -30,6 +30,11 @@ known-first-party = ["apps", "services"]
 # Hyphenated Docker service directory; imports inside the image are top-level.
 "services/api-router/**" = ["N999"]
 "services/api-router/test_api_router.py" = ["E402"]
+"services/api-router/conftest.py" = ["E402"]
+"services/llm/test_llm.py" = ["E402"]
+"services/llm/conftest.py" = ["E402"]
+"services/finetune/test_finetune.py" = ["E402"]
+"services/finetune/conftest.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

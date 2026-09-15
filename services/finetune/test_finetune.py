@@ -1,139 +1,159 @@
-"""Tests for Fine-Tune Service — Config, Pipeline, Health, Endpoints."""
+"""Tests for Fine-Tune Service — local LoRA pipeline, health, endpoints."""
+
+from __future__ import annotations
 
 import json
 import os
-import sys
-import tempfile
+import time
 from pathlib import Path
 
 import pytest
 
-# Add services/finetune to Python path
-sys.path.insert(0, str(Path(__file__).parent))
+os.environ["LORA_MOCK"] = "true"
+os.environ["LORA_MOCK_DELAY_SECONDS"] = "0.05"
+os.environ["BASE_MODEL_ID"] = "qwen3.5-4b"
+os.environ["LORA_BACKEND"] = "peft"
+os.environ["TRAINING_EPOCHS"] = "5"
+os.environ["TRAINING_LR"] = "0.001"
 
-# Set env vars before any imports
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "test-key")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test-secret")
-os.environ.setdefault("AWS_REGION", "us-east-1")
+
+def _write_triples(path: Path, rows: list[dict]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row) + "\n")
 
 
-# --- Config Tests ---
+@pytest.fixture(autouse=True)
+def _reset_jobs(tmp_path, monkeypatch):
+    import pipeline
+    from config import clear_settings_cache, get_settings
+
+    monkeypatch.setenv("ADAPTER_OUTPUT_DIR", str(tmp_path / "models"))
+    monkeypatch.setenv("TRAINING_LOG_DIR", str(tmp_path / "logs"))
+    clear_settings_cache()
+    get_settings()
+    pipeline.reset_jobs()
+    yield
+    pipeline.reset_jobs()
+    clear_settings_cache()
 
 
 class TestConfig:
-    """Tests for Fine-Tune service configuration."""
-
     def test_config_defaults(self):
-        """Test that config has correct defaults."""
         from config import Settings
 
         s = Settings()
         assert s.FINETUNE_PORT == 8004
-        assert s.TRAINING_MAX_EPOCHS == 3
-        assert s.AWS_REGION == "us-east-1"
-
-
-# --- Pipeline Tests ---
+        assert s.BASE_MODEL_ID == "qwen3.5-4b"
+        assert s.LORA_BACKEND == "peft"
+        assert s.TRAINING_EPOCHS == 5
+        assert s.TRAINING_LR == 0.001
+        assert s.MAX_TRAINING_TIME_HOURS == 2
 
 
 class TestPipeline:
-    """Tests for training pipeline."""
+    """G.5 — triples → LoRA format, job store, adapter on completion."""
 
-    def test_convert_triples_to_training_format(self):
-        """Test converting triples JSONL to training format."""
+    def test_convert_triples_to_lora_format(self, tmp_path):
         import pipeline
 
-        # Create temp JSONL file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            json.dump({"subject": "Ibuprofeno", "predicate": "trata", "object": "dolor"}, f)
-            f.write("\n")
-            json.dump({"subject": "Aspirina", "predicate": "reduce", "object": "fiebre"}, f)
-            f.write("\n")
-            triples_path = f.name
+        triples_path = tmp_path / "receta.jsonl"
+        _write_triples(
+            triples_path,
+            [
+                {"subject": "Ibuprofeno", "predicate": "trata", "object": "dolor"},
+                {"subject": "Aspirina", "predicate": "reduce", "object": "fiebre"},
+            ],
+        )
+        examples = pipeline.convert_triples_to_training_format(str(triples_path))
+        assert len(examples) == 2
+        assert examples[0]["input"] == "Ibuprofeno trata"
+        assert examples[0]["output"] == "dolor"
+        assert "instruction" in examples[0]
 
-        try:
-            examples = pipeline.convert_triples_to_training_format(triples_path)
-            assert len(examples) == 2
-            assert "input" in examples[0]
-            assert "output" in examples[0]
-            assert examples[0]["input"] == "Ibuprofeno trata"
-            assert examples[0]["output"] == "dolor"
-        finally:
-            Path(triples_path).unlink()
-
-    def test_submit_training_job(self):
-        """Test submitting a training job."""
+    def test_convert_directory_of_jsonl(self, tmp_path):
         import pipeline
 
-        # Create temp file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            json.dump({"subject": "test", "predicate": "is", "object": "ok"}, f)
-            f.write("\n")
-            triples_path = f.name
+        dataset_dir = tmp_path / "user-123"
+        dataset_dir.mkdir()
+        _write_triples(
+            dataset_dir / "a.jsonl",
+            [{"subject": "a", "predicate": "is", "object": "1"}],
+        )
+        _write_triples(
+            dataset_dir / "b.jsonl",
+            [{"subject": "b", "predicate": "is", "object": "2"}],
+        )
+        examples = pipeline.convert_triples_to_training_format(str(dataset_dir))
+        assert len(examples) == 2
 
-        try:
-            job_id = pipeline.submit_training_job("user1", triples_path, {})
-            assert isinstance(job_id, str)
-            assert job_id.startswith("ft-job-")
+    def test_missing_dataset_raises(self):
+        import pipeline
 
+        with pytest.raises(FileNotFoundError):
+            pipeline.convert_triples_to_training_format("/no/such/file.jsonl")
+
+    def test_empty_dataset_raises(self, tmp_path):
+        import pipeline
+
+        empty = tmp_path / "empty.jsonl"
+        empty.write_text("\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="No valid triples"):
+            pipeline.convert_triples_to_training_format(str(empty))
+
+    def test_submit_and_complete(self, tmp_path):
+        import pipeline
+
+        triples_path = tmp_path / "receta.jsonl"
+        _write_triples(
+            triples_path,
+            [{"subject": "test", "predicate": "is", "object": "ok"}],
+        )
+        job_id = pipeline.submit_training_job("user1", str(triples_path), "cid-1")
+        assert job_id.startswith("ft-job-")
+
+        deadline = time.time() + 3
+        job = pipeline.get_job_status(job_id)
+        while job and job.status not in ("completed", "failed") and time.time() < deadline:
+            time.sleep(0.05)
             job = pipeline.get_job_status(job_id)
-            assert job is not None
-            assert job.status == "submitted"
-            assert job.user_id == "user1"
-            assert job.triples_count == 1
-        finally:
-            Path(triples_path).unlink()
 
-    def test_get_job_status(self):
-        """Test getting job status."""
-        import pipeline
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            json.dump({"subject": "a", "predicate": "b", "object": "c"}, f)
-            f.write("\n")
-            triples_path = f.name
-
-        try:
-            job_id = pipeline.submit_training_job("user1", triples_path, {})
-            job = pipeline.get_job_status(job_id)
-            assert job is not None
-            assert job.job_id == job_id
-        finally:
-            Path(triples_path).unlink()
+        assert job is not None
+        assert job.status == "completed"
+        assert job.model_version and job.model_version.startswith("qwen3.5-4b-lora-v")
+        assert job.adapter_path
+        assert Path(job.adapter_path, "adapter_config.json").exists()
+        assert job.metrics.get("epochs") == 5
+        assert "final_loss" in job.metrics
+        assert job.log_path and Path(job.log_path).exists()
+        log_text = Path(job.log_path).read_text(encoding="utf-8")
+        assert "Hyperparams" in log_text
+        assert "peft" in log_text
 
     def test_get_nonexistent_job(self):
-        """Test getting status of nonexistent job."""
         import pipeline
 
-        result = pipeline.get_job_status("nonexistent")
-        assert result is None
+        assert pipeline.get_job_status("nonexistent") is None
 
-    def test_cancel_submitted_job(self):
-        """Test cancelling a submitted job."""
+    def test_cancel_submitted_job(self, tmp_path, monkeypatch):
         import pipeline
+        from config import clear_settings_cache as clear
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            json.dump({"subject": "x", "predicate": "y", "object": "z"}, f)
-            f.write("\n")
-            triples_path = f.name
-
-        try:
-            job_id = pipeline.submit_training_job("user1", triples_path, {})
-            cancelled = pipeline.cancel_job(job_id)
-            assert cancelled is not None
-            assert cancelled.status == "cancelled"
-        finally:
-            Path(triples_path).unlink()
-
-
-# --- Health Endpoint Tests ---
+        monkeypatch.setenv("LORA_MOCK_DELAY_SECONDS", "2")
+        clear()
+        triples_path = tmp_path / "slow.jsonl"
+        _write_triples(
+            triples_path,
+            [{"subject": "x", "predicate": "y", "object": "z"}],
+        )
+        job_id = pipeline.submit_training_job("user1", str(triples_path))
+        cancelled = pipeline.cancel_job(job_id)
+        assert cancelled is not None
+        assert cancelled.status == "cancelled"
 
 
 class TestHealthEndpoint:
-    """Tests for health check endpoint."""
-
     def test_health_returns_200(self):
-        """Test that /health returns 200 with status ok."""
         from fastapi.testclient import TestClient
         from main import app
 
@@ -143,83 +163,74 @@ class TestHealthEndpoint:
         data = response.json()
         assert data["status"] == "ok"
         assert data["service"] == "finetune-service"
-
-
-# --- Train Endpoint Tests ---
+        assert "active_jobs" in data
 
 
 class TestTrainEndpoint:
-    """Tests for POST /train endpoint."""
+    """G.6 — POST /train + GET /status with mocked local LoRA."""
 
-    def test_train_returns_202(self):
-        """Test that /train returns 202 with job_id."""
+    def test_train_returns_202_and_completes(self, tmp_path):
         from fastapi.testclient import TestClient
         from main import app
 
-        client = TestClient(app)
-
-        # Create temp file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            json.dump({"subject": "test", "predicate": "is", "object": "ok"}, f)
-            f.write("\n")
-            triples_path = f.name
-
-        try:
-            response = client.post(
-                "/train",
-                json={"user_id": "u1", "triples_path": triples_path},
-                headers={"X-Request-ID": "test-123"},
-            )
-            assert response.status_code == 202
-            data = response.json()
-            assert "job_id" in data
-            assert data["status"] == "submitted"
-        finally:
-            Path(triples_path).unlink()
-
-    def test_status_returns_job_info(self):
-        """Test that /status returns job info."""
-        from fastapi.testclient import TestClient
-        from main import app
-
-        client = TestClient(app)
-
-        # Create temp file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            json.dump({"subject": "a", "predicate": "b", "object": "c"}, f)
-            f.write("\n")
-            triples_path = f.name
-
-        try:
-            # Submit job
-            response = client.post(
-                "/train",
-                json={"user_id": "u1", "triples_path": triples_path},
-                headers={"X-Request-ID": "test-123"},
-            )
-            assert response.status_code == 202
-            job_id = response.json()["job_id"]
-
-            # Get status
-            response = client.get(
-                f"/status/{job_id}",
-                headers={"X-Request-ID": "test-123"},
-            )
-            assert response.status_code == 200
-            data = response.json()
-            assert data["job_id"] == job_id
-            assert data["status"] == "submitted"
-        finally:
-            Path(triples_path).unlink()
-
-    def test_status_nonexistent_returns_404(self):
-        """Test that /status returns 404 for nonexistent job."""
-        from fastapi.testclient import TestClient
-        from main import app
-
-        client = TestClient(app)
-        response = client.get(
-            "/status/fake-id",
-            headers={"X-Request-ID": "test-123"},
+        triples_path = tmp_path / "receta.jsonl"
+        _write_triples(
+            triples_path,
+            [{"subject": "Ibuprofeno", "predicate": "trata", "object": "dolor"}],
         )
+        client = TestClient(app)
+        response = client.post(
+            "/train",
+            json={"user_id": "user-123", "dataset_path": str(triples_path)},
+            headers={"X-Request-ID": "abc-123"},
+        )
+        assert response.status_code == 202
+        data = response.json()
+        assert data["status"] == "submitted"
+        assert data["job_id"].startswith("ft-job-")
+        assert "Poll GET /status/" in data["message"]
+        assert response.headers.get("X-Request-ID") == "abc-123"
+
+        job_id = data["job_id"]
+        deadline = time.time() + 3
+        status_data = {}
+        while time.time() < deadline:
+            status_response = client.get(f"/status/{job_id}", headers={"X-Request-ID": "abc-123"})
+            assert status_response.status_code == 200
+            status_data = status_response.json()
+            if status_data["status"] == "completed":
+                break
+            time.sleep(0.05)
+
+        assert status_data["status"] == "completed"
+        assert status_data["metrics"]["epochs"] == 5
+        assert status_data["model_version"]
+        assert status_data["adapter_path"]
+        assert status_data["completed_at"]
+
+    def test_dataset_not_found_returns_404(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post(
+            "/train",
+            json={"user_id": "u1", "dataset_path": "/no/such/receta.jsonl"},
+        )
+        assert response.status_code == 404
+
+    def test_missing_dataset_path_returns_400(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post("/train", json={"user_id": "u1"})
+        assert response.status_code == 400
+
+    def test_status_unknown_returns_404(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.get("/status/fake-id")
         assert response.status_code == 404

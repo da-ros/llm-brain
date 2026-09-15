@@ -29,3 +29,12 @@ Any other value (including `bedrock`) fails at startup.
 ## Fine-tuning
 
 Local LoRA output is the **Premium on-device** build only. The cloud container stays base.
+
+## Frame 4 services
+
+- `services/llm` (port 8003): FastAPI + `QwenLocalProvider`. Serves **base** Qwen3.5-4B
+  for Premium chat/RAG and ETL triple extraction. Free tier is rejected (on-device, Frame 10).
+- `services/finetune` (port 8004): manual `POST /train` only. Converts ETL triples JSONL to
+  LoRA instruction format, runs PEFT / ms-swift / Unsloth locally, writes
+  `data/models/{user_id}/adapter/` and a Markdown training log. Does **not** patch the
+  cloud container.

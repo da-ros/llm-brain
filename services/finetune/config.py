@@ -1,13 +1,18 @@
-"""Fine-Tune Service Configuration.
+"""Fine-Tune Service configuration.
 
-Settings for the LoRA fine-tuning service.
+Local LoRA over Qwen3.5-4B (PEFT / ms-swift / Unsloth). Adapter is for the
+Premium on-device build; the cloud LLM container stays base.
 """
+
+from __future__ import annotations
+
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Fine-Tune service settings."""
+    """Runtime settings for the Fine-Tune Service."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -15,26 +20,34 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # --- Service ---
+    SERVICE_NAME: str = "finetune-service"
+    SERVICE_VERSION: str = "0.1.0"
+
     FINETUNE_HOST: str = "0.0.0.0"
     FINETUNE_PORT: int = 8004
 
-    # --- AWS Bedrock ---
-    AWS_ACCESS_KEY_ID: str = ""
-    AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_REGION: str = "us-east-1"
-    BEDROCK_MODEL_ID: str = "meta.llama3-8b-instruct-v1:0"
+    BASE_MODEL_ID: str = "qwen3.5-4b"
+    LORA_BACKEND: str = "peft"
+    LORA_MOCK: bool = True
+    LORA_MOCK_DELAY_SECONDS: float = 0.05
 
-    # --- Training ---
-    TRAINING_MAX_EPOCHS: int = 3
-    TRAINING_LEARNING_RATE: float = 1e-5
-    TRAINING_MAX_TIME: int = 3600  # seconds
-    TRAINING_OUTPUT_DIR: str = "./data/training"
+    TRAINING_EPOCHS: int = 5
+    TRAINING_LR: float = 0.001
+    MAX_TRAINING_TIME_HOURS: int = 2
+
+    ADAPTER_OUTPUT_DIR: str = "./data/models"
+    TRAINING_LOG_DIR: str = "./data/training_logs"
 
 
+@lru_cache
 def get_settings() -> Settings:
-    """Get settings."""
+    """Load settings (cached)."""
     return Settings()
+
+
+def clear_settings_cache() -> None:
+    """Drop the cached settings (used by tests)."""
+    get_settings.cache_clear()
 
 
 settings = get_settings()

@@ -1,0 +1,7 @@
+# Optional GPU LoRA runtime. Not installed in CI.
+# Used when LORA_MOCK=false.
+-r requirements.txt
+transformers==4.46.0
+torch==2.4.0
+peft==0.12.0
+accelerate==0.34.0

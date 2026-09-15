@@ -1,168 +1,155 @@
-<mxfile host="65bd71144e">
+<mxfile host="app.diagrams.net">
     <diagram id="llm-dataflow" name="Frame 4 — LLM Service Data Flow">
-        <mxGraphModel dx="81491" dy="45828" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1400" math="0" shadow="0">
+        <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1400" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-
-                <!-- Title -->
-                <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=20;fontStyle=1" value="Frame 4 — LLM Service Data Flow" vertex="1">
-                    <mxGeometry height="60" width="600" x="900" y="20" as="geometry"/>
+                <mxCell id="title" value="Frame 4 — LLM Service Data Flow&#10;Premium inference is sync HTTP. ETL uses the same base model. Free tier never enters this service." style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="280" y="12" width="1300" height="56" as="geometry"/>
                 </mxCell>
-
-                <!-- Flow 1: Inference -->
-                <mxCell id="flow1_title" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" value="FLOW 1: INFERENCE (Sync — 30s timeout)" vertex="1">
-                    <mxGeometry height="30" width="400" x="100" y="100" as="geometry"/>
+                <mxCell id="f1" value="FLOW 1 — PREMIUM INFERENCE (sync, 30s timeout)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" parent="1" vertex="1">
+                    <mxGeometry x="60" y="80" width="520" height="24" as="geometry"/>
                 </mxCell>
-
-                <!-- Step 1: Client -->
-                <mxCell id="s1_client" parent="1" style="shape=mxgraph.basic.smiley;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;html=1;" value="Client" vertex="1">
-                    <mxGeometry height="70" width="120" x="100" y="140" as="geometry"/>
+                <mxCell id="c1" value="1. Client" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="120" width="140" height="70" as="geometry"/>
                 </mxCell>
-
-                <!-- Step 2: API Router -->
-                <mxCell id="s2_router" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" value="API Router&#xa;POST /api/chat" vertex="1">
-                    <mxGeometry height="70" width="150" x="280" y="140" as="geometry"/>
+                <mxCell id="c2" value="2. API Router&#10;POST /api/chat" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="120" width="160" height="70" as="geometry"/>
                 </mxCell>
-
-                <!-- Step 3: LLM Service -->
-                <mxCell id="s3_llm" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" value="LLM Service&#xa;POST /generate" vertex="1">
-                    <mxGeometry height="70" width="150" x="490" y="140" as="geometry"/>
+                <mxCell id="c3" value="3. LLM Service&#10;POST /generate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="120" width="160" height="70" as="geometry"/>
                 </mxCell>
-
-                <!-- Step 4: Resolver -->
-                <mxCell id="s4_resolver" parent="1" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" value="get_provider(tier)" vertex="1">
-                    <mxGeometry height="50" width="140" x="700" y="150" as="geometry"/>
+                <mxCell id="c4" value="4. get_provider&#10;tier=premium" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="110" width="160" height="90" as="geometry"/>
                 </mxCell>
-
-                <!-- Step 5: BedrockProvider -->
-                <mxCell id="s5_bedrock_provider" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" value="BedrockProvider&#xa;.complete(prompt)" vertex="1">
-                    <mxGeometry height="70" width="140" x="900" y="140" as="geometry"/>
+                <mxCell id="c5" value="5. QwenLocalProvider&#10;complete(prompt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="920" y="120" width="180" height="70" as="geometry"/>
                 </mxCell>
-
-                <!-- Step 6: AWS Bedrock -->
-                <mxCell id="s6_bedrock" parent="1" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;" value="AWS Bedrock&#xa;Llama 3 8B" vertex="1">
-                    <mxGeometry height="70" width="150" x="1100" y="140" as="geometry"/>
+                <mxCell id="c6" value="6. Qwen3.5-4B&#10;base runtime" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="120" width="160" height="70" as="geometry"/>
                 </mxCell>
-
-                <!-- Arrows for flow 1 -->
-                <mxCell id="f1_a1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#6c8ebf;" edge="1" source="s1_client" target="s2_router">
+                <mxCell id="c7" value="7. 200&#10;{response, tokens_used}" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="250" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="a12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#6c8ebf;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="c1" target="c2" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="f1_a1_label" parent="f1_a1" value="HTTP" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0">
-                    <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="-12" as="offset"/></mxGeometry>
+                <mxCell id="a12l" value="HTTP" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a12" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"><mxPoint y="-10" as="offset"/></mxGeometry>
                 </mxCell>
-
-                <mxCell id="f1_a2" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#6c8ebf;" edge="1" source="s2_router" target="s3_llm">
+                <mxCell id="a23" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#6c8ebf;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="c2" target="c3" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="f1_a2_label" parent="f1_a2" value="HTTP POST&#xa;X-Request-ID" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0">
-                    <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="-15" as="offset"/></mxGeometry>
+                <mxCell id="a23l" value="X-Request-ID" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a23" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"><mxPoint y="-12" as="offset"/></mxGeometry>
                 </mxCell>
-
-                <mxCell id="f1_a3" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#82b366;" edge="1" source="s3_llm" target="s4_resolver">
+                <mxCell id="a34" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="c3" target="c4" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="f1_a3_label" parent="f1_a3" value="tier" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0">
-                    <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="-12" as="offset"/></mxGeometry>
-                </mxCell>
-
-                <mxCell id="f1_a4" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#82b366;" edge="1" source="s4_resolver" target="s5_bedrock_provider">
+                <mxCell id="a45" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="c4" target="c5" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="f1_a4_label" parent="f1_a4" value="provider" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0">
-                    <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="-12" as="offset"/></mxGeometry>
+                <mxCell id="a45l" value="provider" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#82b366" parent="a45" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"><mxPoint y="-10" as="offset"/></mxGeometry>
                 </mxCell>
-
-                <mxCell id="f1_a5" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;strokeColor=#d79b00;" edge="1" source="s5_bedrock_provider" target="s6_bedrock">
+                <mxCell id="a56" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#d6b656;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="c5" target="c6" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="f1_a5_label" parent="f1_a5" value="boto3 API" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0">
-                    <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="-12" as="offset"/></mxGeometry>
+                <mxCell id="a56l" value="generate" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#d6b656" parent="a56" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"><mxPoint y="-10" as="offset"/></mxGeometry>
                 </mxCell>
-
-                <!-- Response arrows (dashed) -->
-                <mxCell id="f1_r1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=1;strokeColor=#999;dashed=1;" edge="1" source="s6_bedrock" target="s5_bedrock_provider">
+                <mxCell id="a65" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#999999;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=1;entryDx=0;entryDy=0;" parent="1" source="c6" target="c5" edge="1">
                     <mxGeometry relative="1" as="geometry">
-                        <Array as="points"><mxPoint x="1175" y="250"/><mxPoint x="970" y="250"/></Array>
+                        <Array as="points">
+                            <mxPoint x="1240" y="220"/>
+                            <mxPoint x="1100" y="220"/>
+                        </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="f1_r1_label" parent="f1_r1" value="response" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#999;" vertex="1" connectable="0">
-                    <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="12" as="offset"/></mxGeometry>
+                <mxCell id="a65l" value="text + tokens" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#999999" parent="a65" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"><mxPoint y="12" as="offset"/></mxGeometry>
                 </mxCell>
-
-                <mxCell id="f1_r2" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=1;strokeColor=#999;dashed=1;" edge="1" source="s5_bedrock_provider" target="s3_llm">
+                <mxCell id="a53" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#999999;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="c5" target="c7" edge="1">
                     <mxGeometry relative="1" as="geometry">
-                        <Array as="points"><mxPoint x="970" y="270"/><mxPoint x="565" y="270"/></Array>
+                        <Array as="points">
+                            <mxPoint x="1010" y="285"/>
+                        </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="f1_r2_label" parent="f1_r2" value="response" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#999;" vertex="1" connectable="0">
-                    <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="12" as="offset"/></mxGeometry>
-                </mxCell>
-
-                <mxCell id="f1_r3" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=1;strokeColor=#999;dashed=1;" edge="1" source="s3_llm" target="s2_router">
+                <mxCell id="a72" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#999999;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="c7" target="c2" edge="1">
                     <mxGeometry relative="1" as="geometry">
-                        <Array as="points"><mxPoint x="565" y="290"/><mxPoint x="355" y="290"/></Array>
+                        <Array as="points">
+                            <mxPoint x="340" y="285"/>
+                        </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="f1_r3_label" parent="f1_r3" value="200 {response, tokens_used}" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#999;" vertex="1" connectable="0">
-                    <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="12" as="offset"/></mxGeometry>
-                </mxCell>
-
-                <mxCell id="f1_r4" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=1;strokeColor=#999;dashed=1;" edge="1" source="s2_router" target="s1_client">
+                <mxCell id="a21" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#999999;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="c2" target="c1" edge="1">
                     <mxGeometry relative="1" as="geometry">
-                        <Array as="points"><mxPoint x="355" y="310"/><mxPoint x="160" y="310"/></Array>
+                        <Array as="points">
+                            <mxPoint x="260" y="230"/>
+                            <mxPoint x="130" y="230"/>
+                        </Array>
                     </mxGeometry>
                 </mxCell>
-
-                <!-- Flow 2: Error path -->
-                <mxCell id="flow2_title" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#cc0000" value="FLOW 2: ERROR PATHS" vertex="1">
-                    <mxGeometry height="30" width="250" x="100" y="380" as="geometry"/>
+                <mxCell id="a21l" value="200 to client" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#999999" parent="a21" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"><mxPoint y="12" as="offset"/></mxGeometry>
                 </mxCell>
-
-                <!-- Error: Bedrock throttling -->
-                <mxCell id="err_throttle" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" value="Bedrock Throttling&#xa;→ 500 Internal Server Error" vertex="1">
-                    <mxGeometry height="60" width="200" x="100" y="420" as="geometry"/>
+                <mxCell id="f2" value="FLOW 2 — ETL TRIPLE EXTRACTION (same base model)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#82b366" parent="1" vertex="1">
+                    <mxGeometry x="60" y="350" width="520" height="24" as="geometry"/>
                 </mxCell>
-
-                <!-- Error: Invalid tier -->
-                <mxCell id="err_tier" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" value="Invalid Tier&#xa;→ 400 Bad Request" vertex="1">
-                    <mxGeometry height="60" width="200" x="350" y="420" as="geometry"/>
+                <mxCell id="e1" value="1. ETL Service&#10;document content" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="390" width="180" height="70" as="geometry"/>
                 </mxCell>
-
-                <!-- Error: Model not found -->
-                <mxCell id="err_model" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" value="Model Not Found&#xa;→ 500 Internal Server Error" vertex="1">
-                    <mxGeometry height="60" width="200" x="600" y="420" as="geometry"/>
+                <mxCell id="e2" value="2. LLM Service&#10;POST /extract" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="320" y="390" width="180" height="70" as="geometry"/>
                 </mxCell>
-
-                <!-- Error: Timeout -->
-                <mxCell id="err_timeout" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" value="Bedrock Timeout&#xa;→ 504 Gateway Timeout" vertex="1">
-                    <mxGeometry height="60" width="200" x="850" y="420" as="geometry"/>
+                <mxCell id="e3" value="3. Qwen3.5-4B base&#10;reasons over content" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="390" width="200" height="70" as="geometry"/>
                 </mxCell>
-
-                <!-- Error: Missing prompt -->
-                <mxCell id="err_prompt" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" value="Missing Prompt&#xa;→ 422 Unprocessable" vertex="1">
-                    <mxGeometry height="60" width="200" x="1100" y="420" as="geometry"/>
+                <mxCell id="e4" value="4. 200 {triples, tokens_used}&#10;subject-predicate-object" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="860" y="390" width="220" height="70" as="geometry"/>
                 </mxCell>
-
-                <!-- Key Design Notes -->
-                <mxCell id="notes_title" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#333333" value="KEY DESIGN NOTES" vertex="1">
-                    <mxGeometry height="30" width="200" x="100" y="520" as="geometry"/>
+                <mxCell id="ae12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#6c8ebf;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="e1" target="e2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-
-                <mxCell id="note1" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="• Sync provider in async endpoint: asyncio.to_thread()" vertex="1">
-                    <mxGeometry height="25" width="400" x="100" y="550" as="geometry"/>
+                <mxCell id="ae23" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="e2" target="e3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="note2" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="• Provider created per-request (no singleton)" vertex="1">
-                    <mxGeometry height="25" width="300" x="100" y="580" as="geometry"/>
+                <mxCell id="ae34" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#82b366;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="e3" target="e4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="note3" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="• Bedrock stubbed — returns placeholder, tokens_used = 0" vertex="1">
-                    <mxGeometry height="25" width="400" x="100" y="610" as="geometry"/>
+                <mxCell id="ae41" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#999999;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="e4" target="e1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="970" y="500"/>
+                            <mxPoint x="150" y="500"/>
+                        </Array>
+                    </mxGeometry>
                 </mxCell>
-                <mxCell id="note4" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="• Correlation ID propagated via X-Request-ID header" vertex="1">
-                    <mxGeometry height="25" width="400" x="100" y="640" as="geometry"/>
+                <mxCell id="ae41l" value="JSON triples back to ETL" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#999999" parent="ae41" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"><mxPoint y="12" as="offset"/></mxGeometry>
                 </mxCell>
-
+                <mxCell id="f3" value="FLOW 3 — ERROR PATHS" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#b85450" parent="1" vertex="1">
+                    <mxGeometry x="60" y="540" width="280" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="err1" value="Missing prompt / messages&#10;→ 400" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="580" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="err2" value="Free / unknown tier&#10;→ 400 (on-device, Frame 10)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="580" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="err3" value="Container / model error&#10;→ 500" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="580" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="err4" value="Inference timeout&#10;→ 504" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="830" y="580" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="notes" value="KEY DESIGN NOTES" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#333333" parent="1" vertex="1">
+                    <mxGeometry x="60" y="670" width="240" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="n1" value="• Solid arrows travel left → right (call). Dashed arrows are responses.&#10;• Provider is created per request. Sync QwenLocalProvider runs via asyncio.to_thread + wait_for.&#10;• tokens_used is counted on every 200 response. Cloud stays base; no LoRA adapter is applied here.&#10;• Correlation ID is copied from X-Request-ID; this service does not mint a new UUID." style="text;html=1;align=left;verticalAlign=top;strokeColor=none;fillColor=none;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="700" width="1200" height="90" as="geometry"/>
+                </mxCell>
             </root>
         </mxGraphModel>
     </diagram>

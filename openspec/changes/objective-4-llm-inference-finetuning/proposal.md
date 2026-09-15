@@ -39,6 +39,29 @@ extracts it into dedicated microservices and adds the local fine-tuning pipeline
 - Produces a LoRA adapter; the on-device build merges + quantizes (Q4) for the **Premium** React Native app only (cloud container stays base)
 - Dockerfile + requirements.txt
 
+### Output
+
+```
+output/
+├── llm/
+│   ├── diagrams/
+│   │   ├── llm-architecture.drawio
+│   │   ├── llm-dataflow.drawio
+│   │   └── README.md
+│   └── documents/
+│       └── justificacion-ejemplo.md
+└── finetune/
+    ├── diagrams/
+    │   ├── finetune-architecture.drawio
+    │   ├── finetune-dataflow.drawio
+    │   └── README.md
+    └── documents/
+        └── justificacion-ejemplo.md
+```
+
+Solid arrows = call / write. Dashed arrows = HTTP response or Frame 10 later.
+There is no arrow from the LoRA adapter into LLM Service :8003.
+
 ### Non-Deliverables
 
 - On-device LLM (Qwen3.5-4B quantized in React Native via Neural Engine / Metal) — Frame 10

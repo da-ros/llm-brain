@@ -55,14 +55,12 @@ services:
     ports:
       - "8003:8003"
     environment:
-      - LLM_PROVIDER=${LLM_PROVIDER:-qwen_local}
-      - LLM_MODEL=${LLM_MODEL:-Qwen3.5-4B}
-      # Frame 1 contract: Qwen3.5-4B base container. Frame 4 still ships a Bedrock
-      # client; those keys are unused by apps/api.
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-meta.llama3-8b-instruct-v1:0}
+      - QWEN_MODEL_ID=${QWEN_MODEL_ID:-qwen3.5-4b}
+      - QWEN_HF_MODEL_ID=${QWEN_HF_MODEL_ID:-Qwen/Qwen3.5-4B}
+      - QWEN_MOCK=${QWEN_MOCK:-true}
+      - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-30}
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
 
   finetune-service:
@@ -70,10 +68,16 @@ services:
     ports:
       - "8004:8004"
     environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-meta.llama3-8b-instruct-v1:0}
+      - BASE_MODEL_ID=${BASE_MODEL_ID:-qwen3.5-4b}
+      - LORA_BACKEND=${LORA_BACKEND:-peft}
+      - LORA_MOCK=${LORA_MOCK:-true}
+      - TRAINING_EPOCHS=${TRAINING_EPOCHS:-5}
+      - TRAINING_LR=${TRAINING_LR:-0.001}
+      - MAX_TRAINING_TIME_HOURS=${MAX_TRAINING_TIME_HOURS:-2}
+      - ADAPTER_OUTPUT_DIR=/app/data/models
+      - TRAINING_LOG_DIR=/app/data/training_logs
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
 
   etl-service:

@@ -1,1 +1,1 @@
-"""LLM Service routers — /generate and /chat endpoints."""
+"""LLM Service routers — /health, /generate, /chat, /extract."""

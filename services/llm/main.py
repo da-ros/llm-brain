@@ -1,81 +1,47 @@
-"""LLM Service — FastAPI Application.
+"""LLM Service — FastAPI application.
 
-Provides inference endpoints for AWS Bedrock (premium tier).
-Handles correlation ID propagation from upstream services.
+Local Qwen3.5-4B base inference for premium users and ETL triple extraction.
 """
 
-import logging
+from __future__ import annotations
 
+from config import get_settings
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-
-from config import settings
-
-# --- Structured Logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(correlation_id)s] %(levelname)s %(name)s: %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-)
-logger = logging.getLogger("llm-service")
+from logging_setup import correlation_id_var, log_with_correlation, logger
+from routers import chat, extract, generate, health
 
 
-class CorrelationFilter(logging.Filter):
-    """Add correlation_id to all log records."""
-
-    def filter(self, record):
-        record.correlation_id = getattr(record, "correlation_id", "no-id")
-        return True
-
-
-logger.addFilter(CorrelationFilter())
-
-
-def log_with_correlation(correlation_id: str, level: str, message: str):
-    """Log a message with correlation_id context."""
-    extra = {"correlation_id": correlation_id}
-    getattr(logger, level)(message, extra=extra)
-
-
-app = FastAPI(
-    title="LLM Service",
-    description="LLM Inference — Bedrock-powered text generation",
-    version="0.1.0",
-)
-
-
-# --- Correlation ID Middleware ---
-@app.middleware("http")
 async def add_correlation_id(request: Request, call_next):
-    """Read correlation ID from X-Request-ID header.
-
-    Do NOT generate a new UUID — the api-router already provides one.
-    """
+    """Propagate X-Request-ID from the API Router. Do not mint a new UUID."""
     correlation_id = request.headers.get("X-Request-ID", "no-id")
     request.state.correlation_id = correlation_id
-
+    token = correlation_id_var.set(correlation_id)
     log_with_correlation(correlation_id, "info", f"{request.method} {request.url.path}")
-
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    finally:
+        correlation_id_var.reset(token)
     response.headers["X-Request-ID"] = correlation_id
     return response
 
 
-# --- Health endpoint ---
-@app.get("/health")
-async def health_check():
-    """Public health check endpoint."""
-    return {
-        "status": "ok",
-        "service": "llm-service",
-        "provider": settings.LLM_PROVIDER,
-        "model": settings.BEDROCK_MODEL_ID,
-        "version": "0.1.0",
-    }
+def create_app() -> FastAPI:
+    """Build the FastAPI application (used by tests and uvicorn)."""
+    settings = get_settings()
+    application = FastAPI(
+        title="LLM Service",
+        description="Local Qwen3.5-4B base inference (container) — premium + ETL",
+        version=settings.SERVICE_VERSION,
+    )
+    application.middleware("http")(add_correlation_id)
+    application.include_router(health.router)
+    application.include_router(generate.router)
+    application.include_router(chat.router)
+    application.include_router(extract.router)
+    logger.info(
+        "LLM Service ready — provider=qwen-local-container model=%s", settings.QWEN_MODEL_ID
+    )
+    return application
 
 
-# --- Import routers ---
-from routers import generate, chat
-
-app.include_router(generate.router)
-app.include_router(chat.router)
+app = create_app()

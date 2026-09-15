@@ -1,0 +1,6 @@
+# Optional GPU / full-precision runtime. Not installed in CI.
+# Used when QWEN_MOCK=false inside the local Qwen3.5-4B container.
+-r requirements.txt
+transformers==4.46.0
+torch==2.4.0
+accelerate==0.34.0

@@ -2,24 +2,22 @@
 
 ## llm-architecture.drawio
 
-Architecture diagram showing:
-- **API Router** (blue, existing) — upstream caller on port 8000
-- **LLM Service** (green, new) — FastAPI app on port 8003
-  - `POST /generate` — text completion
-  - `POST /chat` — multimodal chat (text/image/video)
-  - `GET /health` — provider status
-  - Provider layer: LLMProvider Protocol → QwenLocalProvider → local Qwen3.5-4B container
-- **Qwen3.5-4B (local Docker container, "cloud")** — multimodal inference (**base**, full precision, not fine-tuned)
-- **Config** — Qwen model ID (LoRA adapter is for Premium on-device build, not this container)
+Components and **arrow direction**:
 
-**Color convention**:
-- Blue: Existing components from previous frames
-- Green: New components in this frame
-- Orange: Local Qwen3.5-4B container ("cloud" = local container)
+- **API Router :8000** (blue) → HTTP POST `/generate` and `/chat` → **FastAPI :8003**
+- **ETL Service :8001** (blue) → HTTP POST `/extract` → **FastAPI :8003** (does not skip the app)
+- FastAPI → `/generate`, `/chat`, `/health`, `/extract`
+- `/generate` and `/chat` → **LLMProvider Protocol**
+- Protocol --implements--> **QwenLocalProvider** (dashed)
+- `/extract` → QwenLocalProvider
+- QwenLocalProvider → **Qwen3.5-4B in-process weights** (local container, base, not fine-tuned)
+
+There is **no** AWS Bedrock cloud, **no** Llama, and **no** arrow from Fine-Tune / LoRA adapter into this container. Frame 10 on-device is shown dashed and disconnected from inference.
 
 ## llm-dataflow.drawio
 
-Data flow diagram showing:
-1. **Inference flow**: Client → API Router → LLM Service → Resolver → QwenLocalProvider → local Qwen3.5-4B container → Response (ETL Frame 2 also calls the base model to extract triples)
-2. **Error paths**: local container unavailable (500), invalid tier (400), model not found (500), timeout (504), missing prompt (400/422)
-3. **Key design notes**: asyncio.to_thread, per-request provider, stubbed local Qwen3.5-4B, correlation ID propagation
+1. **Premium inference**: Client → API Router → POST `/generate` → `get_provider(premium)` → `QwenLocalProvider.complete` → Qwen3.5-4B runtime. Dashed arrows return `{response, tokens_used}` to the API Router and then to the client.
+2. **ETL extraction**: ETL → POST `/extract` → base Qwen reasons → JSON triples back to ETL (dashed).
+3. **Errors**: missing prompt 400, free tier 400, container/model 500, timeout 504.
+
+Solid arrows = call direction (left → right). Dashed = response.

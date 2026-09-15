@@ -1,1 +1,1 @@
-"""Fine-Tune Service routers — /train and /status endpoints."""
+"""Fine-Tune Service routers — /health, /train, /status."""

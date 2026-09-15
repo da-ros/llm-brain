@@ -17,7 +17,32 @@ os.environ["KAFKA_ENABLED"] = "false"
 os.environ.setdefault("MONGODB_URI", "mongodb://localhost:27017")
 os.environ.setdefault("MONGODB_DB", "llm_brain_test")
 
-sys.path.insert(0, str(Path(__file__).parent))
+
+def _isolate_service_imports() -> None:
+    root = Path(__file__).resolve().parent
+    prefixes = (
+        "config",
+        "main",
+        "logging_setup",
+        "exceptions",
+        "pipeline",
+        "lora",
+        "providers",
+        "routers",
+    )
+    for name in list(sys.modules):
+        if name not in prefixes and not any(name.startswith(f"{item}.") for item in prefixes):
+            continue
+        mod_file = getattr(sys.modules[name], "__file__", None) or ""
+        if mod_file and Path(mod_file).resolve().is_relative_to(root):
+            continue
+        del sys.modules[name]
+    if str(root) in sys.path:
+        sys.path.remove(str(root))
+    sys.path.insert(0, str(root))
+
+
+_isolate_service_imports()
 
 from config import clear_settings_cache, get_settings
 

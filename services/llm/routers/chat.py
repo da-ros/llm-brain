@@ -1,30 +1,32 @@
-"""Chat Router — Multi-turn chat endpoint.
+"""POST /chat — multimodal chat with optional RAG context."""
 
-Provides chat functionality with optional RAG context.
-"""
+from __future__ import annotations
 
 import asyncio
+from typing import Any
 
+from config import get_settings
+from exceptions import InferenceTimeoutError, ModelNotFoundError, ModelUnavailableError
 from fastapi import APIRouter, HTTPException, Request, status
+from logging_setup import log_with_correlation
+from providers.resolver import get_provider
 from pydantic import BaseModel
-
-from services.llm.providers.resolver import get_provider
 
 router = APIRouter(tags=["chat"])
 
 
 class ChatMessage(BaseModel):
-    """Chat message schema."""
+    """Chat message — content may be text or multimodal parts."""
 
     role: str
-    content: str
+    content: str | list[dict[str, Any]]
 
 
 class ChatRequest(BaseModel):
     """Chat request schema."""
 
-    messages: list[ChatMessage]
-    user_id: str
+    messages: list[ChatMessage] | None = None
+    user_id: str | None = None
     tier: str = "premium"
     context: str | None = None
 
@@ -37,50 +39,69 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(
-    request: Request,
-    body: ChatRequest,
-):
-    """Chat with LLM, optionally using RAG context.
-
-    - **messages**: List of messages (role, content)
-    - **user_id**: User ID for logging
-    - **tier**: Subscription tier (default: premium)
-    - **context**: Optional RAG context
-    """
-    from services.llm.main import log_with_correlation
-
+async def chat(request: Request, body: ChatRequest):
+    """Run multimodal chat on the base Qwen3.5-4B container."""
     correlation_id = getattr(request.state, "correlation_id", "no-id")
+    settings = get_settings()
+
+    if not body.messages:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid request (missing messages)",
+        )
+    if not body.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid request (missing user_id)",
+        )
 
     log_with_correlation(
-        correlation_id, "info",
+        correlation_id,
+        "info",
         f"POST /chat — messages: {len(body.messages)}, user_id: {body.user_id}",
     )
 
     try:
         provider = get_provider(body.tier)
-    except ValueError as e:
+    except ValueError as exc:
         log_with_correlation(correlation_id, "warning", f"Invalid tier: {body.tier}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     messages_list = [msg.model_dump() for msg in body.messages]
 
     try:
-        # Use asyncio.to_thread to avoid blocking the event loop
-        response_text = await asyncio.to_thread(provider.chat, messages_list, body.context)
-    except Exception as e:
-        log_with_correlation(correlation_id, "error", f"LLM error: {str(e)}")
+        result = await asyncio.wait_for(
+            asyncio.to_thread(provider.chat, messages_list, body.context),
+            timeout=settings.INFERENCE_TIMEOUT_SECONDS,
+        )
+    except TimeoutError as exc:
+        log_with_correlation(correlation_id, "error", "Qwen3.5-4B inference timeout")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Inference timeout",
+        ) from exc
+    except InferenceTimeoutError as exc:
+        log_with_correlation(correlation_id, "error", str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Inference timeout",
+        ) from exc
+    except (ModelUnavailableError, ModelNotFoundError) as exc:
+        log_with_correlation(correlation_id, "error", f"Qwen3.5-4B container/model error: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"LLM error: {str(e)}",
-        )
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        log_with_correlation(correlation_id, "error", f"LLM error: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Inference error: {exc}",
+        ) from exc
 
     log_with_correlation(
-        correlation_id, "info",
-        f"Response: 200 OK — tokens_used: 0",
+        correlation_id,
+        "info",
+        f"Qwen3.5-4B response: {result.tokens_used} tokens",
     )
-
-    return ChatResponse(response=response_text, tokens_used=0)
+    return ChatResponse(response=result.text, tokens_used=result.tokens_used)
