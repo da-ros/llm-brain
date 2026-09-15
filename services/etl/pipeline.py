@@ -1,95 +1,100 @@
-"""ETL Pipeline — Distillation Orchestrator.
+"""distill() orchestrator — Factory Method over LangChain loaders + LLM extraction."""
 
-Routes files to correct parser and collects triples.
-"""
+from __future__ import annotations
 
-import json
 from pathlib import Path
 
-from services.etl.base import DocumentParser
-from services.etl.parsers.pdf import PdfParser
-from services.etl.parsers.html import HtmlParser
-from services.etl.parsers.eml import EmlParser
-from services.etl.parsers.ocr import OcrParser
-from services.etl.triples import Triple
+from base import documents_to_content, first_page, first_section, load, source_name
+from config import get_settings
+from exceptions import CorruptFileError, ETLError, FileTooLargeError, LoaderError
+from jsonl import write_triples
+from llm_client import LLMServiceClient, TripleExtractor
+from logging_setup import log_with_correlation
+from triples import Triple, triple_from_llm
 
 
-# Initialize parsers
-PARSERS: list[DocumentParser] = [
-    PdfParser(),
-    HtmlParser(),
-    EmlParser(),
-    OcrParser(),
-]
+def distill(
+    file_path: str,
+    *,
+    user_id: str,
+    document_id: str,
+    mime_type: str | None = None,
+    llm_client: TripleExtractor | None = None,
+    output_dir: str | None = None,
+    correlation_id: str = "no-id",
+    write_output: bool = True,
+) -> list[Triple]:
+    """Load a document, ask the LLM Service to emit triples, optionally write JSONL.
 
-
-def get_parser(file_path: str) -> DocumentParser | None:
-    """Get the appropriate parser for a file.
-
-    Args:
-        file_path: Path to the file
-
-    Returns:
-        Parser instance or None if no parser supports this file
-    """
-    for parser in PARSERS:
-        if parser.supports(file_path):
-            return parser
-    return None
-
-
-def distill(file_path: str) -> list[Triple]:
-    """Distill a document into triples.
-
-    This is the main orchestrator function that:
-    1. Selects the appropriate parser
-    2. Parses the document
-    3. Returns extracted triples
-
-    Args:
-        file_path: Path to the document
-
-    Returns:
-        List of extracted triples
-
-    Raises:
-        ValueError: If file not found or no parser supports this file type
+    1. Select LangChain loader by MIME type
+    2. Load content (text / OCR / multimodal)
+    3. POST content to LLM Service (base Qwen3.5-4B)
+    4. Enrich metadata and write data/triples/{user_id}/{document_id}.jsonl
     """
     path = Path(file_path)
-
-    # Validate file exists
     if not path.exists():
-        raise ValueError(f"File not found: {file_path}")
+        raise FileNotFoundError(f"File not found: {file_path}")
 
-    # Get appropriate parser
-    parser = get_parser(file_path)
-    if parser is None:
-        raise ValueError(f"No parser available for file type: {path.suffix}")
+    settings = get_settings()
+    size = path.stat().st_size
+    if size > settings.MAX_FILE_SIZE:
+        raise FileTooLargeError(f"File too large: {size} bytes (max {settings.MAX_FILE_SIZE})")
 
-    # Parse document
-    triples = parser.parse(file_path)
+    log_with_correlation(
+        correlation_id,
+        "info",
+        f"Starting ETL pipeline: {path.name} ({size} bytes) user_id={user_id}",
+    )
+
+    try:
+        documents = load(str(path), mime_type=mime_type)
+        content = documents_to_content(documents)
+    except ETLError:
+        raise
+    except FileNotFoundError:
+        raise
+    except Exception as exc:
+        raise LoaderError(f"LangChain loader failed: {exc}") from exc
+    source_file = source_name(str(path), documents)
+    page = first_page(documents)
+    section = first_section(documents)
+
+    client = llm_client or LLMServiceClient()
+    raw_triples = client.extract_triples(
+        content,
+        user_id=user_id,
+        correlation_id=correlation_id,
+    )
+
+    triples: list[Triple] = []
+    for item in raw_triples:
+        if not isinstance(item, dict):
+            continue
+        triple = triple_from_llm(
+            item,
+            source_file=source_file,
+            user_id=user_id,
+            page=page,
+            section=section,
+        )
+        if triple is not None:
+            triples.append(triple)
+
+    if not triples:
+        raise CorruptFileError("LLM returned no valid subject-predicate-object triples")
+
+    if write_output:
+        target_dir = output_dir or settings.TRIPLES_OUTPUT_DIR
+        output_path = write_triples(
+            triples,
+            user_id=user_id,
+            document_id=document_id,
+            output_dir=target_dir,
+        )
+        log_with_correlation(
+            correlation_id,
+            "info",
+            f"Saved {len(triples)} triples to {output_path}",
+        )
 
     return triples
-
-
-def save_triples(
-    triples: list[Triple],
-    output_path: str,
-) -> int:
-    """Save triples to JSONL file.
-
-    Args:
-        triples: List of triples to save
-        output_path: Path to output JSONL file
-
-    Returns:
-        Number of triples saved
-    """
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(path, "w") as f:
-        for triple in triples:
-            f.write(triple.to_json_line() + "\n")
-
-    return len(triples)

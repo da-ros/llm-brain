@@ -88,12 +88,16 @@ services:
       - MONGODB_URI=mongodb://mongo:27017
       - MONGODB_DB=llm_brain
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_ENABLED=true
+      - LLM_SERVICE_URL=http://llm-service:8003
+      - TRIPLES_OUTPUT_DIR=/app/data/triples
     volumes:
       - ./data:/app/data
       - ./.env:/app/.env
     depends_on:
       - mongo
       - kafka
+      - llm-service
     restart: unless-stopped
 
   rag-service:

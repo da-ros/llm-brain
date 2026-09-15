@@ -102,22 +102,25 @@ Es como una oración simplificada:
 
 ---
 
-## 📡 upload.py — El router FastAPI
+## 📡 upload.py — El router FastAPI (API Router, puerto 8000)
+
+El upload **no** vive en el ETL Service (el diseño lo prohíbe: ETL no expone HTTP de
+carga). El API Router es la fachada:
 
 ```python
-@router.post("/api/upload")
+@router.post("/api/upload")  # 202 Accepted
 async def upload_file(
     file: UploadFile,
-    user: dict = Depends(get_current_user)  # JWT auth
+    user: dict = Depends(require_premium),  # JWT, Premium only
 ):
-    # 1. Validar tipo MIME (python-magic, no solo extensión)
-    # 2. Validar tamaño (max 10MB)
-    # 3. Llamar distill(file)
-    # 4. Guardar metadata en MongoDB
-    # 5. Retornar {triples_count: N}
+    # 1. Validar tipo MIME (python-magic sobre bytes, no extensión)
+    # 2. Validar tamaño (max 10MB) → 413
+    # 3. Guardar binario en MongoDB GridFS
+    # 4. Publicar Kafka file.uploaded {correlation_id, file_id, user_id}
+    # 5. Retornar 202 {correlation_id} — el cliente hace polling GET /tasks/:id
 ```
 
-Es el **punto de entrada** — el único lugar donde el usuario interactúa con el ETL.
+`triples_count` llega cuando el ETL publica `task.response` y el Router actualiza `task_status`.
 
 ---
 
@@ -135,7 +138,8 @@ Es el **punto de entrada** — el único lugar donde el usuario interactúa con 
 9. Metadata enrichment: agrega source_file, page, timestamp
 10. Escribe: data/triples/{user_id}/receta_123.jsonl
 11. El binario original ya vive en MongoDB GridFS (local); se guarda metadata del documento en MongoDB
-12. Retorna HTTP 201 {triples_count: 15}
+12. API Router responde HTTP 202 {correlation_id}; el cliente consulta GET /tasks/:id
+    y recibe triples_count cuando Kafka task.response llega (success)
 ```
 
 ---
@@ -144,23 +148,23 @@ Es el **punto de entrada** — el único lugar donde el usuario interactúa con 
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│                    ETL SERVICE (8001)                          │
+│                    ETL SERVICE (8001)                         │
 │                                                               │
 │  Kafka file.uploaded ──→ distill() ──→ LangChain Loaders      │
-│       │                      │              │                  │
+│       │                      │              │                 │
 │       │                      │      ┌───────┼───────┐         │
 │       │                      │      │   │   │   │   │         │
 │       │                      │    PDF Text HTML EML Img/Vid   │
 │       │                      │      └───────┼───────┘         │
-│       │                      │              │                  │
+│       │                      │              │                 │
 │       │                      │      contenido cargado         │
-│       │                      │              │                  │
-│       │                      │   ──→ LLM Service (8003)        │
-│       │                      │        Qwen3.5-4B base RAZONA   │
-│       │                      │              │                  │
-│       │                      │      Triples JSON (LLM-first)   │
-│       │                      │              │                  │
-│       ▼                      ▼              ▼                  │
+│       │                      │              │                 │
+│       │                      │   ──→ LLM Service (8003)       │
+│       │                      │        Qwen3.5-4B base RAZONA  │
+│       │                      │              │                 │
+│       │                      │      Triples JSON (LLM-first)  │
+│       │                      │              │                 │
+│       ▼                      ▼              ▼                 │
 │  MongoDB GridFS (local)   data/triples/{user_id}/             │
 │  (binario original)       {doc_id}.jsonl                      │
 │                                                               │
