@@ -39,9 +39,14 @@
 - [x] E.4 Integration test: upload → distill → embed → retrieve → answer
 - [x] E.5 Validate encryption: embeddings encrypted at rest, decrypted on retrieval
 
-### F. Documentation (output/documents/)
+### F. Documentation (output/)
 
 - [x] F.1 Create `output/documents/justificacion-ejemplo.md`
       — Component explanations, design patterns (Strategy, Factory, Adapter, Facade, Repository), SOLID principles
 - [x] F.2 Document design patterns used: Strategy, Factory Method, Adapter, Facade, Repository
 - [x] F.3 Document SOLID principles applied: SRP, OCP, LSP, ISP, DIP
+- [ ] F.4 Create `output/diagrams/rag-architecture.drawio`
+      — Architecture base: existing Frame 1–2 services in blue, RAG Service in green; local MongoDB/GridFS + Chroma (Pinecone is future)
+- [ ] F.5 Create `output/diagrams/rag-dataflow.drawio`
+      — Data flow: JSONL → chunking → Qwen3-VL-Embedding-2B (2048-dim) → Chroma; query → cross-modal search → context injection, including error paths
+- [ ] F.6 Create `output/diagrams/README.md`
