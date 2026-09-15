@@ -1,20 +1,20 @@
-"""Triple Data Model and Extraction.
+"""Triple dataclass — subject-predicate-object with metadata.
 
-Defines the Triple dataclass and rule-based extraction patterns.
+Extraction itself is LLM-first (see llm_client). This module only models the
+record and enriches metadata (source_file, page, section, timestamp, confidence).
 """
 
-import re
+from __future__ import annotations
+
+import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
 @dataclass
 class Triple:
-    """Subject-Predicate-Object triple with metadata.
-
-    This is the fundamental unit of knowledge extracted from documents.
-    """
+    """Subject-predicate-object knowledge unit extracted by the LLM."""
 
     subject: str
     predicate: str
@@ -22,7 +22,7 @@ class Triple:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert triple to dictionary."""
+        """Serialize the triple to a JSON-compatible dict."""
         return {
             "subject": self.subject,
             "predicate": self.predicate,
@@ -31,109 +31,67 @@ class Triple:
         }
 
     def to_json_line(self) -> str:
-        """Convert triple to JSON Line format."""
-        import json
-
-        return json.dumps(self.to_dict())
+        """Serialize as a single JSON Lines row."""
+        return json.dumps(self.to_dict(), ensure_ascii=False)
 
 
-# --- Rule-based extraction patterns ---
-
-# Pattern: "X is Y"
-PATTERN_IS = re.compile(
-    r"([A-Z][a-z]+(?:\s+[a-z]+)*)\s+is\s+([a-z]+(?:\s+[a-z]+)*)",
-    re.IGNORECASE,
-)
-
-# Pattern: "X has Y"
-PATTERN_HAS = re.compile(
-    r"([A-Z][a-z]+(?:\s+[a-z]+)*)\s+has\s+([a-z]+(?:\s+[a-z]+)*)",
-    re.IGNORECASE,
-)
-
-# Pattern: "X performs Y"
-PATTERN_PERFORMS = re.compile(
-    r"([A-Z][a-z]+(?:\s+[a-z]+)*)\s+performs?\s+([a-z]+(?:\s+[a-z]+)*)",
-    re.IGNORECASE,
-)
-
-# Pattern: "X takes Y" (medications)
-PATTERN_TAKES = re.compile(
-    r"([A-Z][a-z]+(?:\s+[a-z]+)*)\s+takes?\s+([a-z]+(?:\s+[a-z]+)*)",
-    re.IGNORECASE,
-)
-
-# Pattern: "X was diagnosed with Y"
-PATTERN_DIAGNOSED = re.compile(
-    r"([A-Z][a-z]+(?:\s+[a-z]+)*)\s+was\s+diagnosed\s+with\s+([a-z]+(?:\s+[a-z]+)*)",
-    re.IGNORECASE,
-)
-
-# All patterns with their predicates
-PATTERNS = [
-    (PATTERN_IS, "is"),
-    (PATTERN_HAS, "has"),
-    (PATTERN_PERFORMS, "performs"),
-    (PATTERN_TAKES, "takes"),
-    (PATTERN_DIAGNOSED, "diagnosed_with"),
-]
+def _clamp_confidence(value: Any) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.7
+    return max(0.0, min(1.0, confidence))
 
 
-def extract_triples(
-    text: str,
-    source_file: str = "",
+def enrich_metadata(
+    raw_metadata: dict[str, Any] | None,
+    *,
+    source_file: str,
+    user_id: str,
     page: int | None = None,
     section: str | None = None,
-) -> list[Triple]:
-    """Extract triples from text using rule-based patterns.
-
-    Args:
-        text: Raw text to extract triples from
-        source_file: Source file name for metadata
-        page: Page number (if applicable)
-        section: Section name (if applicable)
-
-    Returns:
-        List of extracted triples
-    """
-    triples = []
-    metadata = {
-        "source_file": source_file,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "confidence": 0.8,  # Rule-based confidence
-    }
+    timestamp: str | None = None,
+    confidence: float | None = None,
+) -> dict[str, Any]:
+    """Fill required metadata fields without dropping LLM-provided extras."""
+    metadata = dict(raw_metadata or {})
+    metadata["source_file"] = source_file
+    metadata["user_id"] = user_id
+    metadata["timestamp"] = timestamp or datetime.now(UTC).isoformat()
     if page is not None:
-        metadata["page"] = page
-    if section is not None:
-        metadata["section"] = section
+        metadata.setdefault("page", page)
+    if section:
+        metadata.setdefault("section", section)
+    metadata["confidence"] = _clamp_confidence(
+        confidence if confidence is not None else metadata.get("confidence", 0.7)
+    )
+    return metadata
 
-    # Split text into sentences
-    sentences = re.split(r"[.!?]+", text)
 
-    for sentence in sentences:
-        sentence = sentence.strip()
-        if not sentence or len(sentence) < 5:
-            continue
-
-        # Try each pattern
-        for pattern, predicate in PATTERNS:
-            matches = pattern.findall(sentence)
-            for subject, obj in matches:
-                subject = subject.strip()
-                obj = obj.strip()
-
-                # Skip very short or very long extractions
-                if len(subject) < 2 or len(obj) < 2:
-                    continue
-                if len(subject) > 100 or len(obj) > 100:
-                    continue
-
-                triple = Triple(
-                    subject=subject,
-                    predicate=predicate,
-                    object=obj,
-                    metadata={**metadata},
-                )
-                triples.append(triple)
-
-    return triples
+def triple_from_llm(
+    payload: dict[str, Any],
+    *,
+    source_file: str,
+    user_id: str,
+    page: int | None = None,
+    section: str | None = None,
+) -> Triple | None:
+    """Build a Triple from one LLM JSON object, or None if required keys are missing."""
+    subject = payload.get("subject")
+    predicate = payload.get("predicate")
+    obj = payload.get("object")
+    if not subject or not predicate or not obj:
+        return None
+    raw_meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    return Triple(
+        subject=str(subject).strip(),
+        predicate=str(predicate).strip(),
+        object=str(obj).strip(),
+        metadata=enrich_metadata(
+            raw_meta,
+            source_file=source_file,
+            user_id=user_id,
+            page=page,
+            section=section,
+        ),
+    )

@@ -83,6 +83,15 @@ docker compose up --build
 docker compose --profile foundation up --build api mongo chroma
 ```
 
+### Memory distillation (Frame 2)
+
+`POST /api/upload` on the API Router (port 8000) is async: JWT + python-magic MIME + 10MB
+limit → GridFS → Kafka `file.uploaded` → **202**. The ETL Service (port 8001) loads the
+file with LangChain document loaders, calls the LLM Service (`POST /extract`, base
+Qwen3.5-4B) for triples, and writes `data/triples/{user_id}/{correlation_id}.jsonl`.
+
+See `services/etl/README.md` for configuration and loader mapping.
+
 ## Conventional Commits
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/). See `CONTRIBUTING.md` for details.

@@ -1,41 +1,82 @@
-"""Document Parser Protocol.
+"""LangChain loader selection layer.
 
-Defines the interface for all document parsers.
-Each parser must implement this protocol to be used by the ETL pipeline.
+Maps MIME type → langchain_community.document_loaders adapter.
+Exposes `select(file_path)` and `load(file_path)` as specified in the change.
 """
 
-from typing import Protocol, runtime_checkable
+from __future__ import annotations
 
-from services.etl.triples import Triple
+import mimetypes
+from pathlib import Path
+from typing import Any
+
+from exceptions import UnsupportedFileTypeError
+from loaders import (
+    documents_to_content,
+    first_page,
+    first_section,
+    is_supported_mime,
+    resolve_loader_class,
+    source_name,
+    supported_types_message,
+)
+from logging_setup import logger
 
 
-@runtime_checkable
-class DocumentParser(Protocol):
-    """Protocol for document parsers.
+def detect_mime(*, file_path: str | None = None, content: bytes | None = None) -> str:
+    """Detect MIME type from bytes (python-magic), not from the file extension.
 
-    All parsers must implement:
-    - supports(): Check if parser can handle this file
-    - parse(): Extract text and return triples
+    Falls back to mimetypes only when libmagic is unavailable (local/dev).
     """
+    payload = content
+    if payload is None and file_path:
+        payload = Path(file_path).read_bytes()
+    if payload is None:
+        raise UnsupportedFileTypeError("No file content available for MIME detection")
 
-    def supports(self, file_path: str) -> bool:
-        """Check if this parser can handle the given file.
+    try:
+        import magic
 
-        Args:
-            file_path: Path to the file
+        mime = magic.from_buffer(payload, mime=True)
+        if mime:
+            return mime.split(";")[0].strip().lower()
+    except Exception as exc:
+        logger.debug("python-magic unavailable or failed: %s", exc)
 
-        Returns:
-            True if parser can handle this file type
-        """
-        ...
+    if file_path:
+        guessed, _ = mimetypes.guess_type(file_path)
+        if guessed:
+            return guessed.split(";")[0].strip().lower()
 
-    def parse(self, file_path: str) -> list[Triple]:
-        """Parse the file and extract triples.
+    raise UnsupportedFileTypeError("Cannot detect MIME type")
 
-        Args:
-            file_path: Path to the file
 
-        Returns:
-            List of extracted triples
-        """
-        ...
+def select(file_path: str, mime_type: str | None = None) -> type:
+    """Factory Method: return the LangChain loader adapter class for this file."""
+    mime = mime_type or detect_mime(file_path=file_path)
+    loader_cls = resolve_loader_class(mime)
+    if loader_cls is None:
+        raise UnsupportedFileTypeError(
+            f"Unsupported file type: {mime}. {supported_types_message()}"
+        )
+    logger.info("Selecting LangChain loader for mime=%s path=%s", mime, file_path)
+    return loader_cls
+
+
+def load(file_path: str, mime_type: str | None = None) -> list[Any]:
+    """Select the loader and return LangChain Documents."""
+    loader_cls = select(file_path, mime_type=mime_type)
+    return loader_cls(file_path).load()
+
+
+__all__ = [
+    "detect_mime",
+    "documents_to_content",
+    "first_page",
+    "first_section",
+    "is_supported_mime",
+    "load",
+    "select",
+    "source_name",
+    "supported_types_message",
+]

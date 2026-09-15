@@ -100,6 +100,16 @@ def client(tasks):
     async def fake_save_upload(filename: str, content: bytes, content_type: str, user_id: str):
         return "gridfs-file-1"
 
+    def fake_detect_mime(content: bytes, filename: str | None = None) -> str:
+        name = (filename or "").lower()
+        if name.endswith(".pdf"):
+            return "application/pdf"
+        if name.endswith(".txt"):
+            return "text/plain"
+        if name.endswith(".zip"):
+            return "application/zip"
+        return "application/octet-stream"
+
     with (
         patch("db.connect", fake_connect),
         patch("db.disconnect", fake_disconnect),
@@ -114,6 +124,7 @@ def client(tasks):
         patch("routers.upload.db.save_upload", fake_save_upload),
         patch("routers.upload.db.insert_task", fake_insert),
         patch("routers.upload.publish_file_uploaded", publish),
+        patch("routers.upload.detect_mime", fake_detect_mime),
         TestClient(app) as test_client,
     ):
         test_client.publish = publish
@@ -303,9 +314,30 @@ class TestUploadFlow:
         response = client.post(
             "/api/upload",
             headers=auth_header(tier="premium"),
-            files={"file": ("notes.txt", b"hello", "text/plain")},
+            files={"file": ("notes.zip", b"PK\x03\x04not-a-document", "application/zip")},
         )
         assert response.status_code == 422
+
+    def test_plain_text_upload_accepted(self, client, tasks):
+        response = client.post(
+            "/api/upload",
+            headers=auth_header(tier="premium"),
+            files={"file": ("notes.txt", b"Patient has diabetes", "text/plain")},
+        )
+        assert response.status_code == 202
+        assert response.json()["status"] == "processing"
+
+    def test_file_too_large(self, client):
+        from config import get_settings
+
+        settings = get_settings()
+        oversized = b"x" * (settings.MAX_UPLOAD_BYTES + 1)
+        response = client.post(
+            "/api/upload",
+            headers=auth_header(tier="premium"),
+            files={"file": ("big.pdf", oversized, "application/pdf")},
+        )
+        assert response.status_code == 413
 
     def test_upload_without_token_unauthorized(self, client):
         response = client.post(

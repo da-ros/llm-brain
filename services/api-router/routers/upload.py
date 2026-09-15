@@ -1,6 +1,6 @@
 """Upload router — Premium-only, async via Kafka.
 
-POST /api/upload → GridFS + task_status + file.uploaded → 202 Accepted
+POST /api/upload → python-magic MIME + 10MB + GridFS + file.uploaded → 202 Accepted
 """
 
 from typing import Annotated
@@ -10,18 +10,10 @@ from auth import require_premium
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from kafka_io import file_uploaded_message, publish_file_uploaded
 from logging_setup import log_with_correlation
+from mimeutil import detect_mime, is_allowed_upload_mime, supported_types_message
 from rate_limit import rate_limit_upload
 
 router = APIRouter(prefix="/api", tags=["upload"])
-
-ALLOWED_TYPES = {
-    "application/pdf",
-    "text/html",
-    "message/rfc822",
-    "image/png",
-    "image/jpeg",
-    "image/tiff",
-}
 
 
 @router.post("/upload", status_code=status.HTTP_202_ACCEPTED)
@@ -44,12 +36,16 @@ async def upload_file(
         f"JWT validated: user_id={user['user_id']}, tier={user['subscription_tier']}",
     )
 
-    content_type = file.content_type or ""
-    if content_type not in ALLOWED_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Unsupported file type: {content_type}",
-        )
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > settings.MAX_UPLOAD_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"File too large. Maximum: {settings.MAX_UPLOAD_BYTES // (1024 * 1024)}MB",
+                )
+        except ValueError:
+            pass
 
     content = await file.read()
     if len(content) > settings.MAX_UPLOAD_BYTES:
@@ -58,10 +54,17 @@ async def upload_file(
             detail=f"File too large. Maximum: {settings.MAX_UPLOAD_BYTES // (1024 * 1024)}MB",
         )
 
+    mime_type = detect_mime(content, filename=file.filename)
+    if not is_allowed_upload_mime(mime_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unsupported file type: {mime_type}. {supported_types_message()}",
+        )
+
     file_id = await db.save_upload(
         filename=file.filename or "upload.bin",
         content=content,
-        content_type=content_type,
+        content_type=mime_type,
         user_id=user["user_id"],
     )
     log_with_correlation(
@@ -75,7 +78,7 @@ async def upload_file(
         user_id=user["user_id"],
         file_id=file_id,
         filename=file.filename or "upload.bin",
-        content_type=content_type,
+        content_type=mime_type,
     )
     await db.insert_task(task)
     log_with_correlation(correlation_id, "info", "Task status created: in_progress")
