@@ -1,31 +1,49 @@
-"""RAG Service — LangChain retrieval and context injection.
+"""RAG Service — LangChain retrieval facade (chunk, embed, search, inject).
 
-Orchestrates semantic search, document chunking, and context injection
-for LLM queries. Per-user isolation via user_id filtering.
+Depends on VectorStore and Embedder abstractions (DIP). Per-user isolation
+is enforced on every query via user_id.
 """
+
+from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any
 
+from config import get_settings
+from document_store import DocumentStore, document_store
+from embeddings import Embedder, create_embedder
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
+from logging_setup import log_with_correlation
+from vector_store import VectorStore, create_vector_store
 
-from config import settings
-from services.rag.document_store import document_store
-from services.rag.vector_store import VectorStore, create_vector_store
+IMAGE_TYPES = {"image", "image/jpeg", "image/png", "image/webp", "image/gif"}
+VIDEO_TYPES = {"video", "video/mp4", "video/webm", "video/quicktime"}
+
+
+def modality_from_type(doc_type: str | None) -> str:
+    """Map a document type / MIME to text | image | video."""
+    value = (doc_type or "text").lower()
+    if value in IMAGE_TYPES or value.startswith("image/"):
+        return "image"
+    if value in VIDEO_TYPES or value.startswith("video/"):
+        return "video"
+    return "text"
 
 
 class RAGService:
-    """RAG service for semantic retrieval and context injection.
+    """Facade: ingest JSONL triples, Top-k search, LLM context injection."""
 
-    Combines vector search with LLM context augmentation.
-    All operations are filtered by user_id for multi-tenant isolation.
-    """
-
-    def __init__(self) -> None:
-        self._vector_store: VectorStore | None = None
-        self._embedder: SentenceTransformer | None = None
+    def __init__(
+        self,
+        vector_store: VectorStore | None = None,
+        embedder: Embedder | None = None,
+        store: DocumentStore | None = None,
+    ) -> None:
+        settings = get_settings()
+        self._vector_store = vector_store
+        self._embedder = embedder
+        self._document_store = store
         self._splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.RAG_CHUNK_SIZE,
             chunk_overlap=settings.RAG_CHUNK_OVERLAP,
@@ -35,63 +53,58 @@ class RAGService:
 
     @property
     def vector_store(self) -> VectorStore:
-        """Get or create vector store instance."""
         if self._vector_store is None:
             self._vector_store = create_vector_store()
         return self._vector_store
 
     @property
-    def embedder(self) -> SentenceTransformer:
-        """Get or create embedding model instance."""
+    def embedder(self) -> Embedder:
         if self._embedder is None:
-            self._embedder = SentenceTransformer(settings.EMBEDDING_MODEL)
+            self._embedder = create_embedder()
         return self._embedder
 
+    @property
+    def documents(self) -> DocumentStore:
+        if self._document_store is None:
+            self._document_store = document_store
+        return self._document_store
+
     def embed_text(self, text: str) -> list[float]:
-        """Generate embedding for a text string.
-
-        Args:
-            text: Text to embed
-
-        Returns:
-            384-dimensional vector
-        """
-        return self.embedder.encode(text).tolist()
+        """Generate a 2048-dim embedding for text (shared multimodal space)."""
+        return self.embedder.embed_text(text)
 
     def chunk_text(self, text: str) -> list[str]:
-        """Split text into chunks for embedding.
-
-        Args:
-            text: Raw text to chunk
-
-        Returns:
-            List of text chunks
-        """
+        """Split text with RecursiveCharacterTextSplitter (1000 / 200)."""
+        if not text:
+            return []
+        if len(text) <= get_settings().RAG_CHUNK_SIZE:
+            return [text]
         return self._splitter.split_text(text)
 
     async def ingest_triples(
-        self, user_id: str, doc_id: str, triples_path: str
+        self,
+        user_id: str,
+        doc_id: str,
+        triples_path: str,
+        *,
+        gridfs_id: str = "",
+        doc_type: str = "text",
+        correlation_id: str = "no-id",
     ) -> int:
-        """Ingest JSONL triples into the vector store.
-
-        Args:
-            user_id: Owner's user ID
-            doc_id: Document ID
-            triples_path: Path to JSONL file with triples
-
-        Returns:
-            Number of triples ingested
-        """
+        """Read Frame 2 JSONL, chunk, embed (2048-dim), encrypt, store in Chroma."""
         path = Path(triples_path)
         if not path.exists():
+            log_with_correlation(
+                correlation_id,
+                "warning",
+                f"JSONL not found: {triples_path}",
+            )
             return 0
 
-        texts = []
-        metadatas = []
-        ids = []
-
-        with open(path) as f:
-            for i, line in enumerate(f):
+        texts: list[str] = []
+        sources: list[str] = []
+        with path.open(encoding="utf-8") as handle:
+            for line in handle:
                 line = line.strip()
                 if not line:
                     continue
@@ -99,108 +112,144 @@ class RAGService:
                     triple = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-
-                # Build text from triple
-                text = f"{triple.get('subject', '')} {triple.get('predicate', '')} {triple.get('object', '')}"
-                texts.append(text)
-                metadatas.append(
-                    {
-                        "user_id": user_id,
-                        "doc_id": doc_id,
-                        "triple_index": i,
-                        "source": triple.get("metadata", {}).get("source_file", ""),
-                    }
+                text = " ".join(
+                    str(triple.get(key, "")).strip()
+                    for key in ("subject", "predicate", "object")
+                    if triple.get(key)
                 )
-                ids.append(f"{user_id}_{doc_id}_{i}")
+                if not text:
+                    continue
+                texts.append(text)
+                sources.append(str((triple.get("metadata") or {}).get("source_file", "")))
 
         if not texts:
             return 0
 
-        # Chunk texts
-        all_chunks = []
-        all_metadatas = []
-        all_ids = []
-
-        for i, text in enumerate(texts):
-            chunks = self.chunk_text(text)
-            for j, chunk in enumerate(chunks):
-                all_chunks.append(chunk)
-                all_metadatas.append(
-                    {**metadatas[i], "chunk_index": j}
+        modality = modality_from_type(doc_type)
+        chunks: list[str] = []
+        metadatas: list[dict[str, Any]] = []
+        ids: list[str] = []
+        for index, text in enumerate(texts):
+            for chunk_index, chunk in enumerate(self.chunk_text(text)):
+                chunks.append(chunk)
+                metadatas.append(
+                    {
+                        "user_id": user_id,
+                        "doc_id": doc_id,
+                        "gridfs_id": gridfs_id,
+                        "modality": "text",
+                        "triple_index": index,
+                        "chunk_index": chunk_index,
+                        "source": sources[index],
+                    }
                 )
-                all_ids.append(f"{ids[i]}_chunk{j}")
+                ids.append(f"{user_id}_{doc_id}_{index}_chunk{chunk_index}")
 
-        # Generate embeddings
-        embeddings = [self.embed_text(chunk) for chunk in all_chunks]
+        if modality in {"image", "video"} and gridfs_id:
+            payload = await self.documents.get_binary(gridfs_id, user_id)
+            if payload:
+                if modality == "image":
+                    vector = self.embedder.embed_image(payload)
+                else:
+                    vector = self.embedder.embed_video(payload)
+                chunks.append(f"{modality} binary gridfs_id={gridfs_id}")
+                metadatas.append(
+                    {
+                        "user_id": user_id,
+                        "doc_id": doc_id,
+                        "gridfs_id": gridfs_id,
+                        "modality": modality,
+                        "triple_index": -1,
+                        "chunk_index": 0,
+                        "source": sources[0] if sources else "",
+                    }
+                )
+                ids.append(f"{user_id}_{doc_id}_{modality}")
+                embeddings = [self.embed_text(chunk) for chunk in chunks[:-1]]
+                embeddings.append(vector)
+            else:
+                embeddings = [self.embed_text(chunk) for chunk in chunks]
+        else:
+            embeddings = [self.embed_text(chunk) for chunk in chunks]
 
-        # Store in vector store
-        await self.vector_store.add(embeddings, all_metadatas, all_ids)
+        log_with_correlation(
+            correlation_id,
+            "debug",
+            f"Embedding {len(embeddings)} chunks ({get_settings().EMBEDDING_DIM} dims)",
+        )
+        await self.vector_store.add(embeddings, metadatas, ids, documents=chunks)
+
+        try:
+            await self.documents.insert_document(
+                user_id=user_id,
+                doc_type=modality,
+                gridfs_id=gridfs_id,
+                triples_path=triples_path,
+                correlation_id=correlation_id,
+            )
+        except Exception as exc:
+            log_with_correlation(
+                correlation_id,
+                "warning",
+                f"Document index insert skipped: {exc}",
+            )
 
         return len(texts)
 
     async def semantic_search(
-        self, query: str, user_id: str, k: int | None = None
+        self,
+        query: str,
+        user_id: str,
+        k: int | None = None,
+        *,
+        correlation_id: str = "no-id",
     ) -> list[dict[str, Any]]:
-        """Search for relevant documents using semantic similarity.
-
-        Args:
-            query: Natural language query
-            user_id: Owner's user ID (for isolation)
-            k: Number of results (default from config)
-
-        Returns:
-            List of relevant document chunks with metadata
-        """
+        """Embed the query and return Top-k matches for this user only."""
         if k is None:
-            k = settings.RAG_TOP_K
-
+            k = get_settings().RAG_TOP_K
+        log_with_correlation(
+            correlation_id,
+            "debug",
+            f"Searching Chroma with k={k}, user_id={user_id}",
+        )
         query_embedding = self.embed_text(query)
-        results = await self.vector_store.search(query_embedding, k, user_id)
-        return results
+        return await self.vector_store.search(query_embedding, k, user_id)
 
-    async def context_injection(self, query: str, user_id: str) -> str:
-        """Retrieve context and format it for LLM injection.
+    async def top_k_retrieval(
+        self,
+        query: str,
+        user_id: str,
+        k: int | None = None,
+        *,
+        correlation_id: str = "no-id",
+    ) -> list[dict[str, Any]]:
+        """LangChain-style Top-k retrieval (same as semantic_search)."""
+        return await self.semantic_search(query, user_id, k, correlation_id=correlation_id)
 
-        Args:
-            query: User's question
-            user_id: Owner's user ID
-
-        Returns:
-            Formatted context string ready for LLM prompt
-        """
-        results = await self.semantic_search(query, user_id)
-
+    async def context_injection(
+        self,
+        query: str,
+        user_id: str,
+        *,
+        correlation_id: str = "no-id",
+    ) -> str:
+        """Format Top-k chunks as LLM context. Empty corpus → explicit message."""
+        results = await self.semantic_search(query, user_id, correlation_id=correlation_id)
         if not results:
+            log_with_correlation(correlation_id, "info", "No relevant context found")
             return "No relevant context found in your documents."
 
-        context_parts = []
-        for i, result in enumerate(results, 1):
-            meta = result.get("metadata", {})
-            text = meta.get("text", str(meta))
-            source = meta.get("source", "unknown")
-            context_parts.append(f"[{i}] {text} (source: {source})")
+        parts: list[str] = []
+        for index, result in enumerate(results, 1):
+            meta = result.get("metadata") or {}
+            text = result.get("document") or meta.get("chunk_text") or meta.get("text") or ""
+            source = meta.get("source") or meta.get("gridfs_id") or "unknown"
+            parts.append(f"[{index}] {text} (source: {source})")
+        return "\n".join(parts)
 
-        return "\n".join(context_parts)
-
-    async def delete_document_embeddings(self, doc_id: str, user_id: str) -> None:
-        """Delete all embeddings for a document.
-
-        Args:
-            doc_id: Document ID
-            user_id: Owner's user ID
-        """
-        # Search for all chunks belonging to this document
-        results = await self.semantic_search(
-            f"document {doc_id}", user_id, k=1000
-        )
-        ids_to_delete = [
-            r["id"]
-            for r in results
-            if r.get("metadata", {}).get("doc_id") == doc_id
-        ]
-        if ids_to_delete:
-            await self.vector_store.delete(ids_to_delete)
+    async def delete_document_embeddings(self, doc_id: str, user_id: str) -> int:
+        """Delete Chroma rows for one document (user-scoped)."""
+        return await self.vector_store.delete_where({"user_id": user_id, "doc_id": doc_id})
 
 
-# Singleton instance
 rag_service = RAGService()
