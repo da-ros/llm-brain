@@ -37,6 +37,8 @@ known-first-party = ["apps", "services"]
 "services/finetune/conftest.py" = ["E402"]
 "services/etl/test_etl.py" = ["E402"]
 "services/etl/conftest.py" = ["E402"]
+"services/rag/test_rag.py" = ["E402"]
+"services/rag/conftest.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

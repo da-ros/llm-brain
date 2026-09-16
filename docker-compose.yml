@@ -48,6 +48,7 @@ services:
     depends_on:
       - mongo
       - kafka
+      - rag-service
     restart: unless-stopped
 
   llm-service:
@@ -107,7 +108,15 @@ services:
     environment:
       - MONGODB_URI=mongodb://mongo:27017
       - MONGODB_DB=llm_brain
-      - CHROMA_PERSIST_DIR=/app/data/chroma
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - VECTOR_STORE_PROVIDER=chroma
+      - EMBEDDING_MODEL=Qwen/Qwen3-VL-Embedding-2B
+      - EMBEDDING_DIM=2048
+      - EMBEDDING_MOCK=${EMBEDDING_MOCK:-true}
+      - RAG_TOP_K=3
+      - RAG_CHUNK_SIZE=1000
+      - RAG_CHUNK_OVERLAP=200
       - FERNET_KEY=${FERNET_KEY:-change-me-in-production}
     volumes:
       - ./data:/app/data

@@ -15,6 +15,7 @@ python-jose[cryptography]==3.3.0
 # --- Orchestration / RAG ---
 langchain==0.3.0
 langchain-community==0.3.0
+langchain-text-splitters==0.3.0
 
 # --- Data stores ---
 pymongo==4.8.0

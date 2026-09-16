@@ -150,27 +150,30 @@ Con RAG:
 
 ## 🔐 Fernet Encryption
 
-Los vectores se **encriptan** antes de guardarse:
+Los embeddings y el `chunk_text` se protegen con Fernet **a nivel de aplicación**.
+
+Chroma usa HNSW/cosine sobre **floats**. Un ciphertext Fernet **no** se puede usar como
+índice (la implementación anterior guardaba vectores dummy `[0,0,…]` y la búsqueda
+semántica no funcionaba). El diseño correcto del MVP:
 
 ```
-Vector original: [0.12, -0.45, 0.78, ...]
-        │
-        ▼  Fernet.encrypt()
-Vector encriptado: "gAAAAABh..." (texto cifrado)
-        │
-        ▼  Store in Chroma
+Vector 2048-dim (ANN, campo embeddings de Chroma)
+        +
+Fernet(vector)  → metadata.encrypted_vector   (copia cifrada at rest)
+Fernet(chunk)   → campo `document` de Chroma  (texto cifrado at rest)
 ```
 
 Al recuperar:
 ```
-Vector encriptado: "gAAAAABh..."
+Chroma Top-k (floats) → hits
         │
-        ▼  Fernet.decrypt()
-Vector original: [0.12, -0.45, 0.78, ...]
+        ▼  Fernet.decrypt(document) + decrypt(encrypted_vector)
+chunk_text + vector original para el RAG service
 ```
 
-**¿Por qué?** Porque los embeddings contienen información sensible del usuario.
-Si alguien accede a la base de datos, no puede leer los vectores sin la clave Fernet.
+**¿Por qué?** Los embeddings y el texto del usuario son sensibles. Fernet evita que un
+dump de metadata/`document` se lea en claro. El índice float es el compromiso inevitable
+para que Top-k funcione.
 
 ---
 

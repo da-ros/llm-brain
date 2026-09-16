@@ -7,7 +7,7 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from jose import jwt
@@ -370,15 +370,20 @@ class TestUploadFlow:
         with (
             patch("kafka_io.db.find_task", fake_find),
             patch("kafka_io.db.update_task", fake_update),
+            patch("kafka_io.trigger_rag_ingest", new_callable=AsyncMock) as ingest,
         ):
             await apply_task_response(
                 {
                     "correlation_id": "abc-123",
                     "status": "success",
                     "http_code": 200,
-                    "result": {"triples_count": 15},
+                    "result": {
+                        "triples_count": 15,
+                        "output_path": "/app/data/triples/user1/abc-123.jsonl",
+                    },
                 }
             )
+            ingest.assert_awaited_once()
 
         assert tasks["abc-123"]["status"] == "success"
         assert tasks["abc-123"]["result"]["triples_count"] == 15
@@ -539,6 +544,23 @@ class TestChat:
         assert response.json()["context_used"] is False
         rag.assert_not_awaited()
         llm.assert_awaited()
+
+
+class TestDocuments:
+    def test_get_document_404_when_rag_says_missing(self, client):
+        with patch("routers.documents.httpx.AsyncClient") as client_cls:
+            instance = AsyncMock()
+            response = MagicMock()
+            response.status_code = 404
+            instance.get = AsyncMock(return_value=response)
+            instance.__aenter__.return_value = instance
+            instance.__aexit__.return_value = False
+            client_cls.return_value = instance
+            http_response = client.get(
+                "/api/documents/doc-other",
+                headers=auth_header(tier="premium"),
+            )
+        assert http_response.status_code == 404
 
 
 def test_task_document_includes_ttl_expiry():

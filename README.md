@@ -92,6 +92,17 @@ Qwen3.5-4B) for triples, and writes `data/triples/{user_id}/{correlation_id}.jso
 
 See `services/etl/README.md` for configuration and loader mapping.
 
+### Hybrid store + RAG (Frame 3)
+
+After ETL writes JSONL, the API Router calls **RAG Service :8002** `POST /ingest`.
+RAG chunks with LangChain `RecursiveCharacterTextSplitter` (1000/200), embeds with
+**Qwen3-VL-Embedding-2B** (2048-dim, multimodal, one shared space), stores **vector +
+chunk text + `gridfs_id`** in **Chroma :8005**, and indexes metadata in local MongoDB
+(`user_id` isolation). Premium chat (`POST /api/chat`) injects Top-k=3 context into
+the LLM Service. `EMBEDDING_MOCK=true` keeps CI/laptops off the 2B weights.
+
+See `services/rag/README.md`.
+
 ## Conventional Commits
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/). See `CONTRIBUTING.md` for details.
@@ -121,7 +132,7 @@ Docker Compose · GitHub Actions.
 
 ### Data Encryption
 
-- **Application-level**: Fernet for embeddings (later frames)
+- **Application-level**: Fernet for RAG embeddings and chunk text
 - **Transport**: TLS when API Gateway exists (future)
 
 ## Budget

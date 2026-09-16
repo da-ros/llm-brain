@@ -1,94 +1,316 @@
 <mxfile host="65bd71144e">
-    <diagram id="rag-architecture" name="Frame 3 — RAG Architecture">
-        <mxGraphModel dx="149428" dy="73360" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2800" pageHeight="1400" math="0" shadow="0">
+    <diagram id="rag-architecture" name="Frame 3 — Hybrid Store + RAG Architecture">
+        <mxGraphModel dx="4928" dy="1238" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1400" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" value="Frame 3 — Hybrid Store + RAG Architecture" vertex="1">
-                    <mxGeometry height="60" width="500" x="750" y="20" as="geometry"/>
+                <mxCell id="title" value="Frame 3 — Hybrid Store + RAG Architecture&#10;RAG Service :8002 · Qwen3-VL-Embedding-2B (2048-dim) · local MongoDB/GridFS + Chroma :8005" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="180" y="12" width="1600" height="56" as="geometry"/>
                 </mxCell>
-                <mxCell id="existing_label" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" value="EXISTING (Frame 1 + 2)" vertex="1">
-                    <mxGeometry height="30" width="220" x="80" y="100" as="geometry"/>
+                <mxCell id="ex_label" value="EXISTING (Frame 1 / 1.1 / 2 / 4)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" parent="1" vertex="1">
+                    <mxGeometry x="36" y="76" width="320" height="24" as="geometry"/>
                 </mxCell>
-                <mxCell id="fastapi" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;strokeWidth=2;" value="⚡ FastAPI Backend&#xa;(Frame 1)&#xa;&#xa;• JWT Auth&#xa;• Config Layer&#xa;• LLM Provider" vertex="1">
-                    <mxGeometry height="110" width="220" x="80" y="140" as="geometry"/>
+                <mxCell id="client" value="Client&#10;Web / Mobile (Premium)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="112" width="180" height="70" as="geometry"/>
                 </mxCell>
-                <mxCell id="etl" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" value="📥 ETL Pipeline&#xa;(Frame 2)&#xa;&#xa;• Parsers (PDF/HTML/EML/OCR)&#xa;• Triple extraction&#xa;• JSONL output" vertex="1">
-                    <mxGeometry height="110" width="220" x="80" y="290" as="geometry"/>
+                <mxCell id="api_router" value="API Router :8000&#10;POST /api/upload → 202&#10;POST /api/chat + RAG context&#10;GET /api/documents (JWT)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="220" width="200" height="110" as="geometry"/>
                 </mxCell>
-                <mxCell id="jsonl" parent="1" style="shape=document;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;size=0.12;" value="📁 JSONL Triples&#xa;data/triples/{user_id}/&#xa;{doc_id}.jsonl" vertex="1">
-                    <mxGeometry height="90" width="220" x="80" y="440" as="geometry"/>
+                <mxCell id="kafka" value="Kafka&#10;file.uploaded → ETL&#10;task.response → Router&#10;→ POST RAG /ingest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="370" width="200" height="90" as="geometry"/>
                 </mxCell>
-                <mxCell id="new_label" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#82b366" value="NEW — HYBRID STORE + RAG (Frame 3)" vertex="1">
-                    <mxGeometry height="30" width="350" x="400" y="100" as="geometry"/>
+                <mxCell id="etl" value="ETL Service :8001&#10;LangChain loaders&#10;LLM triples → JSONL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="500" width="200" height="90" as="geometry"/>
                 </mxCell>
-                <mxCell id="rag_boundary" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#82b366;strokeWidth=2;dashed=1;" value="" vertex="1">
-                    <mxGeometry height="620" width="700" x="400" y="130" as="geometry"/>
+                <mxCell id="jsonl" value="JSONL triples&#10;data/triples/{user_id}/&#10;{correlation_id}.jsonl" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=0.12;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="630" width="200" height="90" as="geometry"/>
                 </mxCell>
-                <mxCell id="doc_store" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;strokeWidth=2;" value="🗄️ Document Store&#xa;services/rag/document_store.py&#xa;&#xa;• MongoDB Atlas&#xa;• Per-user isolation&#xa;• CRUD with user_id filter" vertex="1">
-                    <mxGeometry height="120" width="260" x="440" y="160" as="geometry"/>
+                <mxCell id="llm" value="LLM Service :8003&#10;base Qwen3.5-4B&#10;(not fine-tuned)&#10;context-augmented chat" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="760" width="200" height="100" as="geometry"/>
                 </mxCell>
-                <mxCell id="vec_store" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;strokeWidth=2;" value="🔍 Vector Store&#xa;services/rag/vector_store.py&#xa;&#xa;• ChromaVectorStore (local)&#xa;• PineconeVectorStore (prod)&#xa;• Fernet encryption" vertex="1">
-                    <mxGeometry height="120" width="260" x="440" y="320" as="geometry"/>
+                <mxCell id="rag_box" value="RAG Service container · FastAPI Python 3.13 · Port 8002&#10;Health is public. Ingest is internal (Router after distillation). Chat uses GET /context." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5fff5;strokeColor=#82b366;strokeWidth=3;dashed=1;verticalAlign=top;fontStyle=1;fontSize=12;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="319" y="104" width="1200" height="780" as="geometry"/>
                 </mxCell>
-                <mxCell id="embed_pipe" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" value="🧮 Embedding Pipeline&#xa;&#xa;• sentence-transformers&#xa;• RecursiveCharacterTextSplitter&#xa;• Chunk: 1000 chars, overlap 200" vertex="1">
-                    <mxGeometry height="100" width="260" x="440" y="480" as="geometry"/>
+                <mxCell id="new_label" value="NEW — HYBRID STORE + RAG (Frame 3)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#82b366" parent="1" vertex="1">
+                    <mxGeometry x="330" y="76" width="380" height="24" as="geometry"/>
                 </mxCell>
-                <mxCell id="rag_svc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" value="🤖 RAG Service&#xa;services/rag/rag_service.py&#xa;&#xa;• semantic_search()&#xa;• top_k_retrieval()&#xa;• context_injection()" vertex="1">
-                    <mxGeometry height="110" width="260" x="440" y="620" as="geometry"/>
+                <mxCell id="rag_app" value="RAG FastAPI :8002&#10;GET /health /search /context&#10;POST /ingest → 201&#10;GET /documents · DELETE /embeddings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="160" width="240" height="100" as="geometry"/>
                 </mxCell>
-                <mxCell id="ext_label" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#666666" value="EXTERNAL" vertex="1">
-                    <mxGeometry height="30" width="100" x="1266" y="100" as="geometry"/>
+                <mxCell id="doc_store" value="Document Store (Repository)&#10;services/rag/document_store.py&#10;MongoDB + GridFS&#10;schema: user_id, type, gridfs_id, triples_path" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="300" width="240" height="110" as="geometry"/>
                 </mxCell>
-                <mxCell id="mongo_ext" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" value="🗄️ MongoDB Atlas&#xa;M0 Free Tier" vertex="1">
-                    <mxGeometry height="80" width="220" x="1200" y="150" as="geometry"/>
+                <mxCell id="embed" value="Embedding Pipeline&#10;Qwen3-VL-Embedding-2B&#10;2048-dim multimodal (MRL)&#10;text + image + video → one space" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="450" width="240" height="110" as="geometry"/>
                 </mxCell>
-                <mxCell id="chroma_ext" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" value="🔍 Chroma (local)&#xa;Pinecone (prod)" vertex="1">
-                    <mxGeometry height="80" width="220" x="1200" y="311" as="geometry"/>
+                <mxCell id="vec_store" value="Vector Store (Strategy + Adapter)&#10;ChromaVectorStore (MVP)&#10;Factory: create_vector_store('chroma')&#10;Fernet ciphertext + ANN float index" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="600" width="240" height="110" as="geometry"/>
                 </mxCell>
-                <mxCell id="llm_ext" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;" value="☁️ AWS Bedrock&#xa;(LLM Cloud)" vertex="1">
-                    <mxGeometry height="60" width="220" x="1200" y="440" as="geometry"/>
+                <mxCell id="rag_facade" value="RAG Facade&#10;services/rag/rag_service.py&#10;chunk() · ingest_triples()&#10;semantic_search() · context_injection()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="750" width="240" height="100" as="geometry"/>
                 </mxCell>
-                <mxCell id="r1" edge="1" parent="1" source="fastapi" style="rounded=1;strokeWidth=2;strokeColor=#d6b656;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="etl">
+                <mxCell id="chunk" value="LangChain splitter&#10;RecursiveCharacterTextSplitter&#10;chunk_size=1000&#10;overlap=200" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="160" width="240" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="patterns" value="Patterns: Strategy (VectorStore) · Factory Method (create_vector_store) · Adapter (Chroma HTTP) · Facade (rag_service) · Repository (document_store)&#10;SOLID: SRP per module · OCP add a store class · LSP any VectorStore · ISP add/search/delete · DIP rag_service depends on Embedder + VectorStore" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="300" width="800" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="chroma_note" value="Chroma document field = Fernet(chunk_text)&#10;metadata.gridfs_id → original binary&#10;metadata.user_id → tenant filter&#10;embeddings[] = 2048-dim floats (ANN)" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=10;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="540" width="320" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="stores_label" value="LOCAL STORES" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#666666" parent="1" vertex="1">
+                    <mxGeometry x="1570" y="76" width="160" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="mongo" value="MongoDB :27017&#10;GridFS binaries&#10;Documents index&#10;per user_id" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1590" y="160" width="200" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="chroma" value="Chroma :8005&#10;2048-dim vectors&#10;chunk_text + metadata&#10;cross-modal collection" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1590" y="430" width="200" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="a_client_api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#6c8ebf;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="client" target="api_router" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="r2" edge="1" parent="1" source="etl" style="rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="jsonl">
-                    <mxGeometry relative="1" as="geometry"/>
+                <mxCell id="a_client_api_l" value="POST /api/upload · /api/chat" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a_client_api" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="4" y="-8" as="offset"/>
+                    </mxGeometry>
                 </mxCell>
-                <mxCell id="r3" edge="1" parent="1" source="jsonl" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="doc_store">
+                <mxCell id="a_api_client" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#6c8ebf;exitX=0;exitY=0.35;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="api_router" target="client" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="360" y="485"/>
-                            <mxPoint x="360" y="220"/>
+                            <mxPoint x="12" y="258"/>
+                            <mxPoint x="12" y="147"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="r3_label" connectable="0" parent="r3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" value="Ingest triples" vertex="1"/>
-                <mxCell id="r4" edge="1" parent="1" source="doc_store" style="rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="vec_store">
+                <mxCell id="a_api_client_l" value="202 / 200" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a_api_client" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-8" y="-2" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_api_kafka" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#6c8ebf;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="api_router" target="kafka" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="r5" edge="1" parent="1" source="vec_store" style="rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="embed_pipe">
+                <mxCell id="a_api_kafka_l" value="file.uploaded" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a_api_kafka" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="40" y="-2" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_kafka_etl" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#6c8ebf;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="kafka" target="etl" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="r6" edge="1" parent="1" source="embed_pipe" style="rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="rag_svc">
+                <mxCell id="a_kafka_etl_l" value="consume" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a_kafka_etl" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="28" y="-2" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_etl_jsonl" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#d6b656;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="etl" target="jsonl" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="r7" edge="1" parent="1" source="doc_store" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="mongo_ext">
-                    <mxGeometry relative="1" as="geometry"/>
+                <mxCell id="a_etl_jsonl_l" value="write JSONL" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#d6b656" parent="a_etl_jsonl" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="40" y="-2" as="offset"/>
+                    </mxGeometry>
                 </mxCell>
-                <mxCell id="r8" edge="1" parent="1" source="vec_store" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="chroma_ext">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="r9" edge="1" parent="1" source="rag_svc" style="rounded=1;strokeWidth=2;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.55;entryY=1.05;entryDx=0;entryDy=0;entryPerimeter=0;" target="llm_ext">
+                <mxCell id="a_etl_kafka" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#6c8ebf;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" parent="1" source="etl" target="kafka" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="1320" y="680"/>
+                            <mxPoint x="14" y="545"/>
+                            <mxPoint x="14" y="438"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="r9_label" connectable="0" parent="r9" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10" value="Context injection" vertex="1"/>
-                <mxCell id="legend" parent="1" style="text;html=1;align=left;verticalAlign=top;fontSize=11;fillColor=#f5f5f5;strokeColor=#999999;rounded=1;spacingLeft=8;spacingRight=8;spacingTop=4;spacingBottom=4;" value="🔵 Blue = Existing (Frame 1+2)    🟢 Green = New (Frame 3 — RAG)    ⚪ Gray = External Stores    🟡 Yellow = Data Flow" vertex="1">
-                    <mxGeometry height="30" width="750" x="80" y="800" as="geometry"/>
+                <mxCell id="a_etl_kafka_l" value="task.response" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a_etl_kafka" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="16" y="-11" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_kafka_api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#6c8ebf;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=1;entryY=0.85;entryDx=0;entryDy=0;" parent="1" source="kafka" target="api_router" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="250" y="388"/>
+                            <mxPoint x="250" y="314"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_kafka_api_l" value="success" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a_kafka_api" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="18" y="-2" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_api_rag" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=1;exitY=0.329;exitDx=0;exitDy=0;entryX=0;entryY=0.35;entryDx=0;entryDy=0;exitPerimeter=0;" parent="1" source="api_router" target="rag_app" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="280" y="256"/>
+                            <mxPoint x="280" y="195"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_api_rag_l" value="POST /ingest after ETL" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#82b366" parent="a_api_rag" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="2" y="-27" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_api_rag_ctx" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="api_router" target="rag_app" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="290" y="297"/>
+                            <mxPoint x="290" y="210"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_api_rag_ctx_l" value="GET /context (chat)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#82b366" parent="a_api_rag_ctx" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="21" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_rag_api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#82b366;exitX=0.003;exitY=0.09;exitDx=0;exitDy=0;entryX=0.95;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;exitPerimeter=0;" parent="1" source="rag_app" target="api_router" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="351" y="170"/>
+                            <mxPoint x="220" y="170"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_rag_api_l" value="201 / context" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#82b366" parent="a_rag_api" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="22" y="-7" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_jsonl_rag" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#d6b656;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.001;entryY=0.636;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="jsonl" target="rag_app" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="300" y="675"/>
+                            <mxPoint x="300" y="224"/>
+                            <mxPoint x="340" y="224"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_jsonl_rag_l" value="read JSONL" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#d6b656" parent="a_jsonl_rag" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-10" y="1" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_rag_doc" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="rag_app" target="doc_store" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a_rag_chunk" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#d6b656;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="rag_app" target="chunk" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a_chunk_embed" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=0;exitY=0.75;exitDx=0;exitDy=0;entryX=1;entryY=0.2;entryDx=0;entryDy=0;" parent="1" source="chunk" target="embed" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="620" y="235"/>
+                            <mxPoint x="620" y="472"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_chunk_embed_l" value="chunks" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#82b366" parent="a_chunk_embed" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-1" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_doc_embed" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="doc_store" target="embed" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a_embed_vec" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="embed" target="vec_store" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a_embed_vec_l" value="2048-dim + Fernet" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#82b366" parent="a_embed_vec" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="50" y="-2" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_vec_facade" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="vec_store" target="rag_facade" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a_doc_mongo" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#666666;exitX=0.999;exitY=0.821;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitPerimeter=0;" parent="1" source="doc_store" target="mongo" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1500" y="390"/>
+                            <mxPoint x="1500" y="215"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_doc_mongo_l" value="index + gridfs_id" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#666666" parent="a_doc_mongo" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-78" y="6" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_mongo_embed" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#666666;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="mongo" target="embed" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1550" y="254"/>
+                            <mxPoint x="1550" y="505"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_mongo_embed_l" value="image/video bytes" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#666666" parent="a_mongo_embed" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-125" y="-11" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_vec_chroma" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#666666;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=-0.004;entryY=0.842;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="vec_store" target="chroma" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a_vec_chroma_l" value="add vector + document + metadata" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#666666" parent="a_vec_chroma" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_facade_chroma" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#666666;exitX=1.002;exitY=0.598;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;exitPerimeter=0;" parent="1" source="rag_facade" target="chroma" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1690" y="810"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_facade_chroma_l" value="Top-k search (user_id)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#666666" parent="a_facade_chroma" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-35" y="10" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_chroma_facade" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#666666;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" parent="1" source="chroma" target="rag_facade" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1640" y="775"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_chroma_facade_l" value="hits (decrypt)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#666666" parent="a_chroma_facade" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-4" y="7" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_api_llm" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#6c8ebf;exitX=0;exitY=0.9;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" parent="1" source="api_router" target="llm" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="-10" y="319"/>
+                            <mxPoint x="-10" y="790"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_api_llm_l" value="prompt + RAG context" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a_api_llm" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="20" y="55" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_llm_api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;dashed=1;strokeColor=#6c8ebf;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" parent="1" source="llm" target="api_router" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="130" y="880"/>
+                            <mxPoint x="-50" y="880"/>
+                            <mxPoint x="-50" y="303"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a_llm_api_l" value="LLM response" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#6c8ebf" parent="a_llm_api" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-82" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="legend" value="Solid = call / write. Dashed = HTTP 202/200, ingest 201, GridFS bytes, Chroma hits, LLM response.&lt;br&gt;Blue = existing Frame 1/1.1/2/4. Green = new RAG. Yellow = JSONL / chunking. Gray = local stores.&lt;br&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=11;fillColor=#f5f5f5;strokeColor=#999999;rounded=1;spacingLeft=8;spacingRight=8;spacingTop=4;spacingBottom=4;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="900" width="1400" height="50" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>

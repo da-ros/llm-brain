@@ -17,6 +17,7 @@ import threading
 from typing import Any, Literal
 
 import db
+import httpx
 from config import get_settings
 from logging_setup import log_with_correlation, logger
 
@@ -105,6 +106,46 @@ def file_uploaded_message(task: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def trigger_rag_ingest(
+    task: dict[str, Any],
+    result: dict[str, Any] | None,
+    correlation_id: str,
+) -> None:
+    """After ETL success, POST JSONL triples into the RAG vector store."""
+    settings = get_settings()
+    user_id = task.get("user_id")
+    if not user_id:
+        return
+    output_path = (result or {}).get("output_path")
+    if not output_path:
+        output_path = f"/app/data/triples/{user_id}/{correlation_id}.jsonl"
+    payload = {
+        "user_id": user_id,
+        "doc_id": correlation_id,
+        "triples_path": output_path,
+        "gridfs_id": str(task.get("file_id") or ""),
+        "doc_type": task.get("content_type") or "text",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                f"{settings.RAG_SERVICE_URL}/ingest",
+                json=payload,
+                headers={"X-Request-ID": correlation_id},
+            )
+        if response.status_code >= 400:
+            log_with_correlation(
+                correlation_id,
+                "warning",
+                f"RAG ingest failed: HTTP {response.status_code}",
+            )
+            return
+        count = (response.json() or {}).get("triples_count", 0)
+        log_with_correlation(correlation_id, "info", f"RAG ingested {count} triples")
+    except Exception as exc:
+        log_with_correlation(correlation_id, "warning", f"RAG ingest skipped: {exc}")
+
+
 async def apply_task_response(data: dict[str, Any]) -> None:
     """Update task_status from a Kafka task.response message."""
     correlation_id = data.get("correlation_id")
@@ -144,6 +185,7 @@ async def apply_task_response(data: dict[str, Any]) -> None:
             },
         )
         log_with_correlation(correlation_id, "info", "Task completed successfully")
+        await trigger_rag_ingest(task, result, correlation_id)
         return
 
     if action == "retry":

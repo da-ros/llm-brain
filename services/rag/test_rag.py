@@ -1,275 +1,410 @@
-"""Tests for RAG service — Document Store, Vector Store, and RAG retrieval."""
+"""Tests for Hybrid Store + RAG — Mongo/GridFS, Chroma, Fernet, retrieval."""
+
+from __future__ import annotations
 
 import json
-import os
-import sys
-import tempfile
-from pathlib import Path
+import math
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-# Set env vars BEFORE any imports
-os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only"
-os.environ["FERNET_KEY"] = "QmSFavzoGj9MohzGATx3CnkOR2I9JTP4ueRhP4P4DZ0="
-
-# Add services/rag to Python path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "rag"))
+from fastapi.testclient import TestClient
 
 
-# --- Document Store Tests ---
+class MemoryVectorStore:
+    """In-memory VectorStore stand-in so unit tests never need Chroma."""
+
+    def __init__(self) -> None:
+        self.items: list[dict] = []
+
+    async def add(self, vectors, metadatas, ids, documents=None) -> None:
+        for index, item_id in enumerate(ids):
+            self.items.append(
+                {
+                    "id": item_id,
+                    "vector": list(vectors[index]),
+                    "metadata": dict(metadatas[index]),
+                    "document": documents[index] if documents else "",
+                }
+            )
+
+    async def search(self, query_vector, k=3, user_id=None):
+        scored = []
+        for item in self.items:
+            if user_id and item["metadata"].get("user_id") != user_id:
+                continue
+            distance = 1.0 - _cosine(query_vector, item["vector"])
+            scored.append((distance, item))
+        scored.sort(key=lambda pair: pair[0])
+        output = []
+        for distance, item in scored[:k]:
+            output.append(
+                {
+                    "id": item["id"],
+                    "metadata": item["metadata"],
+                    "distance": distance,
+                    "document": item["document"],
+                }
+            )
+        return output
+
+    async def delete(self, ids) -> None:
+        wanted = set(ids)
+        self.items = [item for item in self.items if item["id"] not in wanted]
+
+    async def delete_where(self, where) -> int:
+        remaining = []
+        deleted = 0
+        for item in self.items:
+            if all(item["metadata"].get(key) == value for key, value in where.items()):
+                deleted += 1
+            else:
+                remaining.append(item)
+        self.items = remaining
+        return deleted
+
+
+def _cosine(left, right) -> float:
+    dot = sum(a * b for a, b in zip(left, right, strict=False))
+    norm_l = math.sqrt(sum(a * a for a in left)) or 1.0
+    norm_r = math.sqrt(sum(b * b for b in right)) or 1.0
+    return dot / (norm_l * norm_r)
+
+
+class AsyncCursor:
+    def __init__(self, docs):
+        self._docs = docs
+
+    def sort(self, *_args):
+        return self
+
+    def __aiter__(self):
+        self._index = 0
+        return self
+
+    async def __anext__(self):
+        if self._index >= len(self._docs):
+            raise StopAsyncIteration
+        doc = self._docs[self._index]
+        self._index += 1
+        return doc
+
+
+def _service(store=None):
+    from embeddings import MockEmbedder
+    from rag_service import RAGService
+    from vector_store import EncryptedVectorStore
+
+    memory = store or MemoryVectorStore()
+    docs = MagicMock()
+    docs.insert_document = AsyncMock(return_value="doc-mongo-1")
+    docs.get_binary = AsyncMock(return_value=None)
+    return RAGService(
+        vector_store=EncryptedVectorStore(memory),
+        embedder=MockEmbedder(dim=2048),
+        store=docs,
+    ), memory
+
+
+# --- Document Store ---
 
 
 class TestDocumentStore:
-    """Tests for MongoDB document store with user_id isolation."""
-
     @pytest.mark.asyncio
-    async def test_insert_document(self):
-        """Test inserting a document with user_id."""
-        from services.rag.document_store import DocumentStore
+    async def test_insert_document_uses_gridfs_id_schema(self):
+        from document_store import DocumentStore
 
         store = DocumentStore()
         mock_db = MagicMock()
         store._db = mock_db
-
-        mock_db.documents.insert_one = AsyncMock(
-            return_value=MagicMock(inserted_id="doc123")
-        )
+        mock_db.documents.insert_one = AsyncMock(return_value=MagicMock(inserted_id="doc123"))
 
         doc_id = await store.insert_document(
             user_id="user1",
             doc_type="pdf",
-            original_path="/path/to/file.pdf",
-            triples_path="/path/to/triples.jsonl",
+            gridfs_id="gridfs-1",
+            triples_path="/data/triples/user1/doc1.jsonl",
         )
 
         assert doc_id == "doc123"
-        mock_db.documents.insert_one.assert_called_once()
+        payload = mock_db.documents.insert_one.call_args[0][0]
+        assert payload["user_id"] == "user1"
+        assert payload["type"] == "pdf"
+        assert payload["gridfs_id"] == "gridfs-1"
+        assert payload["triples_path"].endswith("doc1.jsonl")
+        assert "original_path" not in payload
 
     @pytest.mark.asyncio
     async def test_list_documents_isolation(self):
-        """Test that list_documents only returns user's documents."""
-        from services.rag.document_store import DocumentStore
+        from document_store import DocumentStore
 
         store = DocumentStore()
         mock_db = MagicMock()
         store._db = mock_db
-
-        # Mock cursor that returns only user1's documents
         docs_list = [
-            {"_id": "doc1", "user_id": "user1", "type": "pdf"},
-            {"_id": "doc2", "user_id": "user1", "type": "html"},
+            {"_id": "doc1", "user_id": "user1", "type": "pdf", "gridfs_id": "g1"},
+            {"_id": "doc2", "user_id": "user1", "type": "html", "gridfs_id": "g2"},
         ]
-
-        class AsyncCursor:
-            def __init__(self, docs):
-                self._docs = docs
-                self._index = 0
-
-            def sort(self, *args):
-                return self
-
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                if self._index >= len(self._docs):
-                    raise StopAsyncIteration
-                doc = self._docs[self._index]
-                self._index += 1
-                return doc
-
         mock_db.documents.find.return_value = AsyncCursor(docs_list)
 
         docs = await store.list_documents("user1")
 
         assert len(docs) == 2
-        assert all(d["user_id"] == "user1" for d in docs)
+        assert all(doc["user_id"] == "user1" for doc in docs)
         mock_db.documents.find.assert_called_with({"user_id": "user1"})
 
     @pytest.mark.asyncio
-    async def test_get_document_wrong_user(self):
-        """Test that get_document returns None for wrong user."""
-        from services.rag.document_store import DocumentStore
+    async def test_get_document_wrong_user_returns_none(self):
+        from document_store import DocumentStore
 
         store = DocumentStore()
         mock_db = MagicMock()
         store._db = mock_db
-
         mock_db.documents.find_one = AsyncMock(return_value=None)
 
-        result = await store.get_document("doc123", "wrong_user")
+        result = await store.get_document("507f1f77bcf86cd799439011", "wrong_user")
 
         assert result is None
 
 
-# --- Vector Store Tests ---
+# --- Vector store / Fernet ---
 
 
 class TestVectorStore:
-    """Tests for vector store operations."""
+    def test_factory_rejects_pinecone(self):
+        from vector_store import create_vector_store
 
-    def test_encrypt_decrypt_vector(self):
-        """Test Fernet encryption roundtrip."""
-        from services.rag.vector_store import EncryptedVectorStore
+        with pytest.raises(ValueError, match="chroma"):
+            create_vector_store("pinecone")
 
-        mock_store = MagicMock()
-        encrypted_store = EncryptedVectorStore(mock_store)
+    def test_encrypt_decrypt_vector_roundtrip(self):
+        from vector_store import EncryptedVectorStore
 
-        original_vector = [0.1, 0.2, 0.3, 0.4, 0.5]
-        encrypted = encrypted_store._encrypt_vector(original_vector)
-        decrypted = encrypted_store._decrypt_vector(encrypted)
-
-        assert decrypted == pytest.approx(original_vector)
+        wrapper = EncryptedVectorStore(MemoryVectorStore())
+        original = [0.1, 0.2, 0.3, 0.4]
+        token = wrapper.encrypt_vector(original)
+        assert token != json.dumps(original)
+        assert wrapper.decrypt_vector(token) == pytest.approx(original)
 
     @pytest.mark.asyncio
-    async def test_search_returns_decrypted_vectors(self):
-        """Test that search decrypts vectors."""
-        from services.rag.vector_store import EncryptedVectorStore
+    async def test_embeddings_encrypted_at_rest_decrypted_on_retrieval(self):
+        from vector_store import EncryptedVectorStore
 
-        mock_store = MagicMock()
-        encrypted_store = EncryptedVectorStore(mock_store)
-
-        original_vector = [0.1, 0.2, 0.3]
-        encrypted = encrypted_store._encrypt_vector(original_vector)
-
-        mock_store.search = AsyncMock(
-            return_value=[
-                {
-                    "id": "doc1",
-                    "metadata": {"encrypted_vector": encrypted, "user_id": "user1"},
-                    "distance": 0.1,
-                }
-            ]
+        memory = MemoryVectorStore()
+        wrapper = EncryptedVectorStore(memory)
+        vector = [0.12, -0.45, 0.78]
+        await wrapper.add(
+            [vector],
+            [{"user_id": "user1", "gridfs_id": "g1", "modality": "text"}],
+            ["id-1"],
+            documents=["Paciente tiene diabetes"],
         )
 
-        results = await encrypted_store.search([0.1, 0.2, 0.3], k=1, user_id="user1")
+        stored = memory.items[0]
+        assert stored["vector"] == pytest.approx(vector)
+        assert stored["metadata"]["encrypted"] is True
+        assert stored["metadata"]["encrypted_vector"] != json.dumps(vector)
+        assert stored["document"] != "Paciente tiene diabetes"
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(stored["document"])
 
-        assert len(results) == 1
-        assert results[0]["vector"] == pytest.approx(original_vector)
+        results = await wrapper.search(vector, k=1, user_id="user1")
+        assert results[0]["document"] == "Paciente tiene diabetes"
+        assert results[0]["vector"] == pytest.approx(vector)
+
+    @pytest.mark.asyncio
+    async def test_chroma_adapter_stores_document_and_gridfs_metadata(self):
+        from vector_store import ChromaVectorStore
+
+        fake_collection = MagicMock()
+        fake_collection.query.return_value = {
+            "ids": [["id-1"]],
+            "metadatas": [[{"user_id": "user1", "gridfs_id": "g1"}]],
+            "distances": [[0.1]],
+            "documents": [["chunk"]],
+        }
+        store = ChromaVectorStore.__new__(ChromaVectorStore)
+        store._collection = fake_collection
+        await store.add(
+            [[0.1] * 8],
+            [{"user_id": "user1", "gridfs_id": "g1"}],
+            ["id-1"],
+            documents=["chunk text"],
+        )
+        kwargs = fake_collection.add.call_args.kwargs
+        assert kwargs["documents"] == ["chunk text"]
+        assert kwargs["metadatas"][0]["gridfs_id"] == "g1"
 
 
-# --- RAG Service Tests ---
+# --- Embeddings ---
+
+
+class TestEmbeddings:
+    def test_mock_embedder_is_2048_dim(self):
+        from embeddings import MockEmbedder
+
+        embedder = MockEmbedder(dim=2048)
+        vector = embedder.embed_text("Paciente tiene diabetes")
+        assert len(vector) == 2048
+        assert math.isclose(sum(v * v for v in vector), 1.0, rel_tol=1e-5)
+
+    def test_create_embedder_uses_mock_when_flag_set(self):
+        from embeddings import MockEmbedder, create_embedder
+
+        embedder = create_embedder()
+        assert isinstance(embedder, MockEmbedder)
+
+
+# --- RAG service ---
 
 
 class TestRAGService:
-    """Tests for RAG service operations."""
-
-    def test_chunk_text(self):
-        """Test text chunking."""
-        from services.rag.rag_service import RAGService
-
-        service = RAGService()
-        text = "A" * 2500  # 2500 chars
-
-        chunks = service.chunk_text(text)
-
+    def test_chunk_text_splits_long_documents(self):
+        service, _memory = _service()
+        chunks = service.chunk_text("A" * 2500)
         assert len(chunks) > 1
         assert all(len(chunk) <= 1000 for chunk in chunks)
 
-    def test_embed_text(self):
-        """Test embedding generation."""
-        from services.rag.rag_service import RAGService
-
-        service = RAGService()
+    def test_embed_text_is_2048_dim(self):
+        service, _memory = _service()
         embedding = service.embed_text("test sentence")
-
         assert isinstance(embedding, list)
-        assert len(embedding) == 384  # sentence-transformers default
+        assert len(embedding) == 2048
 
     @pytest.mark.asyncio
-    async def test_ingest_triples(self):
-        """Test triple ingestion from JSONL."""
-        from services.rag.rag_service import RAGService
-
-        service = RAGService()
-        service._vector_store = MagicMock()
-        service._vector_store.add = AsyncMock()
-
-        # Create temp JSONL file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            json.dump(
-                {"subject": "Patient", "predicate": "has", "object": "diabetes"},
-                f,
-            )
-            f.write("\n")
-            json.dump(
-                {"subject": "Patient", "predicate": "takes", "object": "metformin"},
-                f,
-            )
-            f.write("\n")
-            triples_path = f.name
-
-        try:
-            count = await service.ingest_triples("user1", "doc1", triples_path)
-
-            assert count == 2
-            service._vector_store.add.assert_called_once()
-        finally:
-            Path(triples_path).unlink()
+    async def test_ingest_triples_from_jsonl(self, tmp_path):
+        service, memory = _service()
+        path = tmp_path / "doc1.jsonl"
+        path.write_text(
+            json.dumps({"subject": "Patient", "predicate": "has", "object": "diabetes"})
+            + "\n"
+            + json.dumps({"subject": "Patient", "predicate": "takes", "object": "metformin"})
+            + "\n",
+            encoding="utf-8",
+        )
+        count = await service.ingest_triples(
+            "user1",
+            "doc1",
+            str(path),
+            gridfs_id="grid-1",
+            doc_type="pdf",
+        )
+        assert count == 2
+        assert memory.items
+        assert all(item["metadata"]["gridfs_id"] == "grid-1" for item in memory.items)
+        assert all(item["metadata"]["user_id"] == "user1" for item in memory.items)
+        service.documents.insert_document.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_context_injection_empty(self):
-        """Test context injection when no documents exist."""
-        from services.rag.rag_service import RAGService
-
-        service = RAGService()
-        service._vector_store = MagicMock()
-        service._vector_store.search = AsyncMock(return_value=[])
-
+        service, _memory = _service()
         context = await service.context_injection("test query", "user1")
-
         assert context == "No relevant context found in your documents."
 
+    @pytest.mark.asyncio
+    async def test_retrieval_quality_known_documents(self, tmp_path):
+        service, _memory = _service()
+        path = tmp_path / "known.jsonl"
+        path.write_text(
+            json.dumps({"subject": "Patient", "predicate": "has", "object": "diabetes"})
+            + "\n"
+            + json.dumps({"subject": "Invoice", "predicate": "total", "object": "42 euros"})
+            + "\n",
+            encoding="utf-8",
+        )
+        await service.ingest_triples("user1", "doc1", str(path), gridfs_id="g1")
 
-# --- Integration Tests ---
+        results = await service.semantic_search("diabetes treatment", "user1", k=2)
+        assert results
+        top_text = results[0]["document"].lower()
+        assert "diabetes" in top_text
+
+        other = await service.semantic_search("diabetes", "user2", k=3)
+        assert other == []
+
+    @pytest.mark.asyncio
+    async def test_top_k_retrieval_alias(self, tmp_path):
+        service, _memory = _service()
+        path = tmp_path / "a.jsonl"
+        path.write_text(
+            json.dumps({"subject": "Patient", "predicate": "has", "object": "diabetes"}) + "\n",
+            encoding="utf-8",
+        )
+        await service.ingest_triples("user1", "doc1", str(path), gridfs_id="g1")
+        results = await service.top_k_retrieval("diabetes", "user1", k=1)
+        assert len(results) == 1
 
 
 class TestRAGIntegration:
-    """Integration tests for the full RAG pipeline."""
-
     @pytest.mark.asyncio
-    async def test_full_pipeline_mock(self):
-        """Test upload -> distill -> embed -> retrieve (mocked)."""
-        from services.rag.rag_service import RAGService
-
-        service = RAGService()
-        service._vector_store = MagicMock()
-        service._vector_store.add = AsyncMock()
-        service._vector_store.search = AsyncMock(
-            return_value=[
+    async def test_upload_distill_embed_retrieve_answer(self, tmp_path):
+        service, _memory = _service()
+        path = tmp_path / "receta.jsonl"
+        path.write_text(
+            json.dumps(
                 {
-                    "id": "user1_doc1_0_chunk0",
-                    "metadata": {
-                        "text": "Patient has diabetes",
-                        "user_id": "user1",
-                        "doc_id": "doc1",
-                        "source": "receta.pdf",
-                    },
-                    "distance": 0.1,
+                    "subject": "Patient",
+                    "predicate": "has",
+                    "object": "diabetes",
+                    "metadata": {"source_file": "receta.pdf"},
                 }
-            ]
-        )
-
-        # Ingest
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            json.dump(
-                {"subject": "Patient", "predicate": "has", "object": "diabetes"},
-                f,
             )
-            f.write("\n")
-            triples_path = f.name
+            + "\n",
+            encoding="utf-8",
+        )
+        count = await service.ingest_triples("user1", "doc1", str(path), gridfs_id="gridfs-receta")
+        assert count == 1
+        results = await service.semantic_search("diabetes", "user1")
+        assert len(results) == 1
+        context = await service.context_injection("diabetes", "user1")
+        assert "diabetes" in context.lower()
+        assert "receta.pdf" in context
 
-        try:
-            count = await service.ingest_triples("user1", "doc1", triples_path)
-            assert count == 1
 
-            # Search
-            results = await service.semantic_search("diabetes", "user1")
-            assert len(results) == 1
+class TestRAGHttp:
+    def test_health(self):
+        from main import create_app
 
-            # Context injection
-            context = await service.context_injection("diabetes", "user1")
-            assert "diabetes" in context.lower() or "patient" in context.lower()
-        finally:
-            Path(triples_path).unlink()
+        with (
+            patch("main.document_store.connect", new_callable=AsyncMock),
+            patch("main.document_store.close", new_callable=AsyncMock),
+        ):
+            client = TestClient(create_app())
+            response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["service"] == "rag-service"
+
+    def test_ingest_returns_201(self):
+        from main import create_app
+
+        with (
+            patch("main.document_store.connect", new_callable=AsyncMock),
+            patch("main.document_store.close", new_callable=AsyncMock),
+            patch("main.rag_service.ingest_triples", new_callable=AsyncMock) as ingest,
+        ):
+            ingest.return_value = 15
+            client = TestClient(create_app())
+            response = client.post(
+                "/ingest",
+                json={
+                    "user_id": "user1",
+                    "doc_id": "abc-123",
+                    "triples_path": "/data/triples/user1/abc-123.jsonl",
+                    "gridfs_id": "grid-1",
+                    "doc_type": "pdf",
+                },
+            )
+        assert response.status_code == 201
+        assert response.json()["triples_count"] == 15
+
+    def test_get_document_wrong_user_is_404(self):
+        from main import create_app
+
+        with (
+            patch("main.document_store.connect", new_callable=AsyncMock),
+            patch("main.document_store.close", new_callable=AsyncMock),
+            patch("main.rag_service.documents.get_document", new_callable=AsyncMock) as get_doc,
+        ):
+            get_doc.return_value = None
+            client = TestClient(create_app())
+            response = client.get("/documents/doc1", params={"user_id": "user-b"})
+        assert response.status_code == 404

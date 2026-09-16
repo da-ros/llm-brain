@@ -15,7 +15,7 @@ from config import get_settings
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from logging_setup import correlation_id_var, log_with_correlation, logger
-from routers import chat, health, tasks, upload
+from routers import chat, documents, health, tasks, upload
 
 
 @asynccontextmanager
@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
     application.include_router(health.router)
     application.include_router(upload.router)
     application.include_router(chat.router)
+    application.include_router(documents.router)
     application.include_router(tasks.router)
     return application
 
