@@ -1,7 +1,6 @@
-"""Chat router — synchronous HTTP to RAG (premium) and LLM.
+"""Chat router — premium via Agents Razonador; free skips agents and Kafka.
 
-The router only orchestrates calls. Prompt assembly is a thin facade so the
-client hits one endpoint; RAG/LLM own retrieval and generation.
+CHAT_VIA_AGENTS=false restores the previous Router → RAG → LLM path (rollback).
 """
 
 from typing import Annotated
@@ -9,7 +8,8 @@ from typing import Annotated
 import httpx
 from auth import verify_token
 from config import get_settings
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from kafka_io import publish_session_turn_completed
 from logging_setup import log_with_correlation
 from pydantic import BaseModel
 from rate_limit import rate_limit_chat
@@ -24,6 +24,7 @@ class ChatRequest(BaseModel):
 
     message: str
     use_rag: bool = True
+    session_id: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -32,6 +33,9 @@ class ChatResponse(BaseModel):
     response: str
     context_used: bool
     sources: list[str] = []
+    assumptions: list[str] = []
+    tokens_used: int = 0
+    session_id: str | None = None
     correlation_id: str
 
 
@@ -76,14 +80,60 @@ async def _llm_generate(
     return response.json().get("response") or ""
 
 
+async def _agents_reason(
+    *,
+    message: str,
+    user_id: str,
+    session_id: str | None,
+    correlation_id: str,
+    agents_url: str,
+) -> dict:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{agents_url}/reason",
+            json={
+                "user_id": user_id,
+                "subscription_tier": "premium",
+                "message": message,
+                "session_id": session_id,
+            },
+            headers={"X-Request-ID": correlation_id},
+        )
+    if response.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="LLM service timeout",
+        )
+    if response.status_code >= 500:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Agents service error",
+        )
+    if response.status_code >= 400:
+        raise HTTPException(status_code=response.status_code, detail="Agents service error")
+    return response.json()
+
+
+def _publish_turn(payload: dict) -> None:
+    try:
+        publish_session_turn_completed(payload)
+    except Exception as exc:
+        log_with_correlation(
+            payload.get("correlation_id", "no-id"),
+            "warning",
+            f"Kafka session.turn.completed skipped: {exc}",
+        )
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: Request,
     chat_request: ChatRequest,
+    background_tasks: BackgroundTasks,
     user: Annotated[dict, Depends(verify_token)],
     _: Annotated[dict, Depends(rate_limit_chat)],
 ):
-    """Chat with the LLM, optionally injecting RAG context (premium only)."""
+    """Premium chat uses Razonador. Free chat skips agents, RAG, and Kafka."""
     correlation_id = request.state.correlation_id
     settings = get_settings()
     user_id = user["user_id"]
@@ -95,6 +145,59 @@ async def chat(
         "info",
         f"JWT validated: user_id={user_id}, tier={tier}",
     )
+
+    if tier == "premium" and settings.CHAT_VIA_AGENTS:
+        log_with_correlation(correlation_id, "info", "Calling Agents Service POST /reason")
+        try:
+            data = await _agents_reason(
+                message=chat_request.message,
+                user_id=user_id,
+                session_id=chat_request.session_id,
+                correlation_id=correlation_id,
+                agents_url=settings.AGENTS_SERVICE_URL,
+            )
+        except httpx.TimeoutException as exc:
+            log_with_correlation(correlation_id, "error", "Agents service timeout")
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Agents service timeout",
+            ) from exc
+        except HTTPException:
+            raise
+        except httpx.HTTPError as exc:
+            log_with_correlation(correlation_id, "error", f"Error calling Agents service: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Error calling Agents service: {exc}",
+            ) from exc
+
+        response_text = data.get("response") or ""
+        sources = data.get("sources") or []
+        assumptions = data.get("assumptions") or []
+        session_id = data.get("session_id") or chat_request.session_id
+        tokens_used = int(data.get("tokens_used") or 0)
+        background_tasks.add_task(
+            _publish_turn,
+            {
+                "correlation_id": correlation_id,
+                "user_id": user_id,
+                "session_id": session_id,
+                "query": chat_request.message,
+                "response": response_text,
+                "assumptions": assumptions,
+                "sources": sources,
+            },
+        )
+        log_with_correlation(correlation_id, "info", "Response: 200 OK (Razonador)")
+        return ChatResponse(
+            response=response_text,
+            context_used=bool(sources),
+            sources=sources,
+            assumptions=assumptions,
+            tokens_used=tokens_used,
+            session_id=session_id,
+            correlation_id=correlation_id,
+        )
 
     context = ""
     sources: list[str] = []
@@ -161,5 +264,8 @@ async def chat(
         response=response_text,
         context_used=context_used,
         sources=sources,
+        assumptions=[],
+        tokens_used=0,
+        session_id=chat_request.session_id,
         correlation_id=correlation_id,
     )

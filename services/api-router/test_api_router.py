@@ -29,6 +29,10 @@ def _isolate_service_imports() -> None:
         "lora",
         "providers",
         "routers",
+        "kafka_io",
+        "db",
+        "auth",
+        "rate_limit",
     )
     for name in list(sys.modules):
         if name not in prefixes and not any(name.startswith(f"{item}.") for item in prefixes):
@@ -48,6 +52,8 @@ from config import clear_settings_cache, get_settings
 
 clear_settings_cache()
 
+import db as api_db
+import kafka_io as api_kafka
 from fastapi.testclient import TestClient
 from kafka_io import apply_task_response, classify_response
 from main import app
@@ -111,15 +117,17 @@ def client(tasks):
         return "application/octet-stream"
 
     with (
-        patch("db.connect", fake_connect),
-        patch("db.disconnect", fake_disconnect),
-        patch("db.ensure_indexes", fake_indexes),
-        patch("db.find_task", fake_find),
-        patch("db.insert_task", fake_insert),
-        patch("db.update_task", fake_update),
-        patch("db.save_upload", fake_save_upload),
-        patch("kafka_io.publish_file_uploaded") as publish,
-        patch("kafka_io.publish_dlq") as publish_dlq,
+        patch.object(api_db, "connect", fake_connect),
+        patch.object(api_db, "disconnect", fake_disconnect),
+        patch.object(api_db, "ensure_indexes", fake_indexes),
+        patch.object(api_db, "find_task", fake_find),
+        patch.object(api_db, "insert_task", fake_insert),
+        patch.object(api_db, "update_task", fake_update),
+        patch.object(api_db, "save_upload", fake_save_upload),
+        patch.object(api_kafka, "publish_file_uploaded") as publish,
+        patch.object(api_kafka, "publish_session_turn_completed") as publish_turn,
+        patch("routers.chat.publish_session_turn_completed", publish_turn),
+        patch.object(api_kafka, "publish_dlq") as publish_dlq,
         patch("routers.tasks.db.find_task", fake_find),
         patch("routers.upload.db.save_upload", fake_save_upload),
         patch("routers.upload.db.insert_task", fake_insert),
@@ -128,6 +136,7 @@ def client(tasks):
         TestClient(app) as test_client,
     ):
         test_client.publish = publish
+        test_client.publish_turn = publish_turn
         test_client.publish_dlq = publish_dlq
         yield test_client
 
@@ -368,9 +377,9 @@ class TestUploadFlow:
             tasks[correlation_id] = {**tasks[correlation_id], **updates}
 
         with (
-            patch("kafka_io.db.find_task", fake_find),
-            patch("kafka_io.db.update_task", fake_update),
-            patch("kafka_io.trigger_rag_ingest", new_callable=AsyncMock) as ingest,
+            patch.object(api_db, "find_task", fake_find),
+            patch.object(api_db, "update_task", fake_update),
+            patch.object(api_kafka, "trigger_rag_ingest", new_callable=AsyncMock) as ingest,
         ):
             await apply_task_response(
                 {
@@ -410,9 +419,9 @@ class TestUploadFlow:
             tasks[correlation_id] = {**tasks[correlation_id], **updates}
 
         with (
-            patch("kafka_io.db.find_task", fake_find),
-            patch("kafka_io.db.update_task", fake_update),
-            patch("kafka_io.publish_file_uploaded") as republish,
+            patch.object(api_db, "find_task", fake_find),
+            patch.object(api_db, "update_task", fake_update),
+            patch.object(api_kafka, "publish_file_uploaded") as republish,
         ):
             await apply_task_response(
                 {
@@ -449,9 +458,9 @@ class TestUploadFlow:
             tasks[correlation_id] = {**tasks[correlation_id], **updates}
 
         with (
-            patch("kafka_io.db.find_task", fake_find),
-            patch("kafka_io.db.update_task", fake_update),
-            patch("kafka_io.publish_file_uploaded") as republish,
+            patch.object(api_db, "find_task", fake_find),
+            patch.object(api_db, "update_task", fake_update),
+            patch.object(api_kafka, "publish_file_uploaded") as republish,
         ):
             await apply_task_response(
                 {
@@ -487,9 +496,9 @@ class TestUploadFlow:
             tasks[correlation_id] = {**tasks[correlation_id], **updates}
 
         with (
-            patch("kafka_io.db.find_task", fake_find),
-            patch("kafka_io.db.update_task", fake_update),
-            patch("kafka_io.publish_dlq") as publish_dlq,
+            patch.object(api_db, "find_task", fake_find),
+            patch.object(api_db, "update_task", fake_update),
+            patch.object(api_kafka, "publish_dlq") as publish_dlq,
         ):
             await apply_task_response(
                 {
@@ -508,13 +517,17 @@ class TestUploadFlow:
 
 
 class TestChat:
-    def test_premium_chat_injects_rag_and_returns_200(self, client):
-        with (
-            patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
-            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
-        ):
-            rag.return_value = ("diabetes notes", ["doc-1"])
-            llm.return_value = "Insulin is a treatment."
+    def test_premium_chat_uses_razonador_and_publishes_kafka(self, client):
+        with patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason:
+            reason.return_value = {
+                "response": "Insulin is a treatment.",
+                "assumptions": [
+                    "The answer is grounded in the user's retrieved personal documents."
+                ],
+                "sources": ["doc-1"],
+                "tokens_used": 9,
+                "session_id": "sess-1",
+            }
             response = client.post(
                 "/api/chat",
                 headers=auth_header(tier="premium"),
@@ -523,14 +536,20 @@ class TestChat:
         assert response.status_code == 200
         body = response.json()
         assert body["response"] == "Insulin is a treatment."
-        assert body["context_used"] is True
+        assert body["assumptions"]
         assert body["sources"] == ["doc-1"]
+        assert body["session_id"] == "sess-1"
         assert body["correlation_id"]
-        rag.assert_awaited()
-        llm.assert_awaited()
+        reason.assert_awaited()
+        client.publish_turn.assert_called_once()
+        published = client.publish_turn.call_args.args[0]
+        assert published["query"] == "diabetes treatment"
+        assert published["user_id"] == "user1"
+        assert published["correlation_id"] == body["correlation_id"]
 
-    def test_free_chat_skips_rag(self, client):
+    def test_free_chat_skips_agents_and_kafka(self, client):
         with (
+            patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
             patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
             patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
         ):
@@ -542,8 +561,107 @@ class TestChat:
             )
         assert response.status_code == 200
         assert response.json()["context_used"] is False
+        assert response.json()["assumptions"] == []
+        reason.assert_not_awaited()
         rag.assert_not_awaited()
         llm.assert_awaited()
+        client.publish_turn.assert_not_called()
+
+    def test_unauthenticated_chat_is_401(self, client):
+        with patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason:
+            response = client.post("/api/chat", json={"message": "hi"})
+        assert response.status_code == 401
+        reason.assert_not_awaited()
+        client.publish_turn.assert_not_called()
+
+    def test_rollback_flag_uses_rag_llm_directly(self, client):
+        settings = get_settings()
+        original = settings.CHAT_VIA_AGENTS
+        settings.CHAT_VIA_AGENTS = False
+        try:
+            with (
+                patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
+                patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
+                patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+            ):
+                rag.return_value = ("diabetes notes", ["doc-1"])
+                llm.return_value = "Insulin is a treatment."
+                response = client.post(
+                    "/api/chat",
+                    headers=auth_header(tier="premium"),
+                    json={"message": "diabetes treatment", "use_rag": True},
+                )
+        finally:
+            settings.CHAT_VIA_AGENTS = original
+        assert response.status_code == 200
+        reason.assert_not_awaited()
+        rag.assert_awaited()
+        llm.assert_awaited()
+        client.publish_turn.assert_not_called()
+
+
+class TestSessionsEnd:
+    def test_premium_session_end_accepted(self, client):
+        with patch("routers.sessions.httpx.AsyncClient") as client_cls:
+            instance = AsyncMock()
+            response = MagicMock()
+            response.status_code = 202
+            response.json = MagicMock(return_value={"status": "accepted"})
+            instance.post = AsyncMock(return_value=response)
+            instance.__aenter__.return_value = instance
+            instance.__aexit__.return_value = False
+            client_cls.return_value = instance
+            http_response = client.post(
+                "/api/sessions/end",
+                headers=auth_header(tier="premium"),
+                json={"session_id": "sess-1"},
+            )
+        assert http_response.status_code == 202
+        assert http_response.json()["session_id"] == "sess-1"
+
+    def test_free_session_end_forbidden(self, client):
+        response = client.post(
+            "/api/sessions/end",
+            headers=auth_header(tier="free"),
+            json={"session_id": "sess-1"},
+        )
+        assert response.status_code == 403
+
+
+class TestFineTuneTrigger:
+    def test_manual_trigger_returns_202_with_job_id(self, client):
+        with patch("routers.finetune.httpx.AsyncClient") as client_cls:
+            instance = AsyncMock()
+            response = MagicMock()
+            response.status_code = 202
+            response.json = MagicMock(return_value={"job_id": "ft-job-9", "status": "submitted"})
+            instance.post = AsyncMock(return_value=response)
+            instance.__aenter__.return_value = instance
+            instance.__aexit__.return_value = False
+            client_cls.return_value = instance
+            http_response = client.post(
+                "/api/finetune",
+                headers=auth_header(tier="premium"),
+                json={"batch_id": "batch-1"},
+            )
+        assert http_response.status_code == 202
+        assert http_response.json()["job_id"] == "ft-job-9"
+
+    def test_missing_batch_id_is_422(self, client):
+        response = client.post(
+            "/api/finetune",
+            headers=auth_header(tier="premium"),
+            json={},
+        )
+        assert response.status_code == 422
+
+    def test_free_finetune_forbidden(self, client):
+        response = client.post(
+            "/api/finetune",
+            headers=auth_header(tier="free"),
+            json={"batch_id": "batch-1"},
+        )
+        assert response.status_code == 403
 
 
 class TestDocuments:

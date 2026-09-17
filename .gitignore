@@ -36,11 +36,14 @@ yarn-error.log*
 *.pt
 *.ckpt
 models/
+data/
 data/raw/
 data/staging/
 data/processed/
 data/models/
 data/training_logs/
+data/finetune_batches/
+data/triples/
 data/chroma/
 data/chroma_test/
 chroma/

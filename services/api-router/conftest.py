@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 SERVICE_ROOT = Path(__file__).resolve().parent
 
 _TOP_LEVEL = (
@@ -16,6 +18,10 @@ _TOP_LEVEL = (
     "lora",
     "providers",
     "routers",
+    "kafka_io",
+    "db",
+    "auth",
+    "rate_limit",
 )
 
 
@@ -36,3 +42,10 @@ def isolate_service_imports(root: Path = SERVICE_ROOT) -> None:
 
 
 isolate_service_imports()
+
+
+@pytest.fixture(autouse=True)
+def _reload_this_service():
+    """Sibling services share top-level names (config, main, db). Re-isolate per test."""
+    isolate_service_imports()
+    yield

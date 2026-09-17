@@ -43,10 +43,14 @@ class Settings(BaseSettings):
     KAFKA_TOPIC_DLQ: str = "task.dlq"
     KAFKA_CONSUMER_GROUP: str = "api-router"
 
+    KAFKA_TOPIC_SESSION_TURN: str = "session.turn.completed"
+
     # --- Downstream HTTP services ---
     RAG_SERVICE_URL: str = "http://rag-service:8002"
     LLM_SERVICE_URL: str = "http://llm-service:8003"
     ETL_SERVICE_URL: str = "http://etl-service:8001"
+    AGENTS_SERVICE_URL: str = "http://agents-service:8006"
+    CHAT_VIA_AGENTS: bool = True
 
     # --- Retry / TTL ---
     MAX_RETRIES: int = 3

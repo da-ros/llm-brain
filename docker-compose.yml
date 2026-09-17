@@ -39,6 +39,9 @@ services:
       - RAG_SERVICE_URL=http://rag-service:8002
       - LLM_SERVICE_URL=http://llm-service:8003
       - ETL_SERVICE_URL=http://etl-service:8001
+      - AGENTS_SERVICE_URL=http://agents-service:8006
+      - CHAT_VIA_AGENTS=true
+      - KAFKA_TOPIC_SESSION_TURN=session.turn.completed
       - MAX_RETRIES=3
       - TASK_STATUS_TTL_DAYS=30
       - FERNET_KEY=${FERNET_KEY:-change-me-in-production}
@@ -49,6 +52,7 @@ services:
       - mongo
       - kafka
       - rag-service
+      - agents-service
     restart: unless-stopped
 
   llm-service:
@@ -99,6 +103,34 @@ services:
       - mongo
       - kafka
       - llm-service
+    restart: unless-stopped
+
+  agents-service:
+    build: ./services/agents
+    ports:
+      - "8006:8006"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_DB=llm_brain
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_ENABLED=true
+      - RAG_SERVICE_URL=http://rag-service:8002
+      - LLM_SERVICE_URL=http://llm-service:8003
+      - FINETUNE_SERVICE_URL=http://finetune-service:8004
+      - KAFKA_TOPIC_SESSION_TURN=session.turn.completed
+      - EVAL_SCORE_THRESHOLD=0.6
+      - BATCH_MIN_ITEMS=10
+      - BATCH_EXPORT_DIR=/app/data/finetune_batches
+      - AGENTS_STORE=mongo
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    depends_on:
+      - mongo
+      - kafka
+      - rag-service
+      - llm-service
+      - finetune-service
     restart: unless-stopped
 
   rag-service:

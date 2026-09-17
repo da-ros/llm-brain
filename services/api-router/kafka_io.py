@@ -53,6 +53,28 @@ def _producer():
     )
 
 
+def publish_session_turn_completed(message: dict[str, Any]) -> None:
+    """Publish a completed premium chat turn for learn_graph (after HTTP 200)."""
+    settings = get_settings()
+    correlation_id = message.get("correlation_id", "no-id")
+    log_with_correlation(
+        correlation_id,
+        "info",
+        f"Publishing to Kafka: {settings.KAFKA_TOPIC_SESSION_TURN}",
+    )
+    producer = _producer()
+    try:
+        producer.send(settings.KAFKA_TOPIC_SESSION_TURN, value=message)
+        producer.flush()
+    finally:
+        producer.close()
+    log_with_correlation(
+        correlation_id,
+        "info",
+        f"Published to Kafka: {settings.KAFKA_TOPIC_SESSION_TURN}",
+    )
+
+
 def publish_file_uploaded(message: dict[str, Any]) -> None:
     """Publish a file-upload job to Kafka."""
     settings = get_settings()
