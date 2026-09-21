@@ -1,2 +1,29 @@
 schema: spec-driven
 created: 2026-08-27
+frame: frame-6
+title: "Decision-Support Simulator"
+description: "What-if analysis: decision tree of 3-5 scenarios reasoned by Qwen3.5-4B with explicit assumptions"
+anteproyecto_objectives:
+  - "Objetivo Específico 6 (Decision support)"
+depends_on:
+  - frame-1-1
+  - frame-3
+execution_order: 6
+parallel_with:
+  - frame-8
+status: proposed
+services:
+  - name: simulator-service
+    directory: services/simulator
+    port: 8007
+    description: "Deterministic what-if decision tree — 3-5 scenarios with explicit assumptions (premium)"
+specs:
+  - specs/simulator-service/spec.md
+  - specs/agents-service/spec.md
+  - specs/api-router/spec.md
+output:
+  diagrams:
+    - simulator-architecture.drawio
+    - simulator-dataflow.drawio
+  documents:
+    - justificacion-ejemplo.md

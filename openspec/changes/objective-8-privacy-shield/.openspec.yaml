@@ -1,2 +1,31 @@
 schema: spec-driven
 created: 2026-08-27
+frame: frame-8
+title: "Privacy & Scam Shield"
+description: "Phishing/scam detection via heuristics, embedding similarity, and multimodal LLM reasoning; alert system"
+anteproyecto_objectives:
+  - "Objetivo Específico 8 (Privacy shield)"
+depends_on:
+  - frame-1-1
+  - frame-3
+execution_order: 6
+parallel_with:
+  - frame-6
+status: proposed
+services:
+  - name: shield-service
+    directory: services/shield
+    port: 8009
+    description: "Heuristic + embedding phishing/scam scan — premium incidents and alerts"
+specs:
+  - specs/shield-service/spec.md
+  - specs/hybrid-store-rag/spec.md
+  - specs/agents-service/spec.md
+  - specs/api-router/spec.md
+  - specs/life-analytics-web/spec.md
+output:
+  diagrams:
+    - shield-architecture.drawio
+    - shield-dataflow.drawio
+  documents:
+    - justificacion-ejemplo.md
