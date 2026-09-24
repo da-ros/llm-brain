@@ -8,7 +8,7 @@ import threading
 import time
 from typing import Annotated
 
-from auth import verify_token
+from auth import require_premium, verify_token
 from config import get_settings
 from fastapi import Depends, HTTPException, status
 
@@ -60,3 +60,8 @@ def rate_limit_chat(user: Annotated[dict, Depends(verify_token)]) -> dict:
 
 def rate_limit_tasks(user: Annotated[dict, Depends(verify_token)]) -> dict:
     return _enforce(user, "tasks", get_settings().RATE_LIMIT_TASKS)
+
+
+def rate_limit_simulate(user: Annotated[dict, Depends(require_premium)]) -> dict:
+    """Premium gate first, then 10 simulate requests per minute. Free stays 403."""
+    return _enforce(user, "simulate", get_settings().RATE_LIMIT_SIMULATE)

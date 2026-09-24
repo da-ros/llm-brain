@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 from config import get_settings
 from exceptions import LLMTimeoutError, LLMUpstreamError, UnknownToolError
+from fastapi import HTTPException
 from logging_setup import log_with_correlation
 
 ToolHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -74,6 +75,19 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "description": "Manual local LoRA trigger via Fine-Tune Service (port 8004).",
         "wraps": "Fine-Tune Service POST /train",
         "input_schema": {"user_id": "str", "dataset_path": "str", "correlation_id": "str"},
+    },
+    {
+        "name": "simulate_whatif",
+        "owner": "Simulator",
+        "description": "What-if scenarios via Simulator Service (port 8007). Not used by reason_graph.",
+        "wraps": "Simulator Service POST /simulate",
+        "input_schema": {
+            "user_id": "str",
+            "question": "str",
+            "variables": "dict",
+            "subscription_tier": "str",
+            "correlation_id": "str",
+        },
     },
 ]
 
@@ -310,12 +324,63 @@ async def finetune_trigger(arguments: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def simulate_whatif(arguments: dict[str, Any]) -> dict[str, Any]:
+    """HTTP POST Simulator /simulate. Timeout → 504, 5xx → 502. Does not invent scenarios."""
+    settings = get_settings()
+    correlation_id = arguments.get("correlation_id") or "no-id"
+    log_with_correlation(
+        correlation_id,
+        "info",
+        f"MCP simulate_whatif → Simulator {settings.SIMULATOR_SERVICE_URL}/simulate",
+    )
+    payload = {
+        "user_id": arguments.get("user_id") or "",
+        "subscription_tier": arguments.get("subscription_tier") or "premium",
+        "question": arguments.get("question") or "",
+        "variables": arguments.get("variables") or {},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=settings.SIMULATOR_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{settings.SIMULATOR_SERVICE_URL}/simulate",
+                json=payload,
+                headers=_headers(correlation_id),
+            )
+    except httpx.TimeoutException as exc:
+        log_with_correlation(correlation_id, "error", "Simulator service timeout")
+        raise LLMTimeoutError("Simulator service timeout") from exc
+    except httpx.HTTPError as exc:
+        log_with_correlation(correlation_id, "error", f"Simulator service error: {exc}")
+        raise LLMUpstreamError(f"Simulator service error: {exc}") from exc
+
+    if response.status_code == 504:
+        log_with_correlation(correlation_id, "error", "Simulator service HTTP 504")
+        raise LLMTimeoutError("Simulator service timeout")
+    if response.status_code >= 500:
+        log_with_correlation(
+            correlation_id,
+            "error",
+            f"Simulator service HTTP {response.status_code}",
+        )
+        raise LLMUpstreamError(f"Simulator service HTTP {response.status_code}")
+    if response.status_code >= 400:
+        detail = "Simulator service error"
+        try:
+            body = response.json() or {}
+            detail = body.get("detail") or detail
+        except Exception:
+            detail = response.text or detail
+        raise HTTPException(status_code=response.status_code, detail=detail)
+    return response.json() or {}
+
+
 HANDLERS: dict[str, ToolHandler] = {
     "rag_search": rag_search,
     "llm_generate": llm_generate,
     "ingest_turn": ingest_turn,
     "evaluate_turn": evaluate_turn,
     "finetune_trigger": finetune_trigger,
+    "simulate_whatif": simulate_whatif,
 }
 
 

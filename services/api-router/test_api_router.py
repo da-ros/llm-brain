@@ -54,6 +54,7 @@ clear_settings_cache()
 
 import db as api_db
 import kafka_io as api_kafka
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from kafka_io import apply_task_response, classify_response
 from main import app
@@ -696,3 +697,131 @@ def test_task_document_includes_ttl_expiry():
     assert isinstance(doc["expires_at"], datetime)
     assert doc["expires_at"].tzinfo is UTC
     assert doc["expires_at"] > datetime.now(UTC)
+
+
+class TestSimulate:
+    """Premium what-if gateway: sync HTTP, no Kafka, 401/403/429, list isolation."""
+
+    def _ok(self) -> dict:
+        return {
+            "simulation_id": "sim-1",
+            "scenario_count": 3,
+            "scenarios": [
+                {
+                    "id": "optimistic",
+                    "title": "Rested",
+                    "outcome": "Energy holds",
+                    "assumptions": ["sleep stays at 8h"],
+                    "trace": ["sleep_gte_7", "leaf:rested"],
+                    "severity": "optimistic",
+                },
+                {
+                    "id": "baseline",
+                    "title": "Steady",
+                    "outcome": "No change",
+                    "assumptions": ["current sleep continues"],
+                    "trace": ["sleep_eq_current", "leaf:sleep_baseline"],
+                    "severity": "baseline",
+                },
+                {
+                    "id": "pessimistic",
+                    "title": "Drop",
+                    "outcome": "Fatigue risk",
+                    "assumptions": ["sleep falls"],
+                    "trace": ["sleep_drop", "leaf:fatigue_risk"],
+                    "severity": "pessimistic",
+                },
+            ],
+            "assumptions": ["sleep stays at 8h"],
+            "sources": [],
+            "llm_used": True,
+            "correlation_id": "cid",
+        }
+
+    def test_premium_simulate_returns_200_without_kafka(self, client):
+        with patch("routers.simulate._simulator", new_callable=AsyncMock) as call:
+            call.return_value = self._ok()
+            response = client.post(
+                "/api/simulate",
+                headers={**auth_header(), "X-Request-ID": "cid-sim"},
+                json={"question": "what if I sleep less", "variables": {"sleep_hours": 8}},
+            )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["llm_used"] is True
+        assert body["scenario_count"] == 3
+        client.publish_turn.assert_not_called()
+        call.assert_awaited()
+        assert call.await_args.args[0] == "POST"
+        assert call.await_args.args[1] == "/simulate"
+        assert call.await_args.kwargs["correlation_id"] == "cid-sim"
+        forwarded = call.await_args.kwargs["json_body"]
+        assert forwarded["user_id"] == "user1"
+        assert forwarded["subscription_tier"] == "premium"
+        assert forwarded["question"] == "what if I sleep less"
+
+    def test_free_simulate_is_403(self, client):
+        with patch("routers.simulate._simulator", new_callable=AsyncMock) as call:
+            response = client.post(
+                "/api/simulate",
+                headers=auth_header(tier="free"),
+                json={"question": "what if I sleep less"},
+            )
+        assert response.status_code == 403
+        call.assert_not_awaited()
+        client.publish_turn.assert_not_called()
+
+    def test_missing_jwt_is_401(self, client):
+        with patch("routers.simulate._simulator", new_callable=AsyncMock) as call:
+            response = client.post("/api/simulate", json={"question": "what if I sleep less"})
+        assert response.status_code == 401
+        call.assert_not_awaited()
+
+    def test_eleventh_simulate_is_429(self, client):
+        with patch("routers.simulate._simulator", new_callable=AsyncMock) as call:
+            call.return_value = self._ok()
+            headers = auth_header()
+            for _ in range(10):
+                ok = client.post(
+                    "/api/simulate",
+                    headers=headers,
+                    json={"question": "what if I sleep less"},
+                )
+                assert ok.status_code == 200
+            blocked = client.post(
+                "/api/simulate",
+                headers=headers,
+                json={"question": "what if I sleep less"},
+            )
+        assert blocked.status_code == 429
+        assert call.await_count == 10
+        client.publish_turn.assert_not_called()
+
+    def test_list_and_get_are_isolated(self, client):
+        stored = self._ok()
+
+        async def fake(method, path, **kwargs):
+            user_id = (kwargs.get("params") or {}).get("user_id")
+            if method == "GET" and path == "/simulations":
+                if user_id == "user1":
+                    return {"simulations": [stored]}
+                return {"simulations": []}
+            if method == "GET" and path.startswith("/simulations/"):
+                if user_id != "user1":
+                    raise HTTPException(status_code=404, detail="Not found")
+                return stored
+            return stored
+
+        with patch("routers.simulate._simulator", new=fake):
+            listed = client.get("/api/simulations", headers=auth_header())
+            own = client.get("/api/simulations/sim-1", headers=auth_header())
+            hidden = client.get("/api/simulations/sim-1", headers=auth_header("user2"))
+            other_list = client.get("/api/simulations", headers=auth_header("user2"))
+        assert listed.status_code == 200
+        assert listed.json()["simulations"][0]["simulation_id"] == "sim-1"
+        assert own.status_code == 200
+        assert own.json()["scenarios"][0]["trace"]
+        assert hidden.status_code == 404
+        assert other_list.status_code == 200
+        assert other_list.json()["simulations"] == []
+        client.publish_turn.assert_not_called()

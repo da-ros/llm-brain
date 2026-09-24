@@ -15,7 +15,7 @@ import kafka_io
 from base import ensure_premium, owned_or_404
 from config import get_settings
 from evaluador import finalize_session, trigger_batch
-from exceptions import UnknownToolError
+from exceptions import LLMTimeoutError, LLMUpstreamError, UnknownToolError
 from fastapi import FastAPI, HTTPException, Request, status
 from graphs import run_reason_graph
 from logging_setup import correlation_id_var, log_with_correlation, logger
@@ -117,6 +117,18 @@ def create_app() -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Unknown tool: {exc.name}",
+            ) from exc
+        except LLMTimeoutError as exc:
+            log_with_correlation(request.state.correlation_id, "error", str(exc))
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Upstream service timeout",
+            ) from exc
+        except LLMUpstreamError as exc:
+            log_with_correlation(request.state.correlation_id, "error", str(exc))
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Upstream service error",
             ) from exc
 
     @application.post("/reason", response_model=ReasonResponse)

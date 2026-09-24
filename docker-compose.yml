@@ -40,6 +40,8 @@ services:
       - LLM_SERVICE_URL=http://llm-service:8003
       - ETL_SERVICE_URL=http://etl-service:8001
       - AGENTS_SERVICE_URL=http://agents-service:8006
+      - SIMULATOR_SERVICE_URL=http://simulator-service:8007
+      - RATE_LIMIT_SIMULATE=10
       - CHAT_VIA_AGENTS=true
       - KAFKA_TOPIC_SESSION_TURN=session.turn.completed
       - MAX_RETRIES=3
@@ -53,6 +55,7 @@ services:
       - kafka
       - rag-service
       - agents-service
+      - simulator-service
     restart: unless-stopped
 
   llm-service:
@@ -117,6 +120,7 @@ services:
       - RAG_SERVICE_URL=http://rag-service:8002
       - LLM_SERVICE_URL=http://llm-service:8003
       - FINETUNE_SERVICE_URL=http://finetune-service:8004
+      - SIMULATOR_SERVICE_URL=http://simulator-service:8007
       - KAFKA_TOPIC_SESSION_TURN=session.turn.completed
       - EVAL_SCORE_THRESHOLD=0.6
       - BATCH_MIN_ITEMS=10
@@ -131,6 +135,26 @@ services:
       - rag-service
       - llm-service
       - finetune-service
+      - simulator-service
+    restart: unless-stopped
+
+  simulator-service:
+    build: ./services/simulator
+    ports:
+      - "8007:8007"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_DB=llm_brain
+      - RAG_SERVICE_URL=http://rag-service:8002
+      - LLM_SERVICE_URL=http://llm-service:8003
+      - LLM_TEMPERATURE=0
+      - DEFAULT_SLEEP_HOURS=7
+      - DEFAULT_MEETING_HOURS=3
+      - DEFAULT_FOCUS_HOURS=4
+    depends_on:
+      - mongo
+      - rag-service
+      - llm-service
     restart: unless-stopped
 
   rag-service:
