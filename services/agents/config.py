@@ -30,10 +30,12 @@ class Settings(BaseSettings):
     RAG_SERVICE_URL: str = "http://rag-service:8002"
     LLM_SERVICE_URL: str = "http://llm-service:8003"
     FINETUNE_SERVICE_URL: str = "http://finetune-service:8004"
+    SIMULATOR_SERVICE_URL: str = "http://simulator-service:8007"
 
     RAG_TIMEOUT_SECONDS: float = 10.0
     LLM_TIMEOUT_SECONDS: float = 25.0
     FINETUNE_TIMEOUT_SECONDS: float = 15.0
+    SIMULATOR_TIMEOUT_SECONDS: float = 30.0
 
     KAFKA_ENABLED: bool = True
     KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"

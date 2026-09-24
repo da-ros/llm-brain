@@ -242,7 +242,86 @@ class TestIsolationAndMcp:
             "ingest_turn",
             "evaluate_turn",
             "finetune_trigger",
+            "simulate_whatif",
         }
+
+    def test_simulate_whatif_forwards_to_simulator(self, client):
+        captured: dict = {}
+
+        class FakeResponse:
+            status_code = 200
+
+            def json(self):
+                return {"llm_used": True, "scenario_count": 3, "scenarios": []}
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def post(self, url, json=None, headers=None):
+                captured["url"] = url
+                captured["json"] = json
+                captured["headers"] = headers
+                return FakeResponse()
+
+        with patch("tools.httpx.AsyncClient", FakeClient):
+            response = client.post(
+                "/mcp/tools/simulate_whatif",
+                headers={"X-Request-ID": "cid-sim"},
+                json={
+                    "user_id": "user1",
+                    "subscription_tier": "premium",
+                    "question": "what if I sleep less",
+                },
+            )
+        assert response.status_code == 200
+        assert captured["url"].endswith("/simulate")
+        assert captured["headers"]["X-Request-ID"] == "cid-sim"
+        assert captured["json"]["question"] == "what if I sleep less"
+        assert response.json()["llm_used"] is True
+
+    def test_simulate_whatif_upstream_is_502(self, client):
+        class FakeResponse:
+            status_code = 500
+            text = "down"
+
+            def json(self):
+                return {"detail": "down"}
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def post(self, url, json=None, headers=None):
+                return FakeResponse()
+
+        with patch("tools.httpx.AsyncClient", FakeClient):
+            response = client.post(
+                "/mcp/tools/simulate_whatif",
+                json={
+                    "user_id": "user1",
+                    "subscription_tier": "premium",
+                    "question": "what if I sleep less",
+                },
+            )
+        assert response.status_code == 502
+        assert "scenarios" not in response.json()
+
+    def test_unknown_mcp_tool_still_404(self, client):
+        response = client.post("/mcp/tools/not_a_tool", json={"user_id": "user1"})
+        assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_cross_user_batch_is_404(self, client):
