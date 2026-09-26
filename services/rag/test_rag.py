@@ -408,3 +408,40 @@ class TestRAGHttp:
             client = TestClient(create_app())
             response = client.get("/documents/doc1", params={"user_id": "user-b"})
         assert response.status_code == 404
+
+
+class TestEmbed:
+    def test_embed_modalities_do_not_grow_the_collection(self):
+        import base64
+
+        from main import create_app
+        from rag_service import rag_service
+
+        store = MemoryVectorStore()
+        rag_service._vector_store = store
+        rag_service._embedder = None
+        payload = base64.b64encode(b"bytes").decode()
+        with (
+            patch("main.document_store.connect", new_callable=AsyncMock),
+            patch("main.document_store.close", new_callable=AsyncMock),
+        ):
+            client = TestClient(create_app())
+            before = len(store.items)
+            text = client.post(
+                "/embed",
+                headers={"X-Request-ID": "cid-embed"},
+                json={"modality": "text", "text": "account suspended"},
+            )
+            image = client.post("/embed", json={"modality": "image", "content_base64": payload})
+            video = client.post("/embed", json={"modality": "video", "content_base64": payload})
+            blank = client.post("/embed", json={"modality": "text", "text": "  "})
+        assert text.status_code == 200
+        assert image.status_code == 200
+        assert video.status_code == 200
+        assert len(text.json()["vector"]) == 2048
+        assert len(image.json()["vector"]) == 2048
+        assert len(video.json()["vector"]) == 2048
+        assert text.headers["X-Request-ID"] == "cid-embed"
+        assert blank.status_code == 422
+        assert len(store.items) == before
+        assert store.items == []

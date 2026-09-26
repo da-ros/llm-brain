@@ -243,6 +243,7 @@ class TestIsolationAndMcp:
             "evaluate_turn",
             "finetune_trigger",
             "simulate_whatif",
+            "scan_message",
         }
 
     def test_simulate_whatif_forwards_to_simulator(self, client):
@@ -318,6 +319,53 @@ class TestIsolationAndMcp:
             )
         assert response.status_code == 502
         assert "scenarios" not in response.json()
+
+    def test_scan_message_forwards_to_shield(self, client):
+        captured: dict = {}
+
+        class FakeResponse:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "alert": True,
+                    "severity": "high",
+                    "reasons": [{"type": "llm", "id": "llm"}],
+                    "llm_used": True,
+                }
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def post(self, url, json=None, headers=None):
+                captured["url"] = url
+                captured["json"] = json
+                captured["headers"] = headers
+                return FakeResponse()
+
+        with patch("tools.httpx.AsyncClient", FakeClient):
+            response = client.post(
+                "/mcp/tools/scan_message",
+                headers={"X-Request-ID": "cid-shield"},
+                json={
+                    "user_id": "user1",
+                    "subscription_tier": "premium",
+                    "source": "sms",
+                    "text": "act now",
+                },
+            )
+        assert response.status_code == 200
+        assert captured["url"].endswith("/scan")
+        assert captured["headers"]["X-Request-ID"] == "cid-shield"
+        assert response.json()["alert"] is True
+        assert response.json()["reasons"]
 
     def test_unknown_mcp_tool_still_404(self, client):
         response = client.post("/mcp/tools/not_a_tool", json={"user_id": "user1"})

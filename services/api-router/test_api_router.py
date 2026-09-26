@@ -825,3 +825,97 @@ class TestSimulate:
         assert other_list.status_code == 200
         assert other_list.json()["simulations"] == []
         client.publish_turn.assert_not_called()
+
+
+class TestShield:
+    """Premium scan gateway: sync HTTP, no Kafka, 401/403/429, Frame 7 list."""
+
+    def _ok(self) -> dict:
+        return {
+            "alert": True,
+            "likelihood": 0.9,
+            "severity": "high",
+            "summary": "Likely scam",
+            "reasons": [{"type": "llm", "id": "llm", "detail": "rationale"}],
+            "llm_used": True,
+            "incident_id": "inc-1",
+        }
+
+    def test_premium_scan_and_incidents_shape(self, client):
+        with patch("routers.shield._shield", new_callable=AsyncMock) as call:
+            call.return_value = self._ok()
+            scanned = client.post(
+                "/api/shield/scan",
+                headers={**auth_header(), "X-Request-ID": "cid-shield"},
+                json={"text": "act now", "source": "email"},
+            )
+            call.return_value = {
+                "incidents": [
+                    {
+                        "id": "inc-1",
+                        "created_at": "2026-09-24T00:00:00",
+                        "severity": "high",
+                        "summary": "Likely scam",
+                        "source": "email",
+                    }
+                ]
+            }
+            listed = client.get("/api/shield/incidents", headers=auth_header())
+        assert scanned.status_code == 200
+        assert scanned.json()["alert"] is True
+        assert scanned.json()["likelihood"] == 0.9
+        assert scanned.json()["reasons"]
+        assert listed.status_code == 200
+        item = listed.json()["incidents"][0]
+        assert set(item) >= {"id", "created_at", "severity", "summary", "source"}
+        client.publish_turn.assert_not_called()
+        assert call.await_args_list[0].kwargs["correlation_id"] == "cid-shield"
+        assert call.await_args_list[0].args[1] == "/scan"
+
+    def test_free_and_missing_jwt(self, client):
+        with patch("routers.shield._shield", new_callable=AsyncMock) as call:
+            free = client.post(
+                "/api/shield/scan",
+                headers=auth_header(tier="free"),
+                json={"text": "act now", "source": "sms"},
+            )
+            missing = client.post("/api/shield/scan", json={"text": "act now", "source": "sms"})
+            free_list = client.get("/api/shield/incidents", headers=auth_header(tier="free"))
+        assert free.status_code == 403
+        assert missing.status_code == 401
+        assert free_list.status_code == 403
+        call.assert_not_awaited()
+
+    def test_thirty_first_scan_is_429(self, client):
+        with patch("routers.shield._shield", new_callable=AsyncMock) as call:
+            call.return_value = self._ok()
+            headers = auth_header()
+            for _ in range(30):
+                ok = client.post(
+                    "/api/shield/scan",
+                    headers=headers,
+                    json={"text": "act now", "source": "email"},
+                )
+                assert ok.status_code == 200
+            blocked = client.post(
+                "/api/shield/scan",
+                headers=headers,
+                json={"text": "act now", "source": "email"},
+            )
+        assert blocked.status_code == 429
+        assert call.await_count == 30
+        client.publish_turn.assert_not_called()
+
+    def test_guidelines_and_empty_incidents(self, client):
+        with patch("routers.shield._shield", new_callable=AsyncMock) as call:
+            call.side_effect = [
+                {"text": "Assistive only. Multimodal LLM reasoning on test text."},
+                {"incidents": []},
+            ]
+            guide = client.get("/api/shield/guidelines", headers=auth_header())
+            empty = client.get("/api/shield/incidents", headers=auth_header())
+        assert guide.status_code == 200
+        assert guide.json()["text"]
+        assert empty.status_code == 200
+        assert empty.json()["incidents"] == []
+        client.publish_turn.assert_not_called()

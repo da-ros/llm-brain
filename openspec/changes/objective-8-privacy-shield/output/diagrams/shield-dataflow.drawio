@@ -1,0 +1,161 @@
+<mxfile host="65bd71144e">
+    <diagram id="shield-dataflow" name="Frame 8 — Privacy Shield Data Flow">
+        <mxGraphModel dx="1573" dy="774" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="640" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="client" value="Client" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="80" width="100" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="router" value="Router&#10;checks JWT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="190" y="78" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="shield" value="Shield&#10;one scan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="78" width="110" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ocr" value="OCR&#10;image text" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="78" width="110" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="heur" value="Heuristics&#10;evidence only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="78" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="embed" value="POST /embed&#10;cosine vs corpus" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="850" y="78" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="llm" value="POST /chat&#10;sets the alert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="78" width="130" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="mongo" value="incidents&#10;alerts only" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="250" width="110" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="agents" value="MCP scan_message&#10;not the Router" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="260" width="140" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="note" value="No Kafka on this path." style="text;html=1;align=left;strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="313" width="180" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend" value="Top row is an image. The line under OCR is a video. Solid = call. Dashed = response." style="text;html=1;align=left;strokeColor=none;fillColor=none;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="400" width="560" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_client" style="endArrow=classic;startArrow=none;html=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" parent="1" source="client" target="router" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_prem" style="endArrow=classic;startArrow=none;html=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=1;exitY=0.35;entryX=0;entryY=0.35;" parent="1" source="router" target="shield" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_prem_l" value="premium" style="edgeLabel;html=1;fontSize=10;" parent="e_prem" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-21" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_img" style="endArrow=classic;startArrow=none;html=1;strokeWidth=2;strokeColor=#82b366;exitX=1;exitY=0.35;entryX=0;entryY=0.35;" parent="1" source="shield" target="ocr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_img_l" value="image" style="edgeLabel;html=1;fontSize=10;" parent="e_img" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-15" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_h" style="endArrow=classic;startArrow=none;html=1;strokeWidth=2;strokeColor=#82b366;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" parent="1" source="ocr" target="heur" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_h_l" value="OCR text" style="edgeLabel;html=1;fontSize=10;" parent="e_h" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-21" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_e" style="endArrow=classic;startArrow=none;html=1;strokeWidth=2;strokeColor=#82b366;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" parent="1" source="heur" target="embed" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_e_l" value="rule ids" style="edgeLabel;html=1;fontSize=10;" parent="e_e" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-17" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_l" style="endArrow=classic;startArrow=none;html=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" parent="1" source="embed" target="llm" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_l_l" value="nearest score" style="edgeLabel;html=1;fontSize=10;" parent="e_l" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-32" y="-50" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_db" style="endArrow=classic;startArrow=none;html=1;strokeWidth=2;strokeColor=#666666;exitX=0.573;exitY=1.019;entryX=0.5;entryY=0;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="llm" target="mongo" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_db_l" value="only if alert" style="edgeLabel;html=1;fontSize=10;" parent="e_db" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_back_llm" style="endArrow=classic;startArrow=none;dashed=1;html=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=0.462;exitY=-0.023;entryX=0.839;entryY=-0.036;entryDx=0;entryDy=0;entryPerimeter=0;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="llm" target="router" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1100" y="40"/>
+                            <mxPoint x="290" y="40"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_back_llm_l" value="200 verdict" style="edgeLabel;html=1;fontSize=10;" parent="e_back_llm" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_back_client" style="endArrow=classic;startArrow=none;dashed=1;html=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=0.25;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="router" target="client" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="220" y="40"/>
+                            <mxPoint x="90" y="40"/>
+                        </Array>
+                        <mxPoint x="10" y="130" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_back_client_l" value="popup if alert" style="edgeLabel;html=1;fontSize=10;" parent="e_back_client" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="33" y="8" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_video" style="endArrow=classic;startArrow=none;html=1;strokeWidth=2;strokeColor=#d6b656;exitX=0.85;exitY=1;entryX=0.5;entryY=1;" parent="1" source="shield" target="embed" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="454" y="210"/>
+                            <mxPoint x="920" y="210"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_video_l" value="video skips OCR" style="edgeLabel;html=1;fontSize=10;" parent="e_video" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-9" y="-2" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_free" style="endArrow=classic;startArrow=none;dashed=1;html=1;strokeWidth=2;strokeColor=#b85450;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" parent="1" source="router" target="client" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="250" y="220"/>
+                            <mxPoint x="90" y="220"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_free_l" value="403 free, stops here" style="edgeLabel;html=1;fontSize=10;fontColor=#b85450;" parent="e_free" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-9" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_fail" style="endArrow=classic;startArrow=none;dashed=1;html=1;strokeWidth=2;strokeColor=#b85450;exitX=0;exitY=1;entryX=1;entryY=1;" parent="1" source="llm" target="router" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1040" y="340"/>
+                            <mxPoint x="310" y="340"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_fail_l" value="502/504, nothing stored" style="edgeLabel;html=1;fontSize=10;fontColor=#b85450;" parent="e_fail" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-3" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_mcp" style="endArrow=classic;startArrow=none;html=1;strokeWidth=2;strokeColor=#6c8ebf;exitX=0.5;exitY=0;entryX=0.363;entryY=1.031;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="agents" target="shield" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

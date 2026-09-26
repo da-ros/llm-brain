@@ -6,6 +6,7 @@ LangChain chunking, Fernet, and per-user isolation.
 
 from __future__ import annotations
 
+import base64
 from contextlib import asynccontextmanager
 
 from config import get_settings
@@ -37,6 +38,19 @@ class IngestRequest(BaseModel):
 class IngestResponse(BaseModel):
     triples_count: int
     status: str
+
+
+class EmbedRequest(BaseModel):
+    """On-demand query embed. The vector is not stored."""
+
+    modality: str
+    text: str | None = None
+    content_base64: str | None = None
+
+
+class EmbedResponse(BaseModel):
+    vector: list[float]
+    modality: str
 
 
 async def add_correlation_id(request: Request, call_next):
@@ -171,6 +185,28 @@ def create_app() -> FastAPI:
                 detail=f"Ingest error: {exc}",
             ) from exc
 
+    @application.post("/embed", response_model=EmbedResponse)
+    async def embed_query(request: Request, body: EmbedRequest):
+        """Return a 2048-dim query vector. Does not write Chroma or MongoDB."""
+        correlation_id = getattr(request.state, "correlation_id", "no-id")
+        modality = (body.modality or "").strip().lower()
+        log_with_correlation(correlation_id, "info", f"POST /embed modality={modality}")
+        try:
+            text, payload = _embed_inputs(modality, body)
+            vector = rag_service.embed_query(modality, text=text, payload=payload)
+        except ValueError as exc:
+            log_with_correlation(correlation_id, "warning", f"POST /embed rejected: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+        log_with_correlation(
+            correlation_id,
+            "info",
+            f"POST /embed modality={modality} dim={len(vector)} stored=false",
+        )
+        return EmbedResponse(vector=vector, modality=modality)
+
     @application.get("/documents")
     async def list_documents(user_id: str = Query(..., description="User ID for isolation")):
         docs = await rag_service.documents.list_documents(user_id)
@@ -208,6 +244,26 @@ def create_app() -> FastAPI:
             ) from exc
 
     return application
+
+
+def _embed_inputs(modality: str, body: EmbedRequest) -> tuple[str, bytes]:
+    if modality == "text":
+        text = (body.text or "").strip()
+        if not text:
+            raise ValueError("text is required for modality text")
+        return text, b""
+    if modality in {"image", "video"}:
+        raw = (body.content_base64 or "").strip()
+        if not raw:
+            raise ValueError(f"content_base64 is required for modality {modality}")
+        try:
+            payload = base64.b64decode(raw, validate=True)
+        except Exception as exc:
+            raise ValueError("content_base64 is not valid base64") from exc
+        if not payload:
+            raise ValueError(f"empty payload for modality {modality}")
+        return "", payload
+    raise ValueError("modality must be text, image, or video")
 
 
 app = create_app()

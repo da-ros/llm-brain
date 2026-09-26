@@ -1,0 +1,145 @@
+<mxfile host="65bd71144e">
+    <diagram id="shield-architecture" name="Frame 8 — Privacy Shield Architecture">
+        <mxGraphModel dx="2457" dy="619" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="700" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="client" value="Client&#10;web or mobile" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="45" y="40" width="150" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="router" value="API Router :8000&#10;JWT · premium · 30/min&#10;facade, no Kafka" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="190" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="agents" value="Agents :8006&#10;MCP scan_message&#10;graphs unchanged" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="360" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="shield" value="Shield :8009&#10;OCR, heuristics, cosine&#10;the model sets alert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="170" width="250" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="rag" value="RAG :8002&#10;existing service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="721" y="42" width="180" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="embed" value="POST /embed&#10;text, image, or video&#10;vector is not stored" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="110" width="190" height="75" as="geometry"/>
+                </mxCell>
+                <mxCell id="llm" value="LLM :8003&#10;Qwen3.5-4B base&#10;POST /chat · temp 0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="230" width="190" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="mongo" value="MongoDB&#10;shield_incidents&#10;alerts only" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="740" y="380" width="150" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="nogo" value="No Kafka. Shield does not open Chroma. Clients never call :8009." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="430" width="250" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend" value="Solid = call (arrowhead on the callee). Dashed = response (arrowhead on the caller)." style="text;html=1;align=left;strokeColor=none;fillColor=none;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="520" width="520" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_client_router" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="client" target="router" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_client_router_l" value="scan, incidents, guidelines" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_client_router" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_router_client" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;dashed=1;strokeColor=#6c8ebf;exitX=0;exitY=0.5;entryX=0;entryY=0.5;" parent="1" source="router" target="client" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="10" y="230"/>
+                            <mxPoint x="10" y="75"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_router_client_l" value="200 to the client" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_router_client" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-15" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_router_shield" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;exitX=1;exitY=0.162;entryX=0;entryY=0.3;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="router" target="shield" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_router_shield_l" value="POST /scan" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_router_shield" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-3" y="-4" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_shield_router" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;dashed=1;strokeColor=#82b366;exitX=-0.001;exitY=0.722;entryX=1;entryY=0.75;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="shield" target="router" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_shield_router_l" value="200 alert + reasons" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_shield_router" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-4" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_agents_shield" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;entryX=0.122;entryY=0.996;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" target="shield" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="210" y="380" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="210" y="380"/>
+                            <mxPoint x="371" y="380"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_agents_shield_l" value="MCP, skips the Router" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_agents_shield" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-24" y="-21" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_shield_embed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#d6b656;exitX=1;exitY=0.089;entryX=0;entryY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="shield" target="embed" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_shield_embed_l" value="POST /embed" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_shield_embed" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-2" y="-16" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_embed_shield" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;dashed=1;strokeColor=#d6b656;entryX=1;entryY=0.55;exitX=0.007;exitY=0.931;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="embed" target="shield" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="720" y="180"/>
+                            <mxPoint x="680" y="180"/>
+                            <mxPoint x="680" y="231"/>
+                        </Array>
+                        <mxPoint x="720" y="170" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_embed_shield_l" value="2048-d, not stored" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_embed_shield" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-25" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_shield_llm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;exitX=1;exitY=0.8;entryX=-0.001;entryY=0.36;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="shield" target="llm" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_shield_llm_l" value="POST /chat" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_shield_llm" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="13" y="-3" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_llm_shield" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;dashed=1;strokeColor=#6c8ebf;exitX=0.04;exitY=0.997;entryX=0.75;entryY=1;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="llm" target="shield" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="528" y="310"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_llm_shield_l" value="likelihood and alert" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_llm_shield" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="-41" y="-5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_shield_mongo" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#666666;entryX=0;entryY=0.5;" parent="1" target="mongo" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="590" y="270"/>
+                            <mxPoint x="620" y="270"/>
+                            <mxPoint x="620" y="430"/>
+                        </Array>
+                        <mxPoint x="590" y="270" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_shield_mongo_l" value="only when alert is true" style="edgeLabel;html=1;align=center;fontSize=10;" parent="e_shield_mongo" vertex="1" connectable="0">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
