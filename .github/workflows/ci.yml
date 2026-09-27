@@ -6,23 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  lint:
-    name: Lint & Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - name: Install dependencies
-        run: pip install ruff
-      - name: Run ruff lint
-        run: ruff check .
-      - name: Run ruff format check
-        run: ruff format --check .
-
-  test:
-    name: Tests
+  pipeline:
+    name: Lint → Test → Security
     runs-on: ubuntu-latest
     services:
       mongo:
@@ -39,16 +24,30 @@ jobs:
         ports:
           - 8001:8000
     steps:
+      # ── 0. Quick setup (lint only needs ruff) ─────────────
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Install linter
+        run: pip install ruff
+
+      # ── 1. Lint & Format (fast gate, runs while services boot) ─
+      - name: Run ruff lint
+        run: ruff check .
+      - name: Run ruff format check
+        run: ruff format --check .
+
+      # ── 2. Heavy dependencies + services are now ready ─────
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libmagic1
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          for svc in services/*/requirements.txt; do pip install -r "$svc" 2>/dev/null || true; done
           pip install pytest pytest-asyncio
+
+      # ── 3. Tests (services are healthy by now) ─────────────
       - name: Run tests
         run: pytest
         env:
@@ -67,20 +66,13 @@ jobs:
           CHROMA_PORT: "8001"
           KAFKA_ENABLED: "false"
 
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      # ── 4. Security Scan ──────────────────────────────────
       - uses: snyk/actions/setup@master
-        continue-on-error: true
       - name: Run Snyk dependency scan
-        run: snyk test --all-projects
-        continue-on-error: true
+        run: snyk test --all-projects --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       - name: Run Snyk SAST
-        run: snyk code test
-        continue-on-error: true
+        run: snyk code test --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}

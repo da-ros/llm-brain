@@ -1,4 +1,4 @@
-"""Pytest defaults so `apps.api.main:app` can import during collection."""
+"""Pytest defaults for shared test configuration."""
 
 import os
 
