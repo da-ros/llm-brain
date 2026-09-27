@@ -27,8 +27,8 @@
 - [x] B.4 Add `docker-compose.yml` (local dev environment)
       — Services: API Router, ETL, RAG, LLM, MongoDB, Chroma, Kafka
 - [x] B.5 Add `.github/workflows/ci.yml` running `ruff` lint + `pytest` + Snyk on push/PR
-      — CI pipeline includes: ruff (lint), pytest (tests), snyk test (dependency scan),
-      snyk code test (SAST). This is the **Shift Left** security gate.
+      — CI pipeline includes: ruff (lint), pytest with coverage (threshold 90%),
+      snyk test (dependency scan), snyk code test (SAST). This is the **Shift Left** security gate.
 - [x] B.6 Add `ruff` configuration in `pyproject.toml`
 - [x] B.7 Document security strategy: Shift Left (Snyk in CI) + future Shift Right (monitoring in prod)
 

@@ -46,11 +46,11 @@ jobs:
         run: |
           pip install -r requirements.txt
           for svc in services/*/requirements.txt; do pip install -r "$svc" 2>/dev/null || true; done
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio pytest-cov
 
-      # ── 3. Tests (services are healthy by now) ─────────────
-      - name: Run tests
-        run: pytest
+      # ── 3. Tests + Coverage (services are healthy by now) ───
+      - name: Run tests with coverage
+        run: pytest --cov --cov-report=term-missing
         env:
           MONGODB_URI: mongodb://localhost:27017
           MONGODB_DB: llm_brain_test

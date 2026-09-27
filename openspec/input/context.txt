@@ -408,6 +408,7 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 | Infra Prod (futuro) | AWS ECS Fargate (servicios) + AWS API Gateway |
 | CI/CD | GitHub Actions (2 workflows: push a rama + push a main) |
 | Seguridad | Snyk (dependency scan + SAST en CI + image scan en main) |
+| Cobertura | pytest-cov (threshold 90%, reporte en CI) |
 | Encriptación | Fernet (datos); TLS solo en producción futura (AWS managed) |
 | Trazabilidad | Correlation ID (X-Request-ID) en headers + logs |
 
