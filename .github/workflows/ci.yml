@@ -74,14 +74,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - name: Install dependencies
-        run: pip install snyk
+      - uses: snyk/actions/setup@master
+        continue-on-error: true
       - name: Run Snyk dependency scan
         run: snyk test --all-projects
         continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       - name: Run Snyk SAST
         run: snyk code test
         continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}

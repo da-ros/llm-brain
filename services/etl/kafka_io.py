@@ -150,13 +150,10 @@ def _error_payload(correlation_id: str, http_code: int, error_message: str) -> d
 def _write_temp(payload: bytes, suffix: str) -> str:
     import tempfile
 
-    handle = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    try:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
         handle.write(payload)
         handle.flush()
         return handle.name
-    finally:
-        handle.close()
 
 
 def _consume() -> None:
