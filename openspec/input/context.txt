@@ -453,7 +453,10 @@ Push a main (merge)
 └──────────────┘     └──────────────┘
 ```
 
-**Justificación:** Si lint+test+Snyk code pasaron en la feature branch, en main solo validamos que las imágenes Docker compile y sean seguras. No se duplica el análisis de código.
+**Justificación:** Si lint+test+Snyk code pasaron en la feature branch, en main solo validamos que las imágenes Docker compile y sean seguras. No se duplica el análisis de código porque:
+- El código es el mismo commit (no cambia entre feature branch y main)
+- Si Snyk code falló en feature branch, el PR nunca se mergea a main
+- Correr Snyk code en main solo gastaría tiempo y tokens de Snyk sin valor agregado
 
 - **Shift Left (push a rama)**: lint, tests, Snyk code scan — detección temprana de vulnerabilidades
 - **Shift Left (push a main)**: Docker build + Snyk image scan — validación de imágenes
