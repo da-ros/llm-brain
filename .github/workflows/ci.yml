@@ -50,7 +50,7 @@ jobs:
 
       # ── 3. Tests + Coverage (services are healthy by now) ───
       - name: Run tests with coverage
-        run: pytest --cov --cov-report=term-missing --cov-report=xml
+        run: pytest --cov --cov-report=term-missing
         env:
           MONGODB_URI: mongodb://localhost:27017
           MONGODB_DB: llm_brain_test
@@ -66,12 +66,6 @@ jobs:
           CHROMA_HOST: localhost
           CHROMA_PORT: "8001"
           KAFKA_ENABLED: "false"
-      # TODO: Owner must configure CODECOV_TOKEN in repo secrets
-      # - name: Upload coverage to Codecov
-      #   uses: codecov/codecov-action@v4
-      #   with:
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     fail_ci_if_error: true
 
       # ── 4. Security Scan (Snyk Code / SAST) ───────────────
       - uses: snyk/actions/setup@master
