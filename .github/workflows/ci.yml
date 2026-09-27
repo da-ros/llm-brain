@@ -66,11 +66,12 @@ jobs:
           CHROMA_HOST: localhost
           CHROMA_PORT: "8001"
           KAFKA_ENABLED: "false"
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+      # TODO: Owner must configure CODECOV_TOKEN in repo secrets
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     fail_ci_if_error: false
 
       # ── 4. Security Scan (Snyk Code / SAST) ───────────────
       - uses: snyk/actions/setup@master
