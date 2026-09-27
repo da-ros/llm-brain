@@ -4,10 +4,10 @@
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="title" value="C4 Level 3 — API Backend Components&#10;apps/api (FastAPI · Python 3.13)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" parent="1" vertex="1">
+                <mxCell id="title" value="C4 Level 3 — API Backend Components&#10;services/api-router (FastAPI · Python 3.13)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" parent="1" vertex="1">
                     <mxGeometry x="650" y="20" width="600" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="fastapi_app" value="FastAPI App&#10;apps/api/main.py&#10;&#10;create_app() · router mounting&#10;CORS · fail-fast config" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;strokeWidth=3;" parent="1" vertex="1">
+                <mxCell id="fastapi_app" value="FastAPI App&#10;services/api-router/main.py&#10;&#10;create_app() · router mounting&#10;CORS · fail-fast config" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;strokeWidth=3;" parent="1" vertex="1">
                     <mxGeometry x="80" y="160" width="250" height="130" as="geometry"/>
                 </mxCell>
                 <mxCell id="config" value="Config&#10;pydantic-settings&#10;&#10;LLM_PROVIDER: ondevice | qwen_local&#10;JWT_SECRET_KEY (required)&#10;LLM_SERVICE_URL :8003" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" parent="1" vertex="1">
