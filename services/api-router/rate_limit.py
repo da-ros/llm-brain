@@ -65,3 +65,8 @@ def rate_limit_tasks(user: Annotated[dict, Depends(verify_token)]) -> dict:
 def rate_limit_simulate(user: Annotated[dict, Depends(require_premium)]) -> dict:
     """Premium gate first, then 10 simulate requests per minute. Free stays 403."""
     return _enforce(user, "simulate", get_settings().RATE_LIMIT_SIMULATE)
+
+
+def rate_limit_shield(user: Annotated[dict, Depends(require_premium)]) -> dict:
+    """Premium gate first, then 30 shield scans per minute. Free stays 403."""
+    return _enforce(user, "shield", get_settings().RATE_LIMIT_SHIELD_SCAN)

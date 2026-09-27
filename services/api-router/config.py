@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     ETL_SERVICE_URL: str = "http://etl-service:8001"
     AGENTS_SERVICE_URL: str = "http://agents-service:8006"
     SIMULATOR_SERVICE_URL: str = "http://simulator-service:8007"
+    SHIELD_SERVICE_URL: str = "http://shield-service:8009"
     CHAT_VIA_AGENTS: bool = True
 
     # --- Retry / TTL ---
@@ -63,6 +64,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_CHAT: int = 30
     RATE_LIMIT_TASKS: int = 60
     RATE_LIMIT_SIMULATE: int = 10
+    RATE_LIMIT_SHIELD_SCAN: int = 30
 
     # --- Upload ---
     MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024

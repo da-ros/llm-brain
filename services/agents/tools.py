@@ -89,6 +89,19 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "correlation_id": "str",
         },
     },
+    {
+        "name": "scan_message",
+        "owner": "Shield",
+        "description": "Phishing and scam scan via Shield Service (port 8009). Not used by reason_graph.",
+        "wraps": "Shield Service POST /scan",
+        "input_schema": {
+            "user_id": "str",
+            "text": "str",
+            "source": "str",
+            "subscription_tier": "str",
+            "correlation_id": "str",
+        },
+    },
 ]
 
 
@@ -374,6 +387,66 @@ async def simulate_whatif(arguments: dict[str, Any]) -> dict[str, Any]:
     return response.json() or {}
 
 
+async def scan_message(arguments: dict[str, Any]) -> dict[str, Any]:
+    """HTTP POST Shield /scan. Timeout → 504, 5xx → 502. Does not invent an alert."""
+    settings = get_settings()
+    correlation_id = arguments.get("correlation_id") or "no-id"
+    log_with_correlation(
+        correlation_id,
+        "info",
+        f"MCP scan_message → Shield {settings.SHIELD_SERVICE_URL}/scan",
+    )
+    payload = {
+        "user_id": arguments.get("user_id") or "",
+        "subscription_tier": arguments.get("subscription_tier") or "premium",
+        "source": arguments.get("source") or "message",
+        "text": arguments.get("text") or "",
+        "filename": arguments.get("filename") or "",
+        "content_base64": arguments.get("content_base64") or "",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=settings.SHIELD_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{settings.SHIELD_SERVICE_URL}/scan",
+                json=payload,
+                headers=_headers(correlation_id),
+            )
+    except httpx.TimeoutException as exc:
+        log_with_correlation(correlation_id, "error", "Shield service timeout")
+        raise LLMTimeoutError("Shield service timeout") from exc
+    except httpx.HTTPError as exc:
+        log_with_correlation(correlation_id, "error", f"Shield service error: {exc}")
+        raise LLMUpstreamError(f"Shield service error: {exc}") from exc
+
+    if response.status_code == 504:
+        log_with_correlation(correlation_id, "error", "Shield service HTTP 504")
+        raise LLMTimeoutError("Shield service timeout")
+    if response.status_code >= 500:
+        log_with_correlation(
+            correlation_id,
+            "error",
+            f"Shield service HTTP {response.status_code}",
+        )
+        raise LLMUpstreamError(f"Shield service HTTP {response.status_code}")
+    if response.status_code >= 400:
+        detail = "Shield service error"
+        try:
+            body = response.json() or {}
+            detail = body.get("detail") or detail
+        except Exception:
+            detail = response.text or detail
+        raise HTTPException(status_code=response.status_code, detail=detail)
+    data = response.json() or {}
+    return {
+        "alert": data.get("alert"),
+        "severity": data.get("severity"),
+        "reasons": data.get("reasons") or [],
+        "likelihood": data.get("likelihood"),
+        "summary": data.get("summary"),
+        "llm_used": data.get("llm_used"),
+    }
+
+
 HANDLERS: dict[str, ToolHandler] = {
     "rag_search": rag_search,
     "llm_generate": llm_generate,
@@ -381,6 +454,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "evaluate_turn": evaluate_turn,
     "finetune_trigger": finetune_trigger,
     "simulate_whatif": simulate_whatif,
+    "scan_message": scan_message,
 }
 
 

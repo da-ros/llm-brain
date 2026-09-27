@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Privacy &amp; Scam Shield</title>
+  <style>
+    body { font-family: Georgia, serif; margin: 2rem auto; max-width: 40rem; color: #1a1a1a; }
+    label { display: block; margin-top: 1rem; }
+    textarea, select, input[type="text"] { width: 100%; box-sizing: border-box; }
+    textarea { min-height: 8rem; }
+    button { margin-top: 1rem; }
+    .premium-only { background: #fff4e5; padding: 0.75rem 1rem; }
+    .status { margin-top: 1rem; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
+    .modal[hidden] { display: none; }
+    .dialog { background: #fff; padding: 1.25rem; max-width: 28rem; }
+    ul { padding-left: 1.2rem; }
+    .empty { color: #444; }
+  </style>
+</head>
+<body>
+  <h1>Privacy &amp; Scam Shield</h1>
+  <p>Paste a test message or attach an image or short video. Premium only.</p>
+
+  <label>Access token
+    <input id="token" type="text" autocomplete="off" placeholder="Paste a premium JWT" />
+  </label>
+  <p id="gate" class="premium-only" hidden>Shield is premium-only. A free token cannot scan.</p>
+
+  <form id="scan-form">
+    <label>Source
+      <select id="source">
+        <option value="email">Email</option>
+        <option value="sms">SMS</option>
+        <option value="message">Message</option>
+        <option value="image">Image</option>
+        <option value="video">Video</option>
+      </select>
+    </label>
+    <label>Message
+      <textarea id="text" placeholder="Paste email, SMS, or message text"></textarea>
+    </label>
+    <label>Image or video
+      <input id="file" type="file" accept="image/*,video/*" />
+    </label>
+    <button id="submit" type="submit">Scan</button>
+  </form>
+  <p id="status" class="status"></p>
+
+  <div id="popup" class="modal" hidden>
+    <div class="dialog" role="dialog" aria-labelledby="popup-title">
+      <h2 id="popup-title">Possible threat</h2>
+      <p id="popup-summary"></p>
+      <p id="popup-meta"></p>
+      <ul id="popup-reasons"></ul>
+      <button id="popup-close" type="button">Close</button>
+    </div>
+  </div>
+
+  <h2>Incidents</h2>
+  <p id="empty" class="empty">No incidents yet.</p>
+  <ul id="incidents"></ul>
+
+  <script>
+    const API = window.SHIELD_API || "http://localhost:8000";
+
+    function tierOf(token) {
+      if (!token) return "";
+      const part = token.split(".")[1];
+      if (!part) return "";
+      try {
+        const json = JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/")));
+        return json.subscription_tier || json.tier || "free";
+      } catch (_err) {
+        return "";
+      }
+    }
+
+    function isFree() {
+      return tierOf(document.getElementById("token").value.trim()) === "free";
+    }
+
+    function showGate() {
+      const free = isFree();
+      document.getElementById("gate").hidden = !free;
+      document.getElementById("submit").disabled = free;
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve) => {
+        if (!file) {
+          resolve("");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const value = String(reader.result || "");
+          resolve(value.includes(",") ? value.split(",")[1] : value);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function showPopup(body) {
+      document.getElementById("popup-summary").textContent = body.summary || "";
+      document.getElementById("popup-meta").textContent =
+        "Severity: " + body.severity + ". Likelihood: " + body.likelihood + ".";
+      const list = document.getElementById("popup-reasons");
+      list.replaceChildren();
+      (body.reasons || []).forEach((reason) => {
+        const item = document.createElement("li");
+        item.textContent = reason.detail || reason.id || reason.type;
+        list.appendChild(item);
+      });
+      document.getElementById("popup").hidden = false;
+    }
+
+    function hidePopup() {
+      document.getElementById("popup").hidden = true;
+    }
+
+    function renderIncidents(incidents) {
+      const list = document.getElementById("incidents");
+      const empty = document.getElementById("empty");
+      list.replaceChildren();
+      if (!incidents.length) {
+        empty.hidden = false;
+        empty.textContent = "No incidents yet.";
+        return;
+      }
+      empty.hidden = true;
+      incidents.forEach((row) => {
+        const item = document.createElement("li");
+        item.textContent = row.severity + ": " + row.summary;
+        list.appendChild(item);
+      });
+    }
+
+    async function refreshIncidents(token) {
+      const response = await fetch(API + "/api/shield/incidents", {
+        headers: { Authorization: "Bearer " + token },
+      });
+      if (!response.ok) return;
+      const body = await response.json();
+      renderIncidents(body.incidents || []);
+    }
+
+    document.getElementById("token").addEventListener("input", showGate);
+    document.getElementById("popup-close").addEventListener("click", hidePopup);
+
+    document.getElementById("scan-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const token = document.getElementById("token").value.trim();
+      const status = document.getElementById("status");
+      hidePopup();
+      if (isFree()) {
+        status.textContent = "Shield is premium-only. A free token cannot scan.";
+        return;
+      }
+      const file = document.getElementById("file").files[0];
+      const payload = {
+        text: document.getElementById("text").value,
+        source: document.getElementById("source").value,
+        filename: file ? file.name : "",
+        content_base64: await fileToBase64(file),
+      };
+      status.textContent = "Scanning…";
+      const response = await fetch(API + "/api/shield/scan", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        status.textContent = body.detail || "Scan failed.";
+        return;
+      }
+      if (body.alert) {
+        status.textContent = "";
+        showPopup(body);
+      } else {
+        status.textContent = "No threat detected.";
+      }
+      await refreshIncidents(token);
+    });
+
+    showGate();
+    renderIncidents([]);
+  </script>
+</body>
+</html>

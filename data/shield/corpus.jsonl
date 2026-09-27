@@ -1,0 +1,30 @@
+{"id":"phish-01","label":"phishing","source":"email","text":"Your account suspended. Act now and verify password within 24 hours: https://paypa1.com/login"}
+{"id":"phish-02","label":"phishing","source":"email","text":"Immediately update billing or the mailbox closes. Confirm SSN at https://g00gle.com/secure"}
+{"id":"phish-03","label":"phishing","source":"sms","text":"Bank alert: one-time pin required. Act now https://bit.ly/a1"}
+{"id":"phish-04","label":"phishing","source":"sms","text":"Package held. Verify password within 24 hours or it returns. https://tinyurl.com/hold"}
+{"id":"phish-05","label":"phishing","source":"message","text":"IT desk: account suspended. Update billing at https://micros0ft.com/help"}
+{"id":"phish-06","label":"phishing","source":"email","text":"Payroll change. Confirm SSN and verify password before Friday."}
+{"id":"phish-07","label":"phishing","source":"email","text":"Urgente: verifique su cuenta. Account suspended. https://app1e.com/id"}
+{"id":"phish-08","label":"phishing","source":"sms","text":"Unusual sign-in. Act now. One-time pin: reply YES to keep the account."}
+{"id":"phish-09","label":"phishing","source":"message","text":"Shared doc locked. Immediately verify password: https://lnkd.in/fake"}
+{"id":"phish-10","label":"phishing","source":"email","text":"Invoice overdue. Wire transfer today or service stops. Update billing."}
+{"id":"phish-11","label":"phishing","source":"sms","text":"Your card is frozen. Act now and confirm SSN. https://t.co/zz"}
+{"id":"phish-12","label":"phishing","source":"email","text":"Mailbox almost full. Within 24 hours verify password at the link in this note."}
+{"id":"scam-01","label":"scam","source":"sms","text":"You have won the lottery. Claim your prize with a gift card code."}
+{"id":"scam-02","label":"scam","source":"message","text":"Premio disponible. Send bitcoin to the wallet address and claim your prize."}
+{"id":"scam-03","label":"scam","source":"email","text":"Crypto double. Wire transfer to the wallet address before midnight."}
+{"id":"scam-04","label":"scam","source":"sms","text":"You have won a new phone. Claim your prize: https://bit.ly/win"}
+{"id":"scam-05","label":"scam","source":"message","text":"Uncle stuck abroad. Need a gift card immediately. Do not call."}
+{"id":"scam-06","label":"scam","source":"email","text":"Investment club. Send bitcoin. You have won early access. Act now."}
+{"id":"scam-07","label":"scam","source":"sms","text":"Lottery office. Premio listo. Reply with a gift card number."}
+{"id":"scam-08","label":"scam","source":"email","text":"Refund waiting. Buy a gift card and send the code to release the wire transfer."}
+{"id":"ham-01","label":"ham","source":"email","text":"The notes from yesterday's seminar are in the shared folder. No action needed."}
+{"id":"ham-02","label":"ham","source":"sms","text":"Running ten minutes late. Grab a table if you arrive first."}
+{"id":"ham-03","label":"ham","source":"message","text":"Can you review the draft abstract before Thursday? Thanks."}
+{"id":"ham-04","label":"ham","source":"email","text":"Library books are due next month. Renew them on the campus site when you can."}
+{"id":"ham-05","label":"ham","source":"sms","text":"Dinner at 7 at the usual place. Text if the time does not work."}
+{"id":"ham-06","label":"ham","source":"message","text":"The lab meeting moved to room 204. Same agenda as last week."}
+{"id":"ham-07","label":"ham","source":"email","text":"Attached is the reading list for the methodology course. See you Monday."}
+{"id":"ham-08","label":"ham","source":"sms","text":"The parcel from the bookstore arrived at the front desk."}
+{"id":"ham-09","label":"ham","source":"message","text":"Thanks for the comments. I will send the revised paragraph tomorrow."}
+{"id":"ham-10","label":"ham","source":"email","text":"Office hours stay 15:00 to 16:00. Bring the outline if you want feedback."}

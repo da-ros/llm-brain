@@ -73,6 +73,16 @@ class RAGService:
         """Generate a 2048-dim embedding for text (shared multimodal space)."""
         return self.embedder.embed_text(text)
 
+    def embed_query(self, modality: str, *, text: str = "", payload: bytes = b"") -> list[float]:
+        """Query vector only. Callers must not write the result to Chroma."""
+        if modality == "text":
+            return self.embedder.embed_text(text)
+        if modality == "image":
+            return self.embedder.embed_image(payload)
+        if modality == "video":
+            return self.embedder.embed_video(payload)
+        raise ValueError(f"unsupported modality: {modality}")
+
     def chunk_text(self, text: str) -> list[str]:
         """Split text with RecursiveCharacterTextSplitter (1000 / 200)."""
         if not text:

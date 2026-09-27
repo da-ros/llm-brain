@@ -15,7 +15,7 @@ from config import get_settings
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from logging_setup import correlation_id_var, log_with_correlation, logger
-from routers import chat, documents, finetune, health, sessions, simulate, tasks, upload
+from routers import chat, documents, finetune, health, sessions, shield, simulate, tasks, upload
 
 
 @asynccontextmanager
@@ -70,6 +70,7 @@ def create_app() -> FastAPI:
     application.include_router(sessions.router)
     application.include_router(finetune.router)
     application.include_router(simulate.router)
+    application.include_router(shield.router)
     application.include_router(documents.router)
     application.include_router(tasks.router)
     return application
