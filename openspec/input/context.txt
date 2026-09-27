@@ -406,8 +406,8 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 | Móvil | React Native (iPhone) + Neural Engine / Metal |
 | Infra Local (MVP) | Docker Compose (todos los servicios + LLM) |
 | Infra Prod (futuro) | AWS ECS Fargate (servicios) + AWS API Gateway |
-| CI/CD | GitHub Actions |
-| Seguridad | Snyk (dependency scan + SAST en CI) |
+| CI/CD | GitHub Actions (2 workflows: push a rama + push a main) |
+| Seguridad | Snyk (dependency scan + SAST en CI + image scan en main) |
 | Encriptación | Fernet (datos); TLS solo en producción futura (AWS managed) |
 | Trazabilidad | Correlation ID (X-Request-ID) en headers + logs |
 
@@ -424,9 +424,39 @@ DESARROLLO                                          PRODUCCIÓN
    • pytest (tests)                 │   • Rate limiting logs
    • snyk test (deps)              │   • Anomaly detection
    • snyk code test (SAST)         │   • Monitoring (futuro)
+   • docker build + snyk image     │
 ```
 
-- **Shift Left**: Snyk en GitHub Actions — scan de dependencias y análisis estático en cada push/PR
+### CI Pipeline (GitHub Actions)
+
+Dos workflows separados, ejecutados según el branch de destino:
+
+**Workflow 1 — Push a feature branch** (lint + test + snyk code):
+```
+Push a rama (no main)
+    │
+    ▼
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Lint        │────▶│  Test        │────▶│  Snyk Code   │
+│  (ruff)      │     │  (pytest)    │     │  (SAST)      │
+└──────────────┘     └──────────────┘     └──────────────┘
+```
+
+**Workflow 2 — Push a main** (build + snyk image):
+```
+Push a main (merge)
+    │
+    ▼
+┌──────────────┐     ┌──────────────┐
+│  Docker Build│────▶│  Snyk Image  │
+│  (9 images)  │     │  (container) │
+└──────────────┘     └──────────────┘
+```
+
+**Justificación:** Si lint+test+Snyk code pasaron en la feature branch, en main solo validamos que las imágenes Docker compile y sean seguras. No se duplica el análisis de código.
+
+- **Shift Left (push a rama)**: lint, tests, Snyk code scan — detección temprana de vulnerabilidades
+- **Shift Left (push a main)**: Docker build + Snyk image scan — validación de imágenes
 - **Shift Right**: Monitoreo y logging en producción (módulos posteriores)
 
 ## Límites y supuestos

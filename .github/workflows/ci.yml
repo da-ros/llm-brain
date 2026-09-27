@@ -2,12 +2,13 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    branches-ignore:
+      - main
   workflow_dispatch:
 
 jobs:
   pipeline:
-    name: Lint → Test → Security
+    name: Lint → Test → Snyk Code
     runs-on: ubuntu-latest
     services:
       mongo:
@@ -66,7 +67,7 @@ jobs:
           CHROMA_PORT: "8001"
           KAFKA_ENABLED: "false"
 
-      # ── 4. Security Scan ──────────────────────────────────
+      # ── 4. Security Scan (Snyk Code / SAST) ───────────────
       - uses: snyk/actions/setup@master
       - name: Run Snyk dependency scan
         run: snyk test --all-projects --severity-threshold=high
