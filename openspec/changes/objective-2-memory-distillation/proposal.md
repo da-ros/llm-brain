@@ -45,7 +45,7 @@ The ETL pipeline integrates with this foundation:
 - JSONL writer with per-user isolation (`user_id` tag)
 
 ### FastAPI Integration
-- New router: `apps/api/routers/upload.py`
+- New router: `services/api-router/routers/upload.py`
 - File upload endpoint: `POST /api/upload`
 - File type validation and size limits (max 10MB)
 - Error handling: corrupt files, unsupported formats, encoding issues

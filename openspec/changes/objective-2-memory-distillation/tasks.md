@@ -25,7 +25,7 @@
 
 ### D. FastAPI Integration
 
-- [x] D.1 Create upload router (`apps/api/routers/upload.py`)
+- [x] D.1 Create upload router (`services/api-router/routers/upload.py`)
       — `POST /api/upload` with JWT auth dependency
 - [x] D.2 Wire distill pipeline to upload endpoint
       — Accept file, validate type/size, process, return triples count
