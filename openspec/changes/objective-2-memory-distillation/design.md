@@ -48,13 +48,13 @@ Kafka (file.uploaded) → ETL Service (Port 8001) → Kafka (task.response)
 
 ```python
 # Consumer
-consumer = KafkaConsumer('file.uploaded', ...)
+consumer = KafkaConsumer("file.uploaded", ...)
 for message in consumer:
     process_file(message.value)
 
 # Producer
 producer = KafkaProducer(...)
-producer.send('task.response', value=result)
+producer.send("task.response", value=result)
 ```
 
 **Rationale**:
@@ -144,19 +144,20 @@ loader output (text/multimodal content)
 
 ```python
 # Success
-producer.send('task.response', value={
-    'correlation_id': 'abc-123',
-    'status': 'success',
-    'triples_count': 15
-})
+producer.send(
+    "task.response", value={"correlation_id": "abc-123", "status": "success", "triples_count": 15}
+)
 
 # Error
-producer.send('task.response', value={
-    'correlation_id': 'abc-123',
-    'status': 'error',
-    'http_code': 500,
-    'error_message': 'OCR failed'
-})
+producer.send(
+    "task.response",
+    value={
+        "correlation_id": "abc-123",
+        "status": "error",
+        "http_code": 500,
+        "error_message": "OCR failed",
+    },
+)
 ```
 
 **Rationale**:

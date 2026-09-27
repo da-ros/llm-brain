@@ -114,11 +114,7 @@ async def find_by_id(simulation_id: str) -> dict[str, Any] | None:
 
 async def list_for_user(user_id: str) -> list[dict[str, Any]]:
     if use_memory():
-        rows = [
-            row
-            for row in memory().by_id.values()
-            if row.get("user_id") == user_id
-        ]
+        rows = [row for row in memory().by_id.values() if row.get("user_id") == user_id]
         rows.sort(key=lambda row: row.get("created_at") or _now(), reverse=True)
         return [_serialize(row) for row in rows if row]
     cursor = _db().simulations.find({"user_id": user_id}).sort("created_at", -1)

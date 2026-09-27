@@ -65,8 +65,7 @@ def validate_settings(settings: Settings) -> Settings:
     if provider not in SUPPORTED_PROVIDERS:
         supported = ", ".join((*SUPPORTED_PROVIDERS, "local (alias of qwen_local)"))
         raise ConfigurationError(
-            f"Unsupported LLM_PROVIDER={settings.LLM_PROVIDER!r}. "
-            f"Supported values: {supported}."
+            f"Unsupported LLM_PROVIDER={settings.LLM_PROVIDER!r}. Supported values: {supported}."
         )
 
     if provider == "qwen_local" and not settings.LLM_SERVICE_URL.strip():

@@ -104,7 +104,9 @@ class DispatchClient:
         leaf_ids: list[str] = []
         for line in content.splitlines():
             if line.startswith("LEAF_IDS: "):
-                leaf_ids = [part.strip() for part in line[len("LEAF_IDS: ") :].split(",") if part.strip()]
+                leaf_ids = [
+                    part.strip() for part in line[len("LEAF_IDS: ") :].split(",") if part.strip()
+                ]
         return FakeResponse(200, _llm_body(leaf_ids))
 
     async def request(self, method, url, json=None, params=None, headers=None):
@@ -196,7 +198,9 @@ def test_router_premium_simulate_reaches_simulator():
             assert own.status_code == 200
             assert own.json()["scenarios"]
             assert hidden.status_code == 404
-            assert any(row["simulation_id"] == simulation_id for row in listed.json()["simulations"])
+            assert any(
+                row["simulation_id"] == simulation_id for row in listed.json()["simulations"]
+            )
             assert all(row["simulation_id"] != simulation_id for row in other.json()["simulations"])
 
             for _ in range(9):

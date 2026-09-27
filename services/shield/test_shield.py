@@ -283,7 +283,13 @@ class TestScan:
         own = client.get("/incidents", params={"user_id": "user1", "subscription_tier": "premium"})
         assert own.status_code == 200
         assert own.json()["incidents"][0]["id"] == incident_id
-        assert set(own.json()["incidents"][0]) >= {"id", "created_at", "severity", "summary", "source"}
+        assert set(own.json()["incidents"][0]) >= {
+            "id",
+            "created_at",
+            "severity",
+            "summary",
+            "source",
+        }
 
     def test_empty_incidents_and_guidelines(self, client):
         listed = client.get(

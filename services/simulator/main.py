@@ -104,11 +104,7 @@ def create_app() -> FastAPI:
     @application.post("/simulate", response_model=SimulateResponse)
     async def simulate(request: Request, body: SimulateRequest):
         correlation_id = request.state.correlation_id
-        tier = (
-            body.subscription_tier
-            or request.headers.get("X-Subscription-Tier")
-            or "free"
-        )
+        tier = body.subscription_tier or request.headers.get("X-Subscription-Tier") or "free"
         log_with_correlation(
             correlation_id,
             "info",
