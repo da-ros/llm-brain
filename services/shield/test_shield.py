@@ -306,3 +306,61 @@ class TestScan:
         text = guide.json()["text"]
         assert "multimodal LLM reasoning" in text
         assert "assistive" in text.lower()
+
+
+# ── OCR coverage (ocr.py) ─────────────────────────────────────────
+
+
+class TestOcr:
+    def test_ocr_image_empty(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_loader_instance = MagicMock()
+        mock_loader_instance.load.return_value = []
+        with patch("ocr._image_loader", return_value=mock_loader_instance):
+            from ocr import ocr_image
+
+            result = ocr_image(b"", suffix=".png")
+        assert isinstance(result, str)
+
+    def test_ocr_image_with_content(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_doc = MagicMock()
+        mock_doc.page_content = "extracted text"
+        mock_loader_instance = MagicMock()
+        mock_loader_instance.load.return_value = [mock_doc]
+        with patch("ocr._image_loader", return_value=mock_loader_instance):
+            from ocr import ocr_image
+
+            result = ocr_image(b"fake image bytes", suffix=".png")
+        assert result == "extracted text"
+
+    def test_ocr_image_multiple_docs(self):
+        from unittest.mock import MagicMock, patch
+
+        doc1 = MagicMock()
+        doc1.page_content = "first"
+        doc2 = MagicMock()
+        doc2.page_content = "second"
+        mock_loader_instance = MagicMock()
+        mock_loader_instance.load.return_value = [doc1, doc2]
+        with patch("ocr._image_loader", return_value=mock_loader_instance):
+            from ocr import ocr_image
+
+            result = ocr_image(b"data", suffix=".jpg")
+        assert "first" in result
+        assert "second" in result
+
+    def test_ocr_image_empty_docs(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_doc = MagicMock()
+        mock_doc.page_content = ""
+        mock_loader_instance = MagicMock()
+        mock_loader_instance.load.return_value = [mock_doc]
+        with patch("ocr._image_loader", return_value=mock_loader_instance):
+            from ocr import ocr_image
+
+            result = ocr_image(b"data")
+        assert result == ""

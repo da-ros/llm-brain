@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from pymongo.errors import PyMongoError
 
 
 class MemoryVectorStore:
@@ -445,3 +446,512 @@ class TestEmbed:
         assert blank.status_code == 422
         assert len(store.items) == before
         assert store.items == []
+
+
+# ── Embeddings coverage (embeddings.py) ───────────────────────────
+
+
+class TestEmbeddingsCoverage:
+    def test_l2_normalize(self):
+        from embeddings import _l2_normalize
+
+        result = _l2_normalize([3.0, 4.0])
+        assert abs(result[0] - 0.6) < 0.001
+        assert abs(result[1] - 0.8) < 0.001
+
+    def test_l2_normalize_zero_vector(self):
+        from embeddings import _l2_normalize
+
+        result = _l2_normalize([0.0, 0.0])
+        assert result == [0.0, 0.0]
+
+    def test_fit_dim_same(self):
+        from embeddings import _fit_dim
+
+        result = _fit_dim([1.0, 2.0], 2)
+        assert result == [1.0, 2.0]
+
+    def test_fit_dim_truncate(self):
+        from embeddings import _fit_dim
+
+        result = _fit_dim([1.0, 2.0, 3.0, 4.0], 2)
+        assert len(result) == 2
+
+    def test_fit_dim_pad(self):
+        from embeddings import _fit_dim
+
+        result = _fit_dim([1.0], 3)
+        assert len(result) == 3
+        assert result[0] != 0.0
+
+    def test_mock_embedder_text(self):
+        from embeddings import MockEmbedder
+
+        embedder = MockEmbedder(dim=2048)
+        vector = embedder.embed_text("hello world")
+        assert len(vector) == 2048
+        assert any(v != 0.0 for v in vector)
+
+    def test_mock_embedder_empty_text(self):
+        from embeddings import MockEmbedder
+
+        embedder = MockEmbedder(dim=2048)
+        vector = embedder.embed_text("")
+        assert len(vector) == 2048
+
+    def test_mock_embedder_image(self):
+        from embeddings import MockEmbedder
+
+        embedder = MockEmbedder(dim=2048)
+        vector = embedder.embed_image(b"fake image bytes")
+        assert len(vector) == 2048
+
+    def test_mock_embedder_video(self):
+        from embeddings import MockEmbedder
+
+        embedder = MockEmbedder(dim=2048)
+        vector = embedder.embed_video(b"fake video bytes")
+        assert len(vector) == 2048
+
+    def test_create_embedder_mock(self):
+        from embeddings import create_embedder
+
+        embedder = create_embedder()
+        assert hasattr(embedder, "embed_text")
+        assert hasattr(embedder, "embed_image")
+        assert hasattr(embedder, "embed_video")
+
+    def test_embedder_protocol(self):
+        from embeddings import Embedder, MockEmbedder
+
+        embedder = MockEmbedder(dim=2048)
+        assert isinstance(embedder, Embedder)
+
+
+# ── Document Store coverage (document_store.py) ───────────────────
+
+
+class TestDocumentStoreCoverage:
+    def test_db_property_not_connected(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        with pytest.raises(RuntimeError, match="not connected"):
+            _ = store.db
+
+    def test_fs_property_not_connected(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        with pytest.raises(RuntimeError, match="not connected"):
+            _ = store.fs
+
+    @pytest.mark.asyncio
+    async def test_close_without_connect(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        await store.close()  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_get_binary_invalid_id(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        store._client = True  # Fake connected
+        store._db = True
+        store._fs = True
+        result = await store.get_binary("invalid-id", "u1")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_document_invalid_id(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        store._client = True
+        store._db = MagicMock()
+        store._fs = True
+        result = await store.get_document("invalid", "u1")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_delete_document_invalid_id(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        store._client = True
+        store._db = MagicMock()
+        store._fs = True
+        result = await store.delete_document("invalid", "u1")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_store_binary_success(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_fs = MagicMock()
+        mock_fs.upload_from_stream = AsyncMock(return_value="file-id-123")
+        store._fs = mock_fs
+
+        result = await store.store_binary(
+            b"binary content",
+            filename="test.pdf",
+            user_id="user1",
+            content_type="application/pdf",
+        )
+        assert result == "file-id-123"
+        mock_fs.upload_from_stream.assert_awaited_once()
+        call_kwargs = mock_fs.upload_from_stream.call_args
+        assert call_kwargs[0][0] == "test.pdf"
+        assert call_kwargs[0][1] == b"binary content"
+        assert call_kwargs[1]["metadata"]["user_id"] == "user1"
+
+    @pytest.mark.asyncio
+    async def test_store_binary_pymongo_error(self):
+        from document_store import DocumentStore, DocumentStoreError
+
+        store = DocumentStore()
+        mock_fs = MagicMock()
+        mock_fs.upload_from_stream = AsyncMock(side_effect=PyMongoError("connection lost"))
+        store._fs = mock_fs
+
+        with pytest.raises(DocumentStoreError, match="GridFS upload failed"):
+            await store.store_binary(
+                b"data",
+                filename="f.pdf",
+                user_id="u1",
+                content_type="pdf",
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_binary_success(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_fs = MagicMock()
+        oid = ObjectId()
+        mock_grid_out = MagicMock()
+        mock_grid_out.metadata = {"user_id": "user1", "content_type": "pdf"}
+
+        async def _aiter():
+            yield b"chunk1"
+            yield b"chunk2"
+
+        mock_grid_out.__aiter__ = lambda self: _aiter()
+        mock_fs.open_download_stream = AsyncMock(return_value=mock_grid_out)
+        store._fs = mock_fs
+
+        result = await store.get_binary(str(oid), "user1")
+        assert result == b"chunk1chunk2"
+
+    @pytest.mark.asyncio
+    async def test_get_binary_wrong_user_id(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_fs = MagicMock()
+        oid = ObjectId()
+        mock_grid_out = MagicMock()
+        mock_grid_out.metadata = {"user_id": "other_user"}
+        mock_fs.open_download_stream = AsyncMock(return_value=mock_grid_out)
+        store._fs = mock_fs
+
+        result = await store.get_binary(str(oid), "user1")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_binary_download_error(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_fs = MagicMock()
+        oid = ObjectId()
+        mock_fs.open_download_stream = AsyncMock(side_effect=Exception("not found"))
+        store._fs = mock_fs
+
+        result = await store.get_binary(str(oid), "user1")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_binary_none_metadata(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_fs = MagicMock()
+        oid = ObjectId()
+        mock_grid_out = MagicMock()
+        mock_grid_out.metadata = None
+        mock_fs.open_download_stream = AsyncMock(return_value=mock_grid_out)
+        store._fs = mock_fs
+
+        result = await store.get_binary(str(oid), "user1")
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_insert_document_with_content(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        mock_fs = MagicMock()
+        mock_db.documents.insert_one = AsyncMock(return_value=MagicMock(inserted_id="doc456"))
+        mock_fs.upload_from_stream = AsyncMock(return_value="new-gridfs-id")
+        store._db = mock_db
+        store._fs = mock_fs
+
+        doc_id = await store.insert_document(
+            user_id="user1",
+            doc_type="pdf",
+            gridfs_id="old-id",
+            triples_path="/data/triples.jsonl",
+            content=b"file bytes",
+            filename="test.pdf",
+            content_type="application/pdf",
+        )
+        assert doc_id == "doc456"
+        mock_fs.upload_from_stream.assert_awaited_once()
+        payload = mock_db.documents.insert_one.call_args[0][0]
+        assert payload["gridfs_id"] == "new-gridfs-id"
+
+    @pytest.mark.asyncio
+    async def test_insert_document_pymongo_error(self):
+        from document_store import DocumentStore, DocumentStoreError
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        mock_db.documents.insert_one = AsyncMock(side_effect=PyMongoError("write error"))
+        store._db = mock_db
+
+        with pytest.raises(DocumentStoreError, match="Document insert failed"):
+            await store.insert_document(
+                user_id="u1",
+                doc_type="pdf",
+                gridfs_id="g1",
+                triples_path="/t.jsonl",
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_document_pymongo_error(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        mock_db.documents.find_one = AsyncMock(side_effect=PyMongoError("read error"))
+        store._db = mock_db
+
+        oid = ObjectId()
+        result = await store.get_document(str(oid), "user1")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_document_found(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        oid = ObjectId()
+        mock_db.documents.find_one = AsyncMock(
+            return_value={"_id": oid, "user_id": "user1", "type": "pdf"}
+        )
+        store._db = mock_db
+
+        result = await store.get_document(str(oid), "user1")
+        assert result is not None
+        assert result["_id"] == str(oid)
+        assert result["user_id"] == "user1"
+
+    @pytest.mark.asyncio
+    async def test_get_document_not_found(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        oid = ObjectId()
+        mock_db.documents.find_one = AsyncMock(return_value=None)
+        store._db = mock_db
+
+        result = await store.get_document(str(oid), "user1")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_list_documents_pymongo_error(self):
+        from document_store import DocumentStore, DocumentStoreError
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        mock_db.documents.find.side_effect = PyMongoError("cursor error")
+        store._db = mock_db
+
+        with pytest.raises(DocumentStoreError, match="Document list failed"):
+            await store.list_documents("user1")
+
+    @pytest.mark.asyncio
+    async def test_delete_document_success(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        mock_fs = MagicMock()
+        oid = ObjectId()
+        gridfs_oid = ObjectId()
+        mock_db.documents.find_one = AsyncMock(
+            return_value={"_id": oid, "user_id": "user1", "gridfs_id": str(gridfs_oid)}
+        )
+        mock_db.documents.delete_one = AsyncMock()
+        mock_fs.delete = AsyncMock()
+        store._db = mock_db
+        store._fs = mock_fs
+
+        result = await store.delete_document(str(oid), "user1")
+        assert result is True
+        mock_db.documents.delete_one.assert_awaited_once()
+        mock_fs.delete.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_document_not_found(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        mock_fs = MagicMock()
+        oid = ObjectId()
+        mock_db.documents.find_one = AsyncMock(return_value=None)
+        mock_db.documents.delete_one = AsyncMock()
+        store._db = mock_db
+        store._fs = mock_fs
+
+        result = await store.delete_document(str(oid), "user1")
+        assert result is False
+        mock_db.documents.delete_one.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_delete_document_pymongo_error_on_delete(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        mock_fs = MagicMock()
+        oid = ObjectId()
+        gridfs_oid = ObjectId()
+        mock_db.documents.find_one = AsyncMock(
+            return_value={"_id": oid, "user_id": "user1", "gridfs_id": str(gridfs_oid)}
+        )
+        mock_db.documents.delete_one = AsyncMock(side_effect=PyMongoError("delete failed"))
+        store._db = mock_db
+        store._fs = mock_fs
+
+        result = await store.delete_document(str(oid), "user1")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_insert_document_defaults_filename_and_type(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        mock_fs = MagicMock()
+        mock_db.documents.insert_one = AsyncMock(return_value=MagicMock(inserted_id="doc789"))
+        mock_fs.upload_from_stream = AsyncMock(return_value="gfs-default")
+        store._db = mock_db
+        store._fs = mock_fs
+
+        await store.insert_document(
+            user_id="u1",
+            doc_type="pdf",
+            gridfs_id="g1",
+            triples_path="/t.jsonl",
+            content=b"bytes",
+        )
+        call_kwargs = mock_fs.upload_from_stream.call_args
+        assert call_kwargs[0][0] == "upload.bin"
+        assert call_kwargs[1]["metadata"]["content_type"] == "pdf"
+
+    @pytest.mark.asyncio
+    async def test_delete_document_no_gridfs_id(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        mock_fs = MagicMock()
+        oid = ObjectId()
+        mock_db.documents.find_one = AsyncMock(return_value={"_id": oid, "user_id": "user1"})
+        mock_db.documents.delete_one = AsyncMock()
+        mock_fs.delete = AsyncMock()
+        store._db = mock_db
+        store._fs = mock_fs
+
+        result = await store.delete_document(str(oid), "user1")
+        assert result is True
+        mock_fs.delete.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_binary_empty_chunks(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_fs = MagicMock()
+        oid = ObjectId()
+        mock_grid_out = MagicMock()
+        mock_grid_out.metadata = {"user_id": "user1"}
+
+        async def _empty_iter():
+            return
+            yield  # pragma: no cover
+
+        mock_grid_out.__aiter__ = lambda self: _empty_iter()
+        mock_fs.open_download_stream = AsyncMock(return_value=mock_grid_out)
+        store._fs = mock_fs
+
+        result = await store.get_binary(str(oid), "user1")
+        assert result == b""
+
+    @pytest.mark.asyncio
+    async def test_close_with_connected_client(self):
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_client = MagicMock()
+        store._client = mock_client
+        store._db = MagicMock()
+        store._fs = MagicMock()
+
+        await store.close()
+        mock_client.close.assert_called_once()
+        assert store._client is None
+        assert store._db is None
+        assert store._fs is None
+
+    @pytest.mark.asyncio
+    async def test_list_documents_converts_ids_to_strings(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        mock_db = MagicMock()
+        oid1 = ObjectId()
+        oid2 = ObjectId()
+        docs = [
+            {"_id": oid1, "user_id": "u1", "type": "pdf"},
+            {"_id": oid2, "user_id": "u1", "type": "html"},
+        ]
+        mock_db.documents.find.return_value = AsyncCursor(docs)
+        store._db = mock_db
+
+        result = await store.list_documents("u1")
+        assert len(result) == 2
+        assert result[0]["_id"] == str(oid1)
+        assert result[1]["_id"] == str(oid2)

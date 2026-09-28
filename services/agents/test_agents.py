@@ -62,11 +62,10 @@ from config import clear_settings_cache
 clear_settings_cache()
 
 from base import NO_PERSONAL_CONTEXT
-from exceptions import LLMUpstreamError
 from graphs import run_learn_graph, run_reason_graph
 from kafka_io import process_session_turn
 from main import app
-from tools import HANDLERS, heuristic_score
+from tools import HANDLERS, LLMUpstreamError, heuristic_score
 
 UUID_LEN = 36
 
@@ -584,8 +583,7 @@ class TestToolRegistry:
 
     @pytest.mark.asyncio
     async def test_invoke_tool_unknown_raises(self):
-        from exceptions import UnknownToolError
-        from tools import invoke_tool
+        from tools import UnknownToolError, invoke_tool
 
         with pytest.raises(UnknownToolError):
             await invoke_tool("nonexistent_tool")
@@ -659,8 +657,7 @@ class TestLlmGenerate:
 
     @pytest.mark.asyncio
     async def test_llm_generate_timeout(self):
-        from exceptions import LLMTimeoutError
-        from tools import llm_generate
+        from tools import LLMTimeoutError, llm_generate
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -675,8 +672,7 @@ class TestLlmGenerate:
 
     @pytest.mark.asyncio
     async def test_llm_generate_500(self):
-        from exceptions import LLMUpstreamError
-        from tools import llm_generate
+        from tools import LLMUpstreamError, llm_generate
 
         mock_resp = _mock_response(500)
         mock_client = AsyncMock()
@@ -692,8 +688,7 @@ class TestLlmGenerate:
 
     @pytest.mark.asyncio
     async def test_llm_generate_504(self):
-        from exceptions import LLMTimeoutError
-        from tools import llm_generate
+        from tools import LLMTimeoutError, llm_generate
 
         mock_resp = _mock_response(504)
         mock_client = AsyncMock()
@@ -709,8 +704,7 @@ class TestLlmGenerate:
 
     @pytest.mark.asyncio
     async def test_llm_generate_400(self):
-        from exceptions import LLMUpstreamError
-        from tools import llm_generate
+        from tools import LLMUpstreamError, llm_generate
 
         mock_resp = _mock_response(400)
         mock_client = AsyncMock()
@@ -837,8 +831,7 @@ class TestFinetuneTrigger:
 
     @pytest.mark.asyncio
     async def test_http_error(self):
-        from exceptions import LLMUpstreamError
-        from tools import finetune_trigger
+        from tools import LLMUpstreamError, finetune_trigger
 
         mock_resp = _mock_response(500)
         mock_client = AsyncMock()
@@ -856,8 +849,7 @@ class TestFinetuneTrigger:
 
     @pytest.mark.asyncio
     async def test_connection_error(self):
-        from exceptions import LLMUpstreamError
-        from tools import finetune_trigger
+        from tools import LLMUpstreamError, finetune_trigger
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -892,8 +884,7 @@ class TestSimulateWhatif:
 
     @pytest.mark.asyncio
     async def test_timeout(self):
-        from exceptions import LLMTimeoutError
-        from tools import simulate_whatif
+        from tools import LLMTimeoutError, simulate_whatif
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -908,8 +899,7 @@ class TestSimulateWhatif:
 
     @pytest.mark.asyncio
     async def test_504(self):
-        from exceptions import LLMTimeoutError
-        from tools import simulate_whatif
+        from tools import LLMTimeoutError, simulate_whatif
 
         mock_resp = _mock_response(504)
         mock_client = AsyncMock()
@@ -925,8 +915,7 @@ class TestSimulateWhatif:
 
     @pytest.mark.asyncio
     async def test_500(self):
-        from exceptions import LLMUpstreamError
-        from tools import simulate_whatif
+        from tools import LLMUpstreamError, simulate_whatif
 
         mock_resp = _mock_response(500)
         mock_client = AsyncMock()
@@ -961,8 +950,7 @@ class TestSimulateWhatif:
 
     @pytest.mark.asyncio
     async def test_connection_error(self):
-        from exceptions import LLMUpstreamError
-        from tools import simulate_whatif
+        from tools import LLMUpstreamError, simulate_whatif
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -993,8 +981,7 @@ class TestScanMessage:
 
     @pytest.mark.asyncio
     async def test_timeout(self):
-        from exceptions import LLMTimeoutError
-        from tools import scan_message
+        from tools import LLMTimeoutError, scan_message
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -1009,8 +996,7 @@ class TestScanMessage:
 
     @pytest.mark.asyncio
     async def test_500(self):
-        from exceptions import LLMUpstreamError
-        from tools import scan_message
+        from tools import LLMUpstreamError, scan_message
 
         mock_resp = _mock_response(500)
         mock_client = AsyncMock()
@@ -1043,8 +1029,7 @@ class TestScanMessage:
 
     @pytest.mark.asyncio
     async def test_connection_error(self):
-        from exceptions import LLMUpstreamError
-        from tools import scan_message
+        from tools import LLMUpstreamError, scan_message
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
