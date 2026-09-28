@@ -1445,6 +1445,8 @@ class TestDbConnectDisconnect:
 
     @pytest.mark.asyncio
     async def test_connect_creates_motor_client(self):
+        import motor.motor_asyncio  # noqa: F401 — ensure submodule is loaded
+
         with patch("motor.motor_asyncio.AsyncIOMotorClient") as motor_cls:
             mock_client = MagicMock()
             motor_cls.return_value = mock_client
@@ -1541,6 +1543,8 @@ class TestSaveUpload:
 
     @pytest.mark.asyncio
     async def test_save_upload_uses_gridfs_bucket(self):
+        import motor.motor_asyncio  # noqa: F401 — ensure submodule is loaded
+
         mock_db = MagicMock()
         mock_bucket_instance = MagicMock()
         mock_bucket_instance.upload_from_stream = AsyncMock(return_value="file-object-id-123")
@@ -1569,6 +1573,8 @@ class TestSaveUpload:
 
     @pytest.mark.asyncio
     async def test_save_upload_defaults_filename(self):
+        import motor.motor_asyncio  # noqa: F401 — ensure submodule is loaded
+
         mock_db = MagicMock()
         mock_bucket_instance = MagicMock()
         mock_bucket_instance.upload_from_stream = AsyncMock(return_value="fid-2")
