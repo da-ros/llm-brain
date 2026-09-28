@@ -408,7 +408,7 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 | Infra Prod (futuro) | AWS ECS Fargate (servicios) + AWS API Gateway |
 | CI/CD | GitHub Actions (2 workflows: push a rama + push a main) |
 | Seguridad | Snyk (dependency scan + SAST en CI + image scan en main) |
-| Cobertura | pytest-cov (threshold 90%, reporte en CI) |
+| Cobertura | pytest-cov (threshold 80%, reporte en CI) |
 | Encriptación | Fernet (datos); TLS solo en producción futura (AWS managed) |
 | Trazabilidad | Correlation ID (X-Request-ID) en headers + logs |
 
@@ -462,6 +462,22 @@ Push a main (merge)
 - **Shift Left (push a rama)**: lint, tests, Snyk code scan — detección temprana de vulnerabilidades
 - **Shift Left (push a main)**: Docker build + Snyk image scan — validación de imágenes
 - **Shift Right**: Monitoreo y logging en producción (módulos posteriores)
+
+### Cobertura de tests
+
+Threshold: **80%** (validado en CI con `pytest-cov` + `fail_under = 80`).
+
+**Consenso de la industria (75-80%):**
+- **Google Testing Blog**: 75% es "commendable", 90% es "exemplary". Google advierte contra la obsesión por porcentajes altos — la ganancia es logarítmica.
+- **Bullseye Testing**: "70-80% es una meta razonable para system test de la mayoría de proyectos."
+- **TechTarget / Tim Ottinger (Industrial Logic)**: "80% es el estándar habitual en empresas. Cualquier valor mayor o menor es inusual."
+
+> El 20% sin cubrir es más interesante que el 80% cubierto — el foco debe estar en **qué** no está cubierto, no solo en el número.
+
+Fuentes:
+- [Google Testing Blog – Code Coverage Best Practices](https://testing.googleblog.com/2020/08/code-coverage-best-practices.html)
+- [Bullseye – Minimum Acceptable Code Coverage](https://bullseye.com/minimum.html)
+- [TechTarget – What unit test coverage percentage should teams aim for?](https://www.techtarget.com/it-infrastructure/tip/What-unit-test-coverage-percentage-should-teams-aim-for)
 
 ## Límites y supuestos
 
