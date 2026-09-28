@@ -340,9 +340,7 @@ class TestChatCoverage:
         from main import app
 
         client = TestClient(app)
-        response = client.post(
-            "/chat", json={"messages": [{"role": "user", "content": "hi"}]}
-        )
+        response = client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]})
         assert response.status_code == 400
 
     def test_chat_invalid_tier(self):
