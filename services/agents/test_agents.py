@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+
 def _mock_response(status_code=200, json_data=None):
     """Create a mock HTTP response with proper attribute access."""
     resp = MagicMock()
@@ -655,8 +656,7 @@ class TestLlmGenerate:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").TimeoutException("t"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMTimeoutError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
                 await llm_generate(
                     {"query": "hi", "user_id": "u1", "correlation_id": "c"}
                 )
@@ -672,8 +672,7 @@ class TestLlmGenerate:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMUpstreamError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
                 await llm_generate(
                     {"query": "hi", "user_id": "u1", "correlation_id": "c"}
                 )
@@ -689,8 +688,7 @@ class TestLlmGenerate:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMTimeoutError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
                 await llm_generate(
                     {"query": "hi", "user_id": "u1", "correlation_id": "c"}
                 )
@@ -706,8 +704,7 @@ class TestLlmGenerate:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMUpstreamError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
                 await llm_generate(
                     {"query": "hi", "user_id": "u1", "correlation_id": "c"}
                 )
@@ -787,19 +784,19 @@ class TestHeuristicScore:
     def test_full_score(self):
         from tools import heuristic_score
 
-        score, reason, include = heuristic_score("answer", ["a1"])
+        score, _reason, _include = heuristic_score("answer", ["a1"])
         assert score == 1.0
 
     def test_empty_score(self):
         from tools import heuristic_score
 
-        score, reason, include = heuristic_score("", [])
+        score, _reason, _include = heuristic_score("", [])
         assert score == 0.0
 
     def test_half_score(self):
         from tools import heuristic_score
 
-        score, reason, include = heuristic_score("answer", [])
+        score, _reason, _include = heuristic_score("answer", [])
         assert score == 0.5
 
 class TestFinetuneTrigger:
@@ -830,8 +827,7 @@ class TestFinetuneTrigger:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMUpstreamError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
                 await finetune_trigger(
                     {"user_id": "u1", "dataset_path": "/d.jsonl", "correlation_id": "c"}
                 )
@@ -846,8 +842,7 @@ class TestFinetuneTrigger:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").HTTPError("refused"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMUpstreamError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
                 await finetune_trigger(
                     {"user_id": "u1", "dataset_path": "/d.jsonl", "correlation_id": "c"}
                 )
@@ -879,8 +874,7 @@ class TestSimulateWhatif:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").TimeoutException("t"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMTimeoutError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
                 await simulate_whatif(
                     {"user_id": "u1", "question": "what if", "correlation_id": "c"}
                 )
@@ -896,8 +890,7 @@ class TestSimulateWhatif:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMTimeoutError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
                 await simulate_whatif(
                     {"user_id": "u1", "question": "what if", "correlation_id": "c"}
                 )
@@ -913,8 +906,7 @@ class TestSimulateWhatif:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMUpstreamError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
                 await simulate_whatif(
                     {"user_id": "u1", "question": "what if", "correlation_id": "c"}
                 )
@@ -948,8 +940,7 @@ class TestSimulateWhatif:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").HTTPError("refused"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMUpstreamError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
                 await simulate_whatif(
                     {"user_id": "u1", "question": "what if", "correlation_id": "c"}
                 )
@@ -981,8 +972,7 @@ class TestScanMessage:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").TimeoutException("t"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMTimeoutError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
                 await scan_message(
                     {"user_id": "u1", "text": "hello", "correlation_id": "c"}
                 )
@@ -998,8 +988,7 @@ class TestScanMessage:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMUpstreamError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
                 await scan_message(
                     {"user_id": "u1", "text": "hello", "correlation_id": "c"}
                 )
@@ -1033,8 +1022,7 @@ class TestScanMessage:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").HTTPError("refused"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(LLMUpstreamError):
+        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
                 await scan_message(
                     {"user_id": "u1", "text": "hello", "correlation_id": "c"}
                 )
