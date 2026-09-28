@@ -15,6 +15,7 @@ def _mock_response(status_code=200, json_data=None):
     resp.json.return_value = json_data or {}
     return resp
 
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -39,6 +40,7 @@ _TOP_LEVEL = (
     "kafka_io",
 )
 
+
 def _isolate_service_imports() -> None:
     root_s = str(_SERVICE_ROOT)
     for name in list(sys.modules):
@@ -51,6 +53,7 @@ def _isolate_service_imports() -> None:
     if root_s in sys.path:
         sys.path.remove(root_s)
     sys.path.insert(0, root_s)
+
 
 _isolate_service_imports()
 
@@ -67,10 +70,12 @@ from tools import HANDLERS, heuristic_score
 
 UUID_LEN = 36
 
+
 @pytest.fixture
 def client():
     with TestClient(app) as test_client:
         yield test_client
+
 
 def _reason_state(**overrides):
     state = {
@@ -89,6 +94,7 @@ def _reason_state(**overrides):
     state.update(overrides)
     return state
 
+
 def _learn_state(**overrides):
     state = {
         "user_id": "user1",
@@ -104,6 +110,7 @@ def _learn_state(**overrides):
     }
     state.update(overrides)
     return state
+
 
 class TestHealth:
     def test_health_reports_langgraph(self, client):
@@ -124,6 +131,7 @@ class TestHealth:
     def test_propagates_correlation_id(self, client):
         response = client.get("/health", headers={"X-Request-ID": "abc-123"})
         assert response.headers.get("X-Request-ID") == "abc-123"
+
 
 class TestReasonGraph:
     """7.1 — reason_graph with mocked RAG/LLM."""
@@ -175,6 +183,7 @@ class TestReasonGraph:
         assert result.get("error_kind") == "upstream"
         assert not result.get("assumptions")
 
+
 class TestLearnGraph:
     """7.2 — ingest idempotency; Evaluador never auto-trains."""
 
@@ -212,6 +221,7 @@ class TestLearnGraph:
         assert include is True
         score, _reason, include = heuristic_score("an answer", [])
         assert include is False
+
 
 class TestIsolationAndMcp:
     """7.3 — Free 403, cross-user 404, unknown MCP tool 404."""
@@ -412,6 +422,7 @@ class TestIsolationAndMcp:
         )
         assert response.status_code == 403
 
+
 class TestReasonEndpoint:
     def test_reason_maps_llm_5xx_to_502(self, client):
         async def fake_rag(_arguments):
@@ -456,6 +467,7 @@ class TestReasonEndpoint:
         assert body["assumptions"]
         assert body["session_id"] == "sess-9"
         assert body["sources"] == ["doc-1"]
+
 
 class TestLearnAndTrigger:
     """7.4 — Kafka learn_graph + manual trigger with mocked Fine-Tune."""
@@ -558,7 +570,9 @@ class TestLearnAndTrigger:
         )
         assert response.status_code == 404
 
+
 # ── Tools coverage (tools.py) ─────────────────────────────────────
+
 
 class TestToolRegistry:
     def test_list_tools_returns_all_definitions(self):
@@ -576,27 +590,29 @@ class TestToolRegistry:
         with pytest.raises(UnknownToolError):
             await invoke_tool("nonexistent_tool")
 
+
 class TestRagSearch:
     @pytest.mark.asyncio
     async def test_rag_search_success(self):
         from tools import rag_search
 
-        mock_resp = _mock_response(200, {
-            "results": [
-                {
-                    "document": "chunk text",
-                    "metadata": {"source": "doc1", "chunk_text": "chunk text"},
-                }
-            ]
-        })
+        mock_resp = _mock_response(
+            200,
+            {
+                "results": [
+                    {
+                        "document": "chunk text",
+                        "metadata": {"source": "doc1", "chunk_text": "chunk text"},
+                    }
+                ]
+            },
+        )
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get.return_value = mock_resp
         with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            result = await rag_search(
-                {"query": "test", "user_id": "u1", "correlation_id": "cid-1"}
-            )
+            result = await rag_search({"query": "test", "user_id": "u1", "correlation_id": "cid-1"})
         assert "context" in result
         assert "sources" in result
 
@@ -609,9 +625,7 @@ class TestRagSearch:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get.side_effect = __import__("httpx").HTTPError("connection refused")
         with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            result = await rag_search(
-                {"query": "test", "user_id": "u1", "correlation_id": "cid-1"}
-            )
+            result = await rag_search({"query": "test", "user_id": "u1", "correlation_id": "cid-1"})
         assert result["context"] == ""
 
     @pytest.mark.asyncio
@@ -624,10 +638,9 @@ class TestRagSearch:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get.return_value = mock_resp
         with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            result = await rag_search(
-                {"query": "test", "user_id": "u1", "correlation_id": "cid-1"}
-            )
+            result = await rag_search({"query": "test", "user_id": "u1", "correlation_id": "cid-1"})
         assert result["context"] == ""
+
 
 class TestLlmGenerate:
     @pytest.mark.asyncio
@@ -641,9 +654,7 @@ class TestLlmGenerate:
         mock_client.post.return_value = mock_resp
 
         with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            result = await llm_generate(
-                {"query": "hi", "user_id": "u1", "correlation_id": "cid-1"}
-            )
+            result = await llm_generate({"query": "hi", "user_id": "u1", "correlation_id": "cid-1"})
         assert result["response"] == "hello"
 
     @pytest.mark.asyncio
@@ -656,10 +667,11 @@ class TestLlmGenerate:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").TimeoutException("t"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
-                await llm_generate(
-                    {"query": "hi", "user_id": "u1", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMTimeoutError),
+        ):
+            await llm_generate({"query": "hi", "user_id": "u1", "correlation_id": "c"})
 
     @pytest.mark.asyncio
     async def test_llm_generate_500(self):
@@ -672,10 +684,11 @@ class TestLlmGenerate:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
-                await llm_generate(
-                    {"query": "hi", "user_id": "u1", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMUpstreamError),
+        ):
+            await llm_generate({"query": "hi", "user_id": "u1", "correlation_id": "c"})
 
     @pytest.mark.asyncio
     async def test_llm_generate_504(self):
@@ -688,10 +701,11 @@ class TestLlmGenerate:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
-                await llm_generate(
-                    {"query": "hi", "user_id": "u1", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMTimeoutError),
+        ):
+            await llm_generate({"query": "hi", "user_id": "u1", "correlation_id": "c"})
 
     @pytest.mark.asyncio
     async def test_llm_generate_400(self):
@@ -704,10 +718,12 @@ class TestLlmGenerate:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
-                await llm_generate(
-                    {"query": "hi", "user_id": "u1", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMUpstreamError),
+        ):
+            await llm_generate({"query": "hi", "user_id": "u1", "correlation_id": "c"})
+
 
 class TestIngestTurn:
     @pytest.mark.asyncio
@@ -727,6 +743,7 @@ class TestIngestTurn:
         )
         assert "interaction" in result
         assert result["correlation_id"] == "cid-i1"
+
 
 class TestEvaluateTurn:
     @pytest.mark.asyncio
@@ -780,6 +797,7 @@ class TestEvaluateTurn:
         )
         assert "batch" in result
 
+
 class TestHeuristicScore:
     def test_full_score(self):
         from tools import heuristic_score
@@ -798,6 +816,7 @@ class TestHeuristicScore:
 
         score, _reason, _include = heuristic_score("answer", [])
         assert score == 0.5
+
 
 class TestFinetuneTrigger:
     @pytest.mark.asyncio
@@ -827,10 +846,13 @@ class TestFinetuneTrigger:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
-                await finetune_trigger(
-                    {"user_id": "u1", "dataset_path": "/d.jsonl", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMUpstreamError),
+        ):
+            await finetune_trigger(
+                {"user_id": "u1", "dataset_path": "/d.jsonl", "correlation_id": "c"}
+            )
 
     @pytest.mark.asyncio
     async def test_connection_error(self):
@@ -842,10 +864,14 @@ class TestFinetuneTrigger:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").HTTPError("refused"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
-                await finetune_trigger(
-                    {"user_id": "u1", "dataset_path": "/d.jsonl", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMUpstreamError),
+        ):
+            await finetune_trigger(
+                {"user_id": "u1", "dataset_path": "/d.jsonl", "correlation_id": "c"}
+            )
+
 
 class TestSimulateWhatif:
     @pytest.mark.asyncio
@@ -874,10 +900,11 @@ class TestSimulateWhatif:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").TimeoutException("t"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
-                await simulate_whatif(
-                    {"user_id": "u1", "question": "what if", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMTimeoutError),
+        ):
+            await simulate_whatif({"user_id": "u1", "question": "what if", "correlation_id": "c"})
 
     @pytest.mark.asyncio
     async def test_504(self):
@@ -890,10 +917,11 @@ class TestSimulateWhatif:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
-                await simulate_whatif(
-                    {"user_id": "u1", "question": "what if", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMTimeoutError),
+        ):
+            await simulate_whatif({"user_id": "u1", "question": "what if", "correlation_id": "c"})
 
     @pytest.mark.asyncio
     async def test_500(self):
@@ -906,10 +934,11 @@ class TestSimulateWhatif:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
-                await simulate_whatif(
-                    {"user_id": "u1", "question": "what if", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMUpstreamError),
+        ):
+            await simulate_whatif({"user_id": "u1", "question": "what if", "correlation_id": "c"})
 
     @pytest.mark.asyncio
     async def test_400(self):
@@ -940,10 +969,12 @@ class TestSimulateWhatif:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").HTTPError("refused"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
-                await simulate_whatif(
-                    {"user_id": "u1", "question": "what if", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMUpstreamError),
+        ):
+            await simulate_whatif({"user_id": "u1", "question": "what if", "correlation_id": "c"})
+
 
 class TestScanMessage:
     @pytest.mark.asyncio
@@ -957,9 +988,7 @@ class TestScanMessage:
         mock_client.post.return_value = mock_resp
 
         with patch("tools.httpx.AsyncClient", return_value=mock_client):
-            result = await scan_message(
-                {"user_id": "u1", "text": "hello", "correlation_id": "c"}
-            )
+            result = await scan_message({"user_id": "u1", "text": "hello", "correlation_id": "c"})
         assert result["alert"] is False
 
     @pytest.mark.asyncio
@@ -972,10 +1001,11 @@ class TestScanMessage:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").TimeoutException("t"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMTimeoutError):
-                await scan_message(
-                    {"user_id": "u1", "text": "hello", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMTimeoutError),
+        ):
+            await scan_message({"user_id": "u1", "text": "hello", "correlation_id": "c"})
 
     @pytest.mark.asyncio
     async def test_500(self):
@@ -988,10 +1018,11 @@ class TestScanMessage:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post.return_value = mock_resp
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
-                await scan_message(
-                    {"user_id": "u1", "text": "hello", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMUpstreamError),
+        ):
+            await scan_message({"user_id": "u1", "text": "hello", "correlation_id": "c"})
 
     @pytest.mark.asyncio
     async def test_400(self):
@@ -1007,9 +1038,7 @@ class TestScanMessage:
 
         with patch("tools.httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(HTTPException) as exc:
-                await scan_message(
-                    {"user_id": "u1", "text": "hello", "correlation_id": "c"}
-                )
+                await scan_message({"user_id": "u1", "text": "hello", "correlation_id": "c"})
             assert exc.value.status_code == 400
 
     @pytest.mark.asyncio
@@ -1022,12 +1051,15 @@ class TestScanMessage:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=__import__("httpx").HTTPError("refused"))
 
-        with patch("tools.httpx.AsyncClient", return_value=mock_client), pytest.raises(LLMUpstreamError):
-                await scan_message(
-                    {"user_id": "u1", "text": "hello", "correlation_id": "c"}
-                )
+        with (
+            patch("tools.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(LLMUpstreamError),
+        ):
+            await scan_message({"user_id": "u1", "text": "hello", "correlation_id": "c"})
+
 
 # ── DB coverage (db.py) ────────────────────────────────────────────
+
 
 class TestDbMemory:
     def test_memory_store_init(self):
@@ -1267,7 +1299,9 @@ class TestDbMemory:
         finally:
             get_settings().BATCH_MIN_ITEMS = original
 
+
 # ── Kafka IO coverage (kafka_io.py) ────────────────────────────────
+
 
 class TestKafkaIo:
     @pytest.mark.asyncio
