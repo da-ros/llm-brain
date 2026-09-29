@@ -58,265 +58,179 @@ ignore:
         expires: '2027-03-28T00:00:00.000Z'
 
   # ============================================================
-  # Debian Base Image Vulnerabilities (no fix available)
+  # Debian 13 (trixie) Base Image Vulnerabilities
   # ============================================================
 
   # zlib - Out-of-bounds Write (affects all services)
-  SNYK-DEBIAN12-ZLIB-19520487:
+  SNYK-DEBIAN13-ZLIB-19520500:
     - '*':
-        reason: >-
-          No fixed version available. Upstream fix not yet packaged.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-ZLIB-6008963:
-    - '*':
-        reason: >-
-          No fixed version available. Upstream fix not yet packaged.
+        reason: No fixed version available for Debian 13 (trixie).
         expires: '2027-01-01T00:00:00.000Z'
 
-  # util-linux - Multiple CVEs (affects all services)
-  SNYK-DEBIAN12-UTILLINUX-19513270:
+  # attr - Link Following (affects all services)
+  SNYK-DEBIAN13-ATTR-17678182:
     - '*':
-        reason: >-
-          No fixed version available. Upstream fix not yet packaged.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-UTILLINUX-19513278:
-    - '*':
-        reason: >-
-          No fixed version available. Upstream fix not yet packaged.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-UTILLINUX-19513283:
-    - '*':
-        reason: >-
-          No fixed version available. Upstream fix not yet packaged.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-UTILLINUX-19513290:
-    - '*':
-        reason: >-
-          No fixed version available. Upstream fix not yet packaged.
+        reason: No fixed version available for Debian 13 (trixie).
         expires: '2027-01-01T00:00:00.000Z'
 
-  # perl - Multiple CVEs (affects all services)
-  SNYK-DEBIAN12-PERL-17960064:
+  # acl - Link Following (affects all services)
+  SNYK-DEBIAN13-ACL-17677866:
     - '*':
-        reason: >-
-          No fixed version available. Upstream fix not yet packaged.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-PERL-17960069:
-    - '*':
-        reason: >-
-          No fixed version available. Upstream fix not yet packaged.
+        reason: No fixed version available for Debian 13 (trixie).
         expires: '2027-01-01T00:00:00.000Z'
 
   # ============================================================
-  # ETL Service - Additional Debian Vulnerabilities
+  # ETL Service - Additional Debian 13 Vulnerabilities
   # ============================================================
 
-  # ffmpeg - Multiple CVEs (ETL service only)
-  SNYK-DEBIAN12-FFMPEG-17661994:
+  # ffmpeg - Multiple CVEs
+  SNYK-DEBIAN13-FFMPEG-17661996:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18216087:
+  SNYK-DEBIAN13-FFMPEG-18216080:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18216104:
+  SNYK-DEBIAN13-FFMPEG-18216091:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18216123:
+  SNYK-DEBIAN13-FFMPEG-18216103:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18216124:
+  SNYK-DEBIAN13-FFMPEG-18216125:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18216138:
+  SNYK-DEBIAN13-FFMPEG-18216135:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18291996:
+  SNYK-DEBIAN13-FFMPEG-18291998:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18292005:
+  SNYK-DEBIAN13-FFMPEG-18292006:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18292007:
+  SNYK-DEBIAN13-FFMPEG-18292010:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18292025:
+  SNYK-DEBIAN13-FFMPEG-18292020:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18307495:
+  SNYK-DEBIAN13-FFMPEG-18307501:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18307497:
+  SNYK-DEBIAN13-FFMPEG-18307508:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18307516:
+  SNYK-DEBIAN13-FFMPEG-18307524:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18579648:
+  SNYK-DEBIAN13-FFMPEG-18307525:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18579653:
+  SNYK-DEBIAN13-FFMPEG-18579655:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18968978:
+  SNYK-DEBIAN13-FFMPEG-18579665:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18968979:
+  SNYK-DEBIAN13-FFMPEG-18968975:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18968986:
+  SNYK-DEBIAN13-FFMPEG-18968977:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18968990:
+  SNYK-DEBIAN13-FFMPEG-18968980:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-FFMPEG-18969014:
+  SNYK-DEBIAN13-FFMPEG-18969005:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-
-  # libxml2 - Multiple CVEs (ETL service)
-  SNYK-DEBIAN12-LIBXML2-19540204:
+  SNYK-DEBIAN13-FFMPEG-18969013:
     - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-LIBXML2-19540213:
-    - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-LIBXML2-19540217:
-    - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-LIBXML2-19540219:
-    - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-LIBXML2-19540221:
-    - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-LIBXML2-19540235:
-    - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-LIBXML2-19669395:
-    - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
 
-  # libssh - Multiple CVEs (ETL service)
-  SNYK-DEBIAN12-LIBSSH-18137783:
+  # libxml2 - Multiple CVEs
+  SNYK-DEBIAN13-LIBXML2-19540211:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-LIBSSH-18137794:
+  SNYK-DEBIAN13-LIBXML2-19540216:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-LIBSSH-18137812:
+  SNYK-DEBIAN13-LIBXML2-19540223:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-LIBSSH-18137816:
+  SNYK-DEBIAN13-LIBXML2-19540224:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-
-  # tesseract - Multiple CVEs (ETL service)
-  SNYK-DEBIAN12-TESSERACT-19685751:
+  SNYK-DEBIAN13-LIBXML2-19540226:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-TESSERACT-19685768:
+  SNYK-DEBIAN13-LIBXML2-19540237:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-TESSERACT-19685771:
+  SNYK-DEBIAN13-LIBXML2-19669394:
     - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-TESSERACT-19685776:
-    - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
 
-  # mbedtls - Multiple CVEs (ETL service)
-  SNYK-DEBIAN12-MBEDTLS-10627494:
+  # cjson - Multiple CVEs
+  SNYK-DEBIAN13-CJSON-18353643:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-MBEDTLS-10627505:
+  SNYK-DEBIAN13-CJSON-18392527:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-MBEDTLS-10627552:
+  SNYK-DEBIAN13-CJSON-18392530:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-
-  # cjson - Multiple CVEs (ETL service)
-  SNYK-DEBIAN12-CJSON-18353646:
+  SNYK-DEBIAN13-CJSON-18860558:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-CJSON-18392515:
+  SNYK-DEBIAN13-CJSON-19666194:
     - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-CJSON-18392519:
-    - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-CJSON-18860551:
-    - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN12-CJSON-19666201:
-    - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
 
-  # expat (ETL service)
-  SNYK-DEBIAN12-EXPAT-19964590:
+  # expat
+  SNYK-DEBIAN13-EXPAT-19964593:
     - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
 
-  # tiff (ETL service)
-  SNYK-DEBIAN12-TIFF-17690413:
+  # librsvg
+  SNYK-DEBIAN13-LIBRSVG-20079484:
     - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-
-  # librsvg (ETL service)
-  SNYK-DEBIAN12-LIBRSVG-20079556:
-    - '*':
-        reason: No fixed version available for Debian.
-        expires: '2027-01-01T00:00:00.000Z'
-
-  # intel-mediasdk (ETL service)
-  SNYK-DEBIAN12-INTELMEDIASDK-8061703:
-    - '*':
-        reason: No fixed version available for Debian.
+        reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
 
 patch: {}
