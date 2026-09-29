@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import httpx
-from jose import jwt
+import jwt
 
 os.environ.setdefault("SIMULATOR_STORE", "memory")
 os.environ.setdefault("LLM_TEMPERATURE", "0")

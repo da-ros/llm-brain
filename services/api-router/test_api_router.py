@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from jose import jwt
+import jwt
 
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only"
 os.environ["KAFKA_ENABLED"] = "false"
