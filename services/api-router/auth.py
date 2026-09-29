@@ -9,7 +9,8 @@ from typing import Annotated
 from config import get_settings
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jwt import ExpiredSignatureError, PyJWTError as JWTError, decode
+from jwt import ExpiredSignatureError, decode
+from jwt import PyJWTError as JWTError
 from logging_setup import log_with_correlation
 
 security = HTTPBearer(auto_error=False)
