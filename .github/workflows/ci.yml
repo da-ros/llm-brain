@@ -26,8 +26,8 @@ jobs:
           - 8001:8000
     steps:
       # ── 0. Quick setup (lint only needs ruff) ─────────────
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: Install linter
