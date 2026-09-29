@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     && apt-get upgrade -y \
+    && apt-get install -y --only-upgrade zlib1g libattr1 libacl1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
