@@ -115,7 +115,7 @@ def create_app() -> FastAPI:
         if not question:
             log_with_correlation(correlation_id, "warning", "POST /simulate blank question")
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="question is required",
             )
 
@@ -170,7 +170,7 @@ def create_app() -> FastAPI:
             )
         except ValueError as exc:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
             ) from exc
 

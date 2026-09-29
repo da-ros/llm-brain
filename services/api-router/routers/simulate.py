@@ -91,7 +91,7 @@ async def simulate(
     question = (body.question or "").strip()
     if not question:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="question is required",
         )
     log_with_correlation(correlation_id, "info", "Calling Simulator Service POST /simulate")

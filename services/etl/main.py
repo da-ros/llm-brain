@@ -7,6 +7,8 @@ regardless of Kafka / distillation activity.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from config import get_settings
 from fastapi import FastAPI, Request
 from logging_setup import correlation_id_var, log_with_correlation, logger
@@ -26,6 +28,19 @@ async def add_correlation_id(request: Request, call_next):
     return response
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage startup/shutdown events."""
+    settings = get_settings()
+    if settings.KAFKA_ENABLED:
+        from kafka_io import start_consumer_thread
+
+        start_consumer_thread()
+    else:
+        logger.info("Kafka consumer disabled (KAFKA_ENABLED=false)")
+    yield
+
+
 def create_app() -> FastAPI:
     """Build the FastAPI application (used by tests and uvicorn)."""
     settings = get_settings()
@@ -33,6 +48,7 @@ def create_app() -> FastAPI:
         title="ETL Service",
         description="One-Tap Memory Distillation — LangChain loaders + LLM triples",
         version=settings.SERVICE_VERSION,
+        lifespan=lifespan,
     )
     application.middleware("http")(add_correlation_id)
 
@@ -43,15 +59,6 @@ def create_app() -> FastAPI:
             "service": settings.SERVICE_NAME,
             "version": settings.SERVICE_VERSION,
         }
-
-    @application.on_event("startup")
-    async def startup_event():
-        if not settings.KAFKA_ENABLED:
-            logger.info("Kafka consumer disabled (KAFKA_ENABLED=false)")
-            return
-        from kafka_io import start_consumer_thread
-
-        start_consumer_thread()
 
     logger.info("ETL Service ready — port=%s llm=%s", settings.API_PORT, settings.LLM_SERVICE_URL)
     return application
