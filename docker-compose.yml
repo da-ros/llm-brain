@@ -1,29 +1,4 @@
 services:
-  # Frame 1 foundation image (apps.api). Use:
-  #   docker compose --profile foundation up api mongo chroma
-  # Default `up` still starts api-router on :8000 (Frame 1.1 gateway).
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-local-dev-secret-not-for-production}
-      - LLM_PROVIDER=qwen_local
-      - LLM_MODEL=Qwen3.5-4B
-      - LLM_SERVICE_URL=http://llm-service:8003
-      - MONGODB_URI=mongodb://mongo:27017
-      - MONGODB_DB=llm_brain
-    volumes:
-      - ./.env:/app/.env
-    depends_on:
-      - mongo
-      - chroma
-    profiles:
-      - foundation
-    restart: unless-stopped
-
   api-router:
     build: ./services/api-router
     ports:

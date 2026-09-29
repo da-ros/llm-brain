@@ -73,7 +73,7 @@ The platform supports multiple real users from the MVP.
 
 ## Impact
 
-- New code: `apps/api/` (FastAPI app, config, auth, LLM provider layer)
+- New code: `services/api-router/` (FastAPI app, config, auth, LLM provider layer)
 - New docs: `docs/architecture/` (C4 + MCP + deployment diagrams + stack decision)
 - New infra: Docker Compose (local MVP; includes the LLM container); ECS task definitions are
   future/out of scope; GitHub Actions CI

@@ -15,12 +15,9 @@ def _image_loader(path: str) -> Any:
 
 def ocr_image(payload: bytes, suffix: str = ".png") -> str:
     """Return OCR text. Empty string means the image had no readable text."""
-    handle = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-    try:
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
         handle.write(payload)
-        handle.close()
-        documents = _image_loader(handle.name).load()
-    finally:
-        os.unlink(handle.name)
+    documents = _image_loader(handle.name).load()
+    os.unlink(handle.name)
     parts = [str(getattr(doc, "page_content", "") or "").strip() for doc in documents]
     return "\n".join(part for part in parts if part).strip()

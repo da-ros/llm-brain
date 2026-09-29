@@ -104,11 +104,7 @@ def create_app() -> FastAPI:
     @application.post("/simulate", response_model=SimulateResponse)
     async def simulate(request: Request, body: SimulateRequest):
         correlation_id = request.state.correlation_id
-        tier = (
-            body.subscription_tier
-            or request.headers.get("X-Subscription-Tier")
-            or "free"
-        )
+        tier = body.subscription_tier or request.headers.get("X-Subscription-Tier") or "free"
         log_with_correlation(
             correlation_id,
             "info",
@@ -119,7 +115,7 @@ def create_app() -> FastAPI:
         if not question:
             log_with_correlation(correlation_id, "warning", "POST /simulate blank question")
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="question is required",
             )
 
@@ -174,7 +170,7 @@ def create_app() -> FastAPI:
             )
         except ValueError as exc:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
             ) from exc
 

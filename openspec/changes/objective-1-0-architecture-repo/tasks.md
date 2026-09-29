@@ -21,14 +21,14 @@
 > Establece las convenciones y estructura base antes de escribir código funcional.
 
 - [x] B.1 Define project structure: create directories, `__init__.py` files, placeholder modules
-      — `apps/api/`, `services/etl/`, `services/rag/`, `services/agents/`, etc.
+      — `services/api-router/`, `services/etl/`, `services/rag/`, `services/agents/`, etc.
 - [x] B.2 Pin dependency versions in `requirements.txt` (freeze the working set)
 - [x] B.3 Add `.gitignore` patterns, `CONTRIBUTING.md`, document conventional commits in `README`
-- [x] B.4 Add `Dockerfile` + `docker-compose.yml` (local dev environment)
-      — Services: API backend, MongoDB, Chroma
+- [x] B.4 Add `docker-compose.yml` (local dev environment)
+      — Services: API Router, ETL, RAG, LLM, MongoDB, Chroma, Kafka
 - [x] B.5 Add `.github/workflows/ci.yml` running `ruff` lint + `pytest` + Snyk on push/PR
-      — CI pipeline includes: ruff (lint), pytest (tests), snyk test (dependency scan),
-      snyk code test (SAST). This is the **Shift Left** security gate.
+      — CI pipeline includes: ruff (lint), pytest with coverage (threshold 90%),
+      snyk test (dependency scan), snyk code test (SAST). This is the **Shift Left** security gate.
 - [x] B.6 Add `ruff` configuration in `pyproject.toml`
 - [x] B.7 Document security strategy: Shift Left (Snyk in CI) + future Shift Right (monitoring in prod)
 
@@ -36,10 +36,10 @@
 
 > El contrato que todos los módulos posteriores usan. Configuración validada al inicio.
 
-- [x] C.1 Implement `apps/api/config.py` using `pydantic-settings`, reading `.env` with safe defaults
+- [x] C.1 Implement config using `pydantic-settings`, reading `.env` with safe defaults
 - [x] C.2 Validate required secrets at startup; raise clear error when provider key is missing
 - [x] C.3 Keep `.env.example` in sync with all settings
-- [x] C.4 Define `LLMProvider` protocol (chat/completion interface) in `apps/api/llm/base.py`
+- [x] C.4 Define `LLMProvider` protocol (chat/completion interface)
 - [x] C.5 Implement on-device provider (React Native / Neural Engine / Metal — Free: Qwen3.5-4B base quantized Q4; Premium: fine-tuned quantized Q4)
 - [x] C.6 Implement local containerized "cloud" provider (LLM Service 8003 — Qwen3.5-4B **base**, not fine-tuned)
 - [x] C.7 Implement `get_provider()` resolver that selects by `LLM_PROVIDER` and fails fast on unsupported values
@@ -48,7 +48,7 @@
 
 > El artefacto ejecutable que todos los módulos montan.
 
-- [x] D.1 Create `apps/api/main.py` with FastAPI app and router mounting structure
+- [x] D.1 Create `services/api-router/main.py` with FastAPI app and router mounting structure
 - [x] D.2 Implement public `GET /health` returning `status` + resolved `llm_provider` (no secrets)
 - [x] D.3 Implement JWT auth dependency (replaces basic-auth)
 - [x] D.4 Apply auth to a sample protected endpoint

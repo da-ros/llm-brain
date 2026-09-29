@@ -1,0 +1,60 @@
+# Snyk (https://snyk.io) policy file
+# Ignores vulnerabilities with no available fix
+
+version: v1.25.0
+ignore:
+  # chromadb - No fix available in latest version (1.5.9)
+  # These vulnerabilities exist in chromadb itself, no upstream patch
+  SNYK-PYTHON-CHROMADB-17337041:
+    - chromadb@1.5.9:
+        reason: >-
+          No fix available. chromadb maintainers have not patched this
+          vulnerability. Tracking: https://github.com/chroma-core/chroma/issues/XXXX
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-CHROMADB-16758047:
+    - chromadb@1.5.9:
+        reason: >-
+          No fix available. chromadb maintainers have not patched this
+          vulnerability. Tracking: https://github.com/chroma-core/chroma/issues/XXXX
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-CHROMADB-17337044:
+    - chromadb@1.5.9:
+        reason: >-
+          No fix available. chromadb maintainers have not patched this
+          vulnerability. Tracking: https://github.com/chroma-core/chroma/issues/XXXX
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-CHROMADB-17337045:
+    - chromadb@1.5.9:
+        reason: >-
+          No fix available. chromadb maintainers have not patched this
+          vulnerability. Tracking: https://github.com/chroma-core/chroma/issues/XXXX
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-CHROMADB-17337048:
+    - chromadb@1.5.9:
+        reason: >-
+          No fix available. chromadb maintainers have not patched this
+          vulnerability. Tracking: https://github.com/chroma-core/chroma/issues/XXXX
+        expires: '2027-03-28T00:00:00.000Z'
+
+  # langchain-community - No fix available in latest version (0.4.2)
+  # SSRF vulnerability in document loaders
+  SNYK-PYTHON-LANGCHAINCOMMUNITY-19233333:
+    - langchain-community@0.4.2:
+        reason: >-
+          No fix available. langchain-community maintainers have not patched
+          this SSRF vulnerability. Affects document loaders when processing
+          untrusted URLs.
+        expires: '2027-03-28T00:00:00.000Z'
+
+  # unstructured - Open Redirect
+  # Cannot upgrade to 0.24.0+ because it requires Python <3.14
+  # We are on Python 3.14 which is not supported by the fix version
+  SNYK-PYTHON-UNSTRUCTURED-19233386:
+    - unstructured@0.18.32:
+        reason: >-
+          Fix requires unstructured>=0.24.0 which needs Python <3.14.
+          Project uses Python 3.14. Will resolve when Python 3.14 is
+          supported by unstructured or when project downgrades to Python 3.13.
+        expires: '2027-03-28T00:00:00.000Z'
+
+patch: {}

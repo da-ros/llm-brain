@@ -41,8 +41,7 @@ def _prompt(
         f"Question: {question}\n"
         f"Variables: {json.dumps(variables, sort_keys=True)}\n"
         f"RAG excerpts:\n{excerpt_block}\n"
-        "Leaves:\n"
-        + "\n".join(leaf_lines)
+        "Leaves:\n" + "\n".join(leaf_lines)
     )
 
 
@@ -92,7 +91,9 @@ def parse_scenarios(text: str, leaves: list[dict[str, Any]]) -> list[dict[str, A
         cleaned = [str(item).strip() for item in assumptions if str(item).strip()]
         if not cleaned:
             raise InvalidScenarioJSONError(f"empty assumptions for {leaf['id']}")
-        authored.append({"id": leaf["id"], "title": title, "outcome": outcome, "assumptions": cleaned})
+        authored.append(
+            {"id": leaf["id"], "title": title, "outcome": outcome, "assumptions": cleaned}
+        )
     return authored
 
 

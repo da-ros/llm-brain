@@ -199,8 +199,8 @@ LangChain loaders (langchain_community.document_loaders)
 
 ```python
 def distill(file_path: str) -> list[Triple]:
-    loader = select_loader(file_path)        # elige loader LangChain por MIME
-    content = loader(file_path).load()       # carga el contenido
+    loader = select_loader(file_path)  # elige loader LangChain por MIME
+    content = loader(file_path).load()  # carga el contenido
     return llm_client.extract_triples(content)  # el LLM razona y emite triples
 ```
 
@@ -272,6 +272,7 @@ La capa de selección expone una interfaz mínima (`select` + `load`), y el clie
 ```python
 # distill() NO acopla a un loader concreto en todo el flujo:
 from langchain_community.document_loaders import PyPDFLoader  # ❌ acoplamiento directo
+
 
 # distill() SÍ hace esto:
 def distill(select_loader, llm_client, file: str):  # ✅ depende de abstracciones

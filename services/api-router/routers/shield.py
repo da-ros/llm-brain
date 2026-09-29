@@ -96,7 +96,7 @@ async def scan(
         not text and not body.content_base64
     ):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="text or file is required, and source must be valid",
         )
     log_with_correlation(correlation_id, "info", "Calling Shield Service POST /scan")

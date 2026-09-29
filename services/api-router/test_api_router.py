@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import os
 import sys
 import uuid
@@ -9,8 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import jwt
 import pytest
-from jose import jwt
 
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only"
 os.environ["KAFKA_ENABLED"] = "false"
@@ -919,3 +920,824 @@ class TestShield:
         assert empty.status_code == 200
         assert empty.json()["incidents"] == []
         client.publish_turn.assert_not_called()
+
+
+# ── Kafka IO coverage (kafka_io.py) ───────────────────────────────
+
+
+class TestClassifyResponse:
+    def test_success(self):
+        assert classify_response("success", None, 0, 3) == "success"
+
+    def test_retry_under_max(self):
+        assert classify_response("error", 500, 1, 3) == "retry"
+
+    def test_dlq_max(self):
+        assert classify_response("error", 500, 3, 3) == "dlq-max"
+
+    def test_error_4xx(self):
+        assert classify_response("error", 422, 0, 3) == "error"
+
+    def test_error_no_http_code(self):
+        assert classify_response("error", None, 0, 3) == "error"
+
+
+class TestFileUploadedMessage:
+    def test_builds_message(self):
+        from kafka_io import file_uploaded_message
+
+        task = {
+            "_id": "cid-1",
+            "user_id": "u1",
+            "file_id": "fid-1",
+            "filename": "test.pdf",
+            "content_type": "application/pdf",
+        }
+        msg = file_uploaded_message(task)
+        assert msg["correlation_id"] == "cid-1"
+        assert msg["user_id"] == "u1"
+        assert msg["file_id"] == "fid-1"
+        assert msg["service"] == "etl-service"
+
+    def test_defaults(self):
+        from kafka_io import file_uploaded_message
+
+        task = {"_id": "cid-2"}
+        msg = file_uploaded_message(task)
+        assert msg["service"] == "etl-service"
+        assert "endpoint" in msg
+
+
+class TestPublishFunctions:
+    def test_publish_session_turn_completed(self):
+        from kafka_io import publish_session_turn_completed
+
+        mock_producer = MagicMock()
+        with patch("kafka_io._producer", return_value=mock_producer):
+            publish_session_turn_completed({"correlation_id": "c1", "query": "q"})
+        mock_producer.send.assert_called_once()
+        mock_producer.flush.assert_called_once()
+        mock_producer.close.assert_called_once()
+
+    def test_publish_file_uploaded(self):
+        from kafka_io import publish_file_uploaded
+
+        mock_producer = MagicMock()
+        with patch("kafka_io._producer", return_value=mock_producer):
+            publish_file_uploaded({"correlation_id": "c1", "filename": "f.pdf"})
+        mock_producer.send.assert_called_once()
+        mock_producer.flush.assert_called_once()
+        mock_producer.close.assert_called_once()
+
+    def test_publish_dlq(self):
+        from kafka_io import publish_dlq
+
+        mock_producer = MagicMock()
+        with patch("kafka_io._producer", return_value=mock_producer):
+            publish_dlq({"correlation_id": "c1", "status": "dlq-max"})
+        mock_producer.send.assert_called_once()
+        mock_producer.flush.assert_called_once()
+        mock_producer.close.assert_called_once()
+
+
+class TestTriggerRagIngest:
+    @pytest.mark.asyncio
+    async def test_no_user_id_skips(self):
+        from kafka_io import trigger_rag_ingest
+
+        await trigger_rag_ingest({}, None, "cid-1")  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_success(self):
+        from kafka_io import trigger_rag_ingest
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"triples_count": 5}
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with patch("kafka_io.httpx.AsyncClient", return_value=mock_client):
+            await trigger_rag_ingest(
+                {"user_id": "u1", "file_id": "f1", "content_type": "pdf"},
+                None,
+                "cid-1",
+            )
+
+    @pytest.mark.asyncio
+    async def test_with_output_path(self):
+        from kafka_io import trigger_rag_ingest
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"triples_count": 3}
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with patch("kafka_io.httpx.AsyncClient", return_value=mock_client):
+            await trigger_rag_ingest(
+                {"user_id": "u1", "file_id": "f1"},
+                {"output_path": "/custom/path.jsonl"},
+                "cid-1",
+            )
+
+    @pytest.mark.asyncio
+    async def test_http_error_skips(self):
+        from kafka_io import trigger_rag_ingest
+
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with patch("kafka_io.httpx.AsyncClient", return_value=mock_client):
+            await trigger_rag_ingest(
+                {"user_id": "u1", "file_id": "f1"},
+                None,
+                "cid-1",
+            )
+
+    @pytest.mark.asyncio
+    async def test_connection_error_skips(self):
+        from kafka_io import trigger_rag_ingest
+
+        mock_client = AsyncMock()
+        mock_client.post.side_effect = Exception("connection refused")
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with patch("kafka_io.httpx.AsyncClient", return_value=mock_client):
+            await trigger_rag_ingest(
+                {"user_id": "u1", "file_id": "f1"},
+                None,
+                "cid-1",
+            )
+
+
+class TestApplyTaskResponse:
+    @pytest.mark.asyncio
+    async def test_missing_correlation_id(self):
+        from kafka_io import apply_task_response
+
+        await apply_task_response({})  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_task_not_found(self):
+        from kafka_io import apply_task_response
+
+        with patch("kafka_io.db") as mock_db:
+            mock_db.find_task = AsyncMock(return_value=None)
+            await apply_task_response({"correlation_id": "cid-1"})
+
+    @pytest.mark.asyncio
+    async def test_success_action(self):
+        from kafka_io import apply_task_response
+
+        task = {
+            "_id": "cid-1",
+            "user_id": "u1",
+            "file_id": "f1",
+            "retries": 0,
+            "max_retries": 3,
+        }
+        with (
+            patch("kafka_io.db") as mock_db,
+            patch("kafka_io.trigger_rag_ingest", new_callable=AsyncMock),
+        ):
+            mock_db.find_task = AsyncMock(return_value=task)
+            mock_db.update_task = AsyncMock()
+            await apply_task_response(
+                {
+                    "correlation_id": "cid-1",
+                    "status": "success",
+                    "result": {"output_path": "/path.jsonl"},
+                }
+            )
+            mock_db.update_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_retry_action(self):
+        from kafka_io import apply_task_response
+
+        task = {
+            "_id": "cid-1",
+            "user_id": "u1",
+            "file_id": "f1",
+            "retries": 0,
+            "max_retries": 3,
+        }
+        with patch("kafka_io.db") as mock_db, patch("kafka_io.publish_file_uploaded"):
+            mock_db.find_task = AsyncMock(return_value=task)
+            mock_db.update_task = AsyncMock()
+            await apply_task_response(
+                {
+                    "correlation_id": "cid-1",
+                    "status": "error",
+                    "http_code": 500,
+                    "error_message": "server error",
+                }
+            )
+            mock_db.update_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_dlq_max_action(self):
+        from kafka_io import apply_task_response
+
+        task = {
+            "_id": "cid-1",
+            "user_id": "u1",
+            "file_id": "f1",
+            "retries": 3,
+            "max_retries": 3,
+        }
+        with patch("kafka_io.db") as mock_db, patch("kafka_io.publish_dlq"):
+            mock_db.find_task = AsyncMock(return_value=task)
+            mock_db.update_task = AsyncMock()
+            await apply_task_response(
+                {
+                    "correlation_id": "cid-1",
+                    "status": "error",
+                    "http_code": 500,
+                    "error_message": "permanent failure",
+                }
+            )
+            mock_db.update_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_error_action(self):
+        from kafka_io import apply_task_response
+
+        task = {
+            "_id": "cid-1",
+            "user_id": "u1",
+            "file_id": "f1",
+            "retries": 0,
+            "max_retries": 3,
+        }
+        with patch("kafka_io.db") as mock_db:
+            mock_db.find_task = AsyncMock(return_value=task)
+            mock_db.update_task = AsyncMock()
+            await apply_task_response(
+                {
+                    "correlation_id": "cid-1",
+                    "status": "error",
+                    "http_code": 422,
+                    "error_message": "bad request",
+                }
+            )
+            mock_db.update_task.assert_called_once()
+
+
+class TestConsumerThread:
+    def test_stop_consumer_thread(self):
+        from kafka_io import stop_consumer_thread
+
+        stop_consumer_thread()  # Should not raise
+
+
+# ── MIME utility coverage (mimeutil.py) ──────────────────────────
+
+
+class TestDetectMime:
+    """Tests for detect_mime() covering python-magic detection and fallback paths."""
+
+    def test_magic_available_returns_detected_mime(self):
+        """When python-magic is available, detect_mime uses it."""
+        from mimeutil import detect_mime
+
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.return_value = "application/pdf"
+
+        with patch.dict("sys.modules", {"magic": mock_magic}):
+            result = detect_mime(b"%PDF-1.4 content", filename="test.pdf")
+        assert result == "application/pdf"
+        mock_magic.from_buffer.assert_called_once_with(b"%PDF-1.4 content", mime=True)
+
+    def test_magic_available_strips_parameters(self):
+        """Magic result with parameters (charset, etc.) is stripped."""
+        from mimeutil import detect_mime
+
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.return_value = "text/plain; charset=utf-8"
+
+        with patch.dict("sys.modules", {"magic": mock_magic}):
+            result = detect_mime(b"hello world")
+        assert result == "text/plain"
+
+    def test_magic_unavailable_falls_back_to_mimetypes(self):
+        """When python-magic import gives None, falls back to mimetypes.guess_type."""
+        from mimeutil import detect_mime
+
+        with patch.dict("sys.modules", {"magic": None}):
+            result = detect_mime(b"content", filename="document.pdf")
+        assert result == "application/pdf"
+
+    def test_magic_exception_falls_back_to_mimetypes(self):
+        """When magic.from_buffer raises, falls back to mimetypes."""
+        from mimeutil import detect_mime
+
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.side_effect = Exception("magic error")
+
+        with patch.dict("sys.modules", {"magic": mock_magic}):
+            result = detect_mime(b"content", filename="image.png")
+        assert result == "image/png"
+
+    def test_no_magic_no_filename_returns_octet_stream(self):
+        """Without magic and no filename, returns application/octet-stream."""
+        from mimeutil import detect_mime
+
+        with patch.dict("sys.modules", {"magic": None}):
+            result = detect_mime(b"\x00\x01\x02\x03")
+        assert result == "application/octet-stream"
+
+    def test_no_magic_unknown_extension_returns_octet_stream(self):
+        """Fallback to mimetypes returns octet-stream for unknown extensions."""
+        from mimeutil import detect_mime
+
+        with patch.dict("sys.modules", {"magic": None}):
+            result = detect_mime(b"data", filename="file.xyzunknown")
+        assert result == "application/octet-stream"
+
+    def test_magic_returns_empty_falls_back(self):
+        """If magic returns empty string, falls through to filename fallback."""
+        from mimeutil import detect_mime
+
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.return_value = ""
+
+        with patch.dict("sys.modules", {"magic": mock_magic}):
+            result = detect_mime(b"content", filename="notes.txt")
+        assert result == "text/plain"
+
+    def test_magic_returns_none_falls_back(self):
+        """If magic returns None/falsy, falls through to filename fallback."""
+        from mimeutil import detect_mime
+
+        mock_magic = MagicMock()
+        mock_magic.from_buffer.return_value = None
+
+        with patch.dict("sys.modules", {"magic": mock_magic}):
+            result = detect_mime(b"content", filename="page.html")
+        assert result == "text/html"
+
+    def test_filename_fallback_strips_parameters(self):
+        """mimetypes.guess_type result with parameters is stripped."""
+        from mimeutil import detect_mime
+
+        with (
+            patch.dict("sys.modules", {"magic": None}),
+            patch(
+                "mimeutil.mimetypes.guess_type",
+                return_value=("text/html; charset=utf-8", None),
+            ),
+        ):
+            result = detect_mime(b"<html>", filename="page.html")
+        assert result == "text/html"
+
+    def test_filename_fallback_no_match_returns_octet_stream(self):
+        """mimetypes returns None for unknown type -> octet-stream."""
+        from mimeutil import detect_mime
+
+        with (
+            patch.dict("sys.modules", {"magic": None}),
+            patch(
+                "mimeutil.mimetypes.guess_type",
+                return_value=(None, None),
+            ),
+        ):
+            result = detect_mime(b"data", filename="file.unknownext")
+        assert result == "application/octet-stream"
+
+    def test_magic_module_import_error_falls_back(self):
+        """ModuleNotFoundError during import magic is caught and falls back."""
+        from mimeutil import detect_mime
+
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "magic":
+                raise ImportError("No module named 'magic'")
+            return original_import(name, *args, **kwargs)
+
+        with patch.object(builtins, "__import__", side_effect=mock_import):
+            result = detect_mime(b"content", filename="doc.pdf")
+        assert result == "application/pdf"
+
+    def test_filename_only_no_magic(self):
+        """With no magic, filename-only path returns guessed MIME."""
+        from mimeutil import detect_mime
+
+        with patch.dict("sys.modules", {"magic": None}):
+            result = detect_mime(b"content", filename="photo.jpeg")
+        assert result == "image/jpeg"
+
+
+class TestIsAllowedUploadMime:
+    """Tests for is_allowed_upload_mime() covering all branches."""
+
+    def test_pdf_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("application/pdf") is True
+
+    def test_image_png_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("image/png") is True
+
+    def test_image_jpeg_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("image/jpeg") is True
+
+    def test_video_mp4_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("video/mp4") is True
+
+    def test_video_webm_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("video/webm") is True
+
+    def test_unknown_mime_not_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("application/zip") is False
+
+    def test_empty_string_not_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("") is False
+
+    def test_none_not_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime(None) is False
+
+    def test_mimetype_with_charset_still_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("application/pdf; charset=utf-8") is True
+
+    def test_case_insensitive(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("Application/PDF") is True
+
+    def test_text_plain_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("text/plain") is True
+
+    def test_docx_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert (
+            is_allowed_upload_mime(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+            is True
+        )
+
+    def test_video_quicktime_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("video/quicktime") is True
+
+    def test_non_video_unknown_not_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("application/x-executable") is False
+
+    def test_whitespace_around_mime_stripped(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("  video/webm  ") is True
+
+
+class TestSupportedTypesMessage:
+    def test_returns_nonempty_string(self):
+        from mimeutil import supported_types_message
+
+        msg = supported_types_message()
+        assert isinstance(msg, str)
+        assert len(msg) > 0
+
+    def test_mentions_key_types(self):
+        from mimeutil import supported_types_message
+
+        msg = supported_types_message()
+        assert "pdf" in msg
+        assert "image" in msg
+        assert "video" in msg
+        assert "text/plain" in msg
+
+
+# ── db.py unit tests ──────────────────────────────────────────────
+
+
+class TestDbConnectDisconnect:
+    """Cover connect() (lines 24-29) and disconnect() (lines 35-38)."""
+
+    @pytest.mark.asyncio
+    async def test_connect_creates_motor_client(self):
+        import motor.motor_asyncio  # noqa: F401 — ensure submodule is loaded
+
+        with patch("motor.motor_asyncio.AsyncIOMotorClient") as motor_cls:
+            mock_client = MagicMock()
+            motor_cls.return_value = mock_client
+
+            await api_db.connect()
+
+            assert motor_cls.called
+            assert api_db._client is mock_client
+            assert api_db._database is not None
+
+        # Clean up
+        api_db._client = None
+        api_db._database = None
+
+        # Clean up
+        api_db._client = None
+        api_db._database = None
+
+    @pytest.mark.asyncio
+    async def test_disconnect_closes_client(self):
+        mock_client = MagicMock()
+        api_db._client = mock_client
+        api_db._database = MagicMock()
+
+        await api_db.disconnect()
+
+        mock_client.close.assert_called_once()
+        assert api_db._client is None
+        assert api_db._database is None
+
+    @pytest.mark.asyncio
+    async def test_disconnect_when_already_none(self):
+        api_db._client = None
+        api_db._database = None
+        await api_db.disconnect()  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_disconnect_resets_globals(self):
+        """Verify both _client and _database are set to None after disconnect."""
+        mock_client = MagicMock()
+        api_db._client = mock_client
+        api_db._database = MagicMock()
+        await api_db.disconnect()
+        assert api_db._client is None
+        assert api_db._database is None
+        mock_client.close.assert_called_once()
+
+
+class TestDbHelper:
+    """Cover _db() (lines 42-44)."""
+
+    def test_db_raises_when_not_connected(self):
+        saved = api_db._database
+        api_db._database = None
+        try:
+            with pytest.raises(RuntimeError, match="MongoDB is not connected"):
+                api_db._db()
+        finally:
+            api_db._database = saved
+
+    def test_db_returns_database(self):
+        saved = api_db._database
+        mock_db = MagicMock()
+        api_db._database = mock_db
+        try:
+            assert api_db._db() is mock_db
+        finally:
+            api_db._database = saved
+
+
+class TestEnsureIndexes:
+    """Cover ensure_indexes() (lines 49-50)."""
+
+    @pytest.mark.asyncio
+    async def test_ensure_indexes_calls_create_index(self):
+        mock_db = MagicMock()
+        mock_task_status = MagicMock()
+        mock_task_status.create_index = AsyncMock()
+        mock_db.task_status = mock_task_status
+
+        saved = api_db._database
+        api_db._database = mock_db
+        try:
+            await api_db.ensure_indexes()
+            mock_task_status.create_index.assert_awaited_once_with(
+                "expires_at", expireAfterSeconds=0
+            )
+        finally:
+            api_db._database = saved
+
+
+class TestSaveUpload:
+    """Cover save_upload() (lines 86-94)."""
+
+    @pytest.mark.asyncio
+    async def test_save_upload_uses_gridfs_bucket(self):
+        import motor.motor_asyncio  # noqa: F401 — ensure submodule is loaded
+
+        mock_db = MagicMock()
+        mock_bucket_instance = MagicMock()
+        mock_bucket_instance.upload_from_stream = AsyncMock(return_value="file-object-id-123")
+
+        saved = api_db._database
+        api_db._database = mock_db
+        try:
+            with patch(
+                "motor.motor_asyncio.AsyncIOMotorGridFSBucket", return_value=mock_bucket_instance
+            ) as bucket_cls:
+                result = await api_db.save_upload(
+                    filename="receta.pdf",
+                    content=b"fake-content",
+                    content_type="application/pdf",
+                    user_id="user1",
+                )
+                bucket_cls.assert_called_once_with(mock_db)
+                mock_bucket_instance.upload_from_stream.assert_awaited_once()
+                call_args = mock_bucket_instance.upload_from_stream.call_args
+                assert call_args.args[0] == "receta.pdf"
+                assert call_args.kwargs["metadata"]["content_type"] == "application/pdf"
+                assert call_args.kwargs["metadata"]["user_id"] == "user1"
+                assert result == "file-object-id-123"
+        finally:
+            api_db._database = saved
+
+    @pytest.mark.asyncio
+    async def test_save_upload_defaults_filename(self):
+        import motor.motor_asyncio  # noqa: F401 — ensure submodule is loaded
+
+        mock_db = MagicMock()
+        mock_bucket_instance = MagicMock()
+        mock_bucket_instance.upload_from_stream = AsyncMock(return_value="fid-2")
+
+        saved = api_db._database
+        api_db._database = mock_db
+        try:
+            with patch(
+                "motor.motor_asyncio.AsyncIOMotorGridFSBucket", return_value=mock_bucket_instance
+            ):
+                result = await api_db.save_upload(
+                    filename="",
+                    content=b"data",
+                    content_type="text/plain",
+                    user_id="u2",
+                )
+                call_args = mock_bucket_instance.upload_from_stream.call_args
+                assert call_args.args[0] == "upload.bin"
+                assert result == "fid-2"
+        finally:
+            api_db._database = saved
+
+
+class TestInsertTask:
+    """Cover insert_task() (line 98)."""
+
+    @pytest.mark.asyncio
+    async def test_insert_task_calls_insert_one(self):
+        mock_db = MagicMock()
+        mock_db.task_status.insert_one = AsyncMock()
+
+        saved = api_db._database
+        api_db._database = mock_db
+        try:
+            doc = {"_id": "cid-1", "user_id": "u1", "status": "in_progress"}
+            await api_db.insert_task(doc)
+            mock_db.task_status.insert_one.assert_awaited_once_with(doc)
+        finally:
+            api_db._database = saved
+
+
+class TestFindTask:
+    """Cover find_task() (line 102)."""
+
+    @pytest.mark.asyncio
+    async def test_find_task_returns_document(self):
+        mock_db = MagicMock()
+        expected = {"_id": "cid-1", "status": "success"}
+        mock_db.task_status.find_one = AsyncMock(return_value=expected)
+
+        saved = api_db._database
+        api_db._database = mock_db
+        try:
+            result = await api_db.find_task("cid-1")
+            mock_db.task_status.find_one.assert_awaited_once_with({"_id": "cid-1"})
+            assert result == expected
+        finally:
+            api_db._database = saved
+
+    @pytest.mark.asyncio
+    async def test_find_task_returns_none(self):
+        mock_db = MagicMock()
+        mock_db.task_status.find_one = AsyncMock(return_value=None)
+
+        saved = api_db._database
+        api_db._database = mock_db
+        try:
+            result = await api_db.find_task("missing-id")
+            assert result is None
+        finally:
+            api_db._database = saved
+
+
+class TestUpdateTask:
+    """Cover update_task() (lines 106-107)."""
+
+    @pytest.mark.asyncio
+    async def test_update_task_sets_updated_at(self):
+        mock_db = MagicMock()
+        mock_db.task_status.update_one = AsyncMock()
+
+        saved = api_db._database
+        api_db._database = mock_db
+        try:
+            await api_db.update_task("cid-1", {"status": "success", "retries": 1})
+            mock_db.task_status.update_one.assert_awaited_once()
+            call_args = mock_db.task_status.update_one.call_args
+            assert call_args.args[0] == {"_id": "cid-1"}
+            payload = call_args.args[1]["$set"]
+            assert payload["status"] == "success"
+            assert payload["retries"] == 1
+            assert "updated_at" in payload
+            assert isinstance(payload["updated_at"], datetime)
+            assert payload["updated_at"].tzinfo is UTC
+        finally:
+            api_db._database = saved
+
+    @pytest.mark.asyncio
+    async def test_update_task_empty_updates(self):
+        mock_db = MagicMock()
+        mock_db.task_status.update_one = AsyncMock()
+
+        saved = api_db._database
+        api_db._database = mock_db
+        try:
+            await api_db.update_task("cid-1", {})
+            call_args = mock_db.task_status.update_one.call_args
+            payload = call_args.args[1]["$set"]
+            assert "updated_at" in payload
+            assert len(payload) == 1  # only updated_at
+        finally:
+            api_db._database = saved
+
+
+class TestTaskDocument:
+    """Cover task_document() more thoroughly."""
+
+    def test_all_fields_present(self):
+        from db import task_document
+
+        doc = task_document(
+            correlation_id="cid-x",
+            user_id="user-x",
+            file_id="fid-x",
+            filename="doc.pdf",
+            content_type="application/pdf",
+        )
+        assert doc["_id"] == "cid-x"
+        assert doc["user_id"] == "user-x"
+        assert doc["file_id"] == "fid-x"
+        assert doc["filename"] == "doc.pdf"
+        assert doc["content_type"] == "application/pdf"
+        assert doc["service"] == "etl-service"
+        assert doc["retries"] == 0
+        assert doc["http_code"] is None
+        assert doc["error_message"] is None
+        assert doc["result"] is None
+        assert doc["endpoint"].endswith("/process")
+
+    def test_created_at_and_updated_at_are_equal(self):
+        from db import task_document
+
+        doc = task_document(
+            correlation_id="c",
+            user_id="u",
+            file_id="f",
+            filename="a.txt",
+            content_type="text/plain",
+        )
+        assert doc["created_at"] == doc["updated_at"]
+
+    def test_ttl_days_matches_settings(self):
+        from datetime import timedelta
+
+        from db import task_document
+
+        settings = get_settings()
+        doc = task_document(
+            correlation_id="c",
+            user_id="u",
+            file_id="f",
+            filename="a.txt",
+            content_type="text/plain",
+        )
+        expected_expires = doc["created_at"] + timedelta(days=settings.TASK_STATUS_TTL_DAYS)
+        assert doc["expires_at"] == expected_expires

@@ -85,11 +85,7 @@ def parse_rag_text(text: str) -> dict[str, float]:
 def _source_of(item: dict[str, Any]) -> str:
     meta = item.get("metadata") or {}
     return str(
-        meta.get("source")
-        or meta.get("doc_id")
-        or meta.get("gridfs_id")
-        or item.get("id")
-        or ""
+        meta.get("source") or meta.get("doc_id") or meta.get("gridfs_id") or item.get("id") or ""
     )
 
 

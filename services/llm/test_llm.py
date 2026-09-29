@@ -273,3 +273,117 @@ def test_settings_cache_reset():
     clear_settings_cache()
     s = get_settings()
     assert s.QWEN_MODEL_ID == "qwen3.5-4b"
+
+
+# ── Extract endpoint coverage ─────────────────────────────────────
+
+
+class TestExtractCoverage:
+    def test_extract_empty_content(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post("/extract", json={"content": "", "user_id": "u1"})
+        assert response.status_code == 400
+
+    def test_extract_whitespace_content(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post("/extract", json={"content": "   ", "user_id": "u1"})
+        assert response.status_code == 400
+
+    def test_extract_missing_content(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post("/extract", json={"user_id": "u1"})
+        assert response.status_code == 400
+
+    def test_extract_invalid_tier(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post(
+            "/extract",
+            json={"content": "test content", "user_id": "u1", "tier": "invalid"},
+        )
+        assert response.status_code == 400
+
+
+# ── Chat endpoint coverage ────────────────────────────────────────
+
+
+class TestChatCoverage:
+    def test_chat_empty_messages(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post("/chat", json={"messages": [], "user_id": "u1"})
+        assert response.status_code == 400
+
+    def test_chat_missing_messages(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post("/chat", json={"user_id": "u1"})
+        assert response.status_code == 400
+
+    def test_chat_missing_user_id(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+        assert response.status_code == 400
+
+    def test_chat_invalid_tier(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "hi"}],
+                "user_id": "u1",
+                "tier": "invalid",
+            },
+        )
+        assert response.status_code == 400
+
+    def test_chat_success(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "hello"}],
+                "user_id": "u1",
+            },
+        )
+        assert response.status_code == 200
+        assert "response" in response.json()
+
+    def test_chat_with_context(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "hello"}],
+                "user_id": "u1",
+                "context": "some RAG context",
+            },
+        )
+        assert response.status_code == 200

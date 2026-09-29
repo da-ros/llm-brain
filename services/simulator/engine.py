@@ -156,7 +156,10 @@ def _mandatory(family: str, variables: dict[str, float]) -> list[dict[str, Any]]
             pessimistic = ("leaf:budget_pressure", ["spend_gt_0", "leaf:budget_pressure"])
         else:
             optimistic = ("leaf:spend_unknown", ["spend_eq_0", "leaf:spend_unknown"])
-            pessimistic = ("leaf:budget_unknown_risk", ["spend_unknown", "leaf:budget_unknown_risk"])
+            pessimistic = (
+                "leaf:budget_unknown_risk",
+                ["spend_unknown", "leaf:budget_unknown_risk"],
+            )
         baseline = ("leaf:money_baseline", ["money_eq_current", "leaf:money_baseline"])
     else:
         prescriptions = variables["active_prescriptions"]

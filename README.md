@@ -20,7 +20,7 @@ AWS (Bedrock, ECS, API Gateway) is future work.
 
 | # | Module | Path |
 |---|--------|------|
-| 1 | Architecture & repo (C4, MCP, CI, JWT, LLM protocol) | `apps/api/`, `docs/architecture/` |
+| 1 | Architecture & repo (C4, MCP, CI, JWT, LLM protocol) | `services/api-router/`, `docs/architecture/` |
 | 2 | One-Tap Memory Distillation (ETL → JSON triples) | `services/etl/` |
 | 3 | Hybrid store + RAG (Mongo + Chroma + LangChain) | `services/rag/` |
 | 4 | LLM container (Qwen3.5-4B base) + local LoRA | `services/llm/`, `services/finetune/` |
@@ -28,16 +28,13 @@ AWS (Bedrock, ECS, API Gateway) is future work.
 | 6 | Decision-Support Simulator (what-if) | `services/simulator/` |
 | 7 | Life Analytics (React + Chart.js) | `apps/web/` |
 | 8 | Privacy & Scam Shield | `services/shield/` |
-| 9 | Alpha validation & KPIs | across modules + `apps/api/` |
+| 9 | Alpha validation & KPIs | across modules |
 
 ## Repository layout
 
 ```text
 llm-brain/
 ├─ openspec/       # Spec-driven development: specs (truth) + changes (proposals)
-├─ apps/
-│  ├─ api/         # Platform foundation (health, JWT, LLMProvider)
-│  └─ web/         # React + Chart.js dashboard (later frame)
 ├─ services/
 │  ├─ api-router/  # Gateway (JWT, Kafka, routing) — Frame 1.1
 │  ├─ etl/         # One-Tap Memory Distillation
@@ -48,7 +45,7 @@ llm-brain/
 │  ├─ simulator/   # Decision-Support Simulator
 │  └─ shield/      # Privacy & Scam Shield
 ├─ notebooks/      # Fine-tune experiment log
-├─ infra/          # Pointers to Docker Compose / Dockerfile
+├─ infra/          # Docker Compose configuration
 └─ docs/architecture/  # C4, stack, security, decisions
 ```
 
@@ -72,15 +69,12 @@ In Cursor, drive the workflow with slash commands: `/opsx-propose`, `/opsx-apply
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env      # JWT_SECRET_KEY is required
-uvicorn apps.api.main:app --reload --port 8000
 ```
 
 Local stack (MongoDB, Chroma, Kafka, services):
 
 ```bash
 docker compose up --build
-# Frame 1 foundation API only:
-docker compose --profile foundation up --build api mongo chroma
 ```
 
 ### Memory distillation (Frame 2)

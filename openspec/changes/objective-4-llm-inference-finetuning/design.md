@@ -109,7 +109,9 @@ Triples (JSONL) → Format conversion → Local LoRA over Qwen3.5-4B → LoRA ad
 ```python
 # Local Qwen3.5-4B container
 QWEN_MODEL_ID: str = "qwen3.5-4b"
-QWEN_ADAPTER_PATH: str | None = None   # LoRA adapter path (Premium on-device build only; cloud unused)
+QWEN_ADAPTER_PATH: str | None = (
+    None  # LoRA adapter path (Premium on-device build only; cloud unused)
+)
 
 # Service
 LLM_HOST: str = "0.0.0.0"
@@ -120,7 +122,7 @@ LLM_PORT: int = 8003
 ```python
 # Local LoRA over Qwen3.5-4B
 BASE_MODEL_ID: str = "qwen3.5-4b"
-LORA_BACKEND: str = "peft"   # peft / ms-swift / unsloth
+LORA_BACKEND: str = "peft"  # peft / ms-swift / unsloth
 
 # Training
 TRAINING_EPOCHS: int = 5

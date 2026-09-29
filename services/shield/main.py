@@ -108,13 +108,13 @@ def create_app() -> FastAPI:
         if source not in SOURCES or (not text and not file_bytes):
             log_with_correlation(correlation_id, "warning", "POST /scan missing content or source")
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="text or file is required, and source must be valid",
             )
         if len(file_bytes) > settings.MAX_UPLOAD_BYTES:
             log_with_correlation(correlation_id, "warning", "POST /scan file too large")
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="file exceeds 20 MB",
             )
 
