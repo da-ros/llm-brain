@@ -29,6 +29,6 @@ jobs:
 
       - uses: snyk/actions/setup@master
       - name: Run Snyk container scan
-        run: snyk container test llm-brain/${{ matrix.service }}:latest --severity-threshold=high
+        run: snyk container test llm-brain/${{ matrix.service }}:latest --severity-threshold=high --policy-path=.snyk
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
