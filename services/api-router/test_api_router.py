@@ -10,8 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 import jwt
+import pytest
 
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only"
 os.environ["KAFKA_ENABLED"] = "false"
