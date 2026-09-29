@@ -5,7 +5,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && apt-get upgrade -y \
-    && apt-get install -y --only-upgrade zlib1g libattr1 libacl1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
