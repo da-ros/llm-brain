@@ -45,7 +45,7 @@ Upload stays **202** (Frame 2). `/ingest` returns **201** with `triples_count`.
 | `RAG_TOP_K` | `3` | Retrieval width |
 | `RAG_CHUNK_SIZE` | `1000` | LangChain splitter |
 | `RAG_CHUNK_OVERLAP` | `200` | LangChain splitter |
-| `FERNET_KEY` | *(required in prod)* | Application-level encryption |
+| `FERNET_KEY` | see note | rag-service only. At-rest encryption: `chunk_text` + ciphertext copy of each vector. Default = `urlsafe_b64(sha256("FERNET_KEY@TESIS_MESTRIA_UPS"))`. Production: stable key from the secret store — rotating it makes stored ciphertext unreadable |
 
 Set `EMBEDDING_MOCK=false` only when the Qwen3-VL-Embedding-2B weights are available.
 

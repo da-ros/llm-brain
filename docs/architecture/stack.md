@@ -4,7 +4,7 @@
 |-------|--------|-----------|
 | Language | Python 3.13 | Async FastAPI, first-class typing, thesis runtime |
 | API | FastAPI + uvicorn | Health, JWT dependencies, OpenAPI for the defense |
-| Settings | pydantic-settings | `.env` + fail-fast validation |
+| Settings | pydantic-settings | env vars (Compose / ECS task definition), optional `.env`, fail-fast validation |
 | Auth | JWT (python-jose) + bcrypt | Multi-tenant `user_id` + `subscription_tier` |
 | LLM protocol | `LLMProvider` Protocol | Switch on-device vs local container without rewriting callers |
 | Cloud LLM | Qwen3.5-4B **base** in Docker :8003 | $0, local, multimodal; not Bedrock |
