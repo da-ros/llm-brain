@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
+from base import NO_PERSONAL_CONTEXT
 from config import get_settings
 from exceptions import LLMTimeoutError, LLMUpstreamError, UnknownToolError
 from fastapi import HTTPException
@@ -98,6 +99,17 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "user_id": "str",
             "text": "str",
             "source": "str",
+            "subscription_tier": "str",
+            "correlation_id": "str",
+        },
+    },
+    {
+        "name": "analytics_query",
+        "owner": "Analytics",
+        "description": "Pearson correlations via Analytics Service (port 8008). Not used by reason_graph.",
+        "wraps": "Analytics Service GET /correlations",
+        "input_schema": {
+            "user_id": "str",
             "subscription_tier": "str",
             "correlation_id": "str",
         },
@@ -240,11 +252,12 @@ def heuristic_score(response: str, assumptions: list[str]) -> tuple[float, str, 
         reasons.append("non-empty answer")
     else:
         reasons.append("empty answer")
-    if assumptions:
+    personal = [item for item in assumptions if (item or "").strip() and item != NO_PERSONAL_CONTEXT]
+    if personal:
         score += 0.5
-        reasons.append("assumptions present")
+        reasons.append("personal context")
     else:
-        reasons.append("missing assumptions")
+        reasons.append("no personal facts")
     include = score >= settings.EVAL_SCORE_THRESHOLD
     return score, "; ".join(reasons), include
 
@@ -447,6 +460,59 @@ async def scan_message(arguments: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def analytics_query(arguments: dict[str, Any]) -> dict[str, Any]:
+    """HTTP GET Analytics /correlations. Timeout → 504, 5xx → 502. Does not invent r."""
+    settings = get_settings()
+    correlation_id = arguments.get("correlation_id") or "no-id"
+    user_id = arguments.get("user_id") or ""
+    log_with_correlation(
+        correlation_id,
+        "info",
+        f"MCP analytics_query → Analytics {settings.ANALYTICS_SERVICE_URL}/correlations",
+    )
+    try:
+        async with httpx.AsyncClient(timeout=settings.ANALYTICS_TIMEOUT_SECONDS) as client:
+            response = await client.get(
+                f"{settings.ANALYTICS_SERVICE_URL}/correlations",
+                params={
+                    "user_id": user_id,
+                    "subscription_tier": arguments.get("subscription_tier") or "premium",
+                },
+                headers=_headers(correlation_id),
+            )
+    except httpx.TimeoutException as exc:
+        log_with_correlation(correlation_id, "error", "Analytics service timeout")
+        raise LLMTimeoutError("Analytics service timeout") from exc
+    except httpx.HTTPError as exc:
+        log_with_correlation(correlation_id, "error", f"Analytics service error: {exc}")
+        raise LLMUpstreamError(f"Analytics service error: {exc}") from exc
+
+    if response.status_code == 504:
+        log_with_correlation(correlation_id, "error", "Analytics service HTTP 504")
+        raise LLMTimeoutError("Analytics service timeout")
+    if response.status_code >= 500:
+        log_with_correlation(
+            correlation_id,
+            "error",
+            f"Analytics service HTTP {response.status_code}",
+        )
+        raise LLMUpstreamError(f"Analytics service HTTP {response.status_code}")
+    if response.status_code >= 400:
+        detail = "Analytics service error"
+        try:
+            body = response.json() or {}
+            detail = body.get("detail") or detail
+        except Exception:
+            detail = response.text or detail
+        raise HTTPException(status_code=response.status_code, detail=detail)
+    data = response.json() or {}
+    return {
+        "pairs": data.get("pairs") or {},
+        "narrative": data.get("narrative") or "",
+        "llm_used": data.get("llm_used"),
+    }
+
+
 HANDLERS: dict[str, ToolHandler] = {
     "rag_search": rag_search,
     "llm_generate": llm_generate,
@@ -455,6 +521,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "finetune_trigger": finetune_trigger,
     "simulate_whatif": simulate_whatif,
     "scan_message": scan_message,
+    "analytics_query": analytics_query,
 }
 
 

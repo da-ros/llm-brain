@@ -1,0 +1,32 @@
+schema: spec-driven
+created: 2026-08-27
+frame: frame-7
+title: "User Interface"
+description: "Encefalus web app: welcome, home, and the product screens, each built from the API Router. Analytics is the correlations screen."
+anteproyecto_objectives:
+  - "Objetivo Específico 7 (User interface)"
+depends_on:
+  - frame-6
+  - frame-8
+execution_order: 8
+status: proposed
+services:
+  - name: web
+    directory: apps/web
+    port: 5173
+    description: "Encefalus user interface. The browser talks only to the API Router."
+  - name: analytics-service
+    directory: services/analytics
+    port: 8008
+    description: "Life-metric ingest and Pearson correlations for the Analytics screen"
+specs:
+  - specs/user-interface/spec.md
+  - specs/analytics-service/spec.md
+  - specs/agents-service/spec.md
+  - specs/api-router/spec.md
+output:
+  diagrams:
+    - ui-architecture.drawio
+    - ui-dataflow.drawio
+  documents:
+    - justificacion-ejemplo.md

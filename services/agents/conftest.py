@@ -31,6 +31,7 @@ _TOP_LEVEL = (
     "razonador",
     "ingestor",
     "evaluador",
+    "learning",
     "kafka_io",
 )
 

@@ -32,12 +32,14 @@ class Settings(BaseSettings):
     FINETUNE_SERVICE_URL: str = "http://finetune-service:8004"
     SIMULATOR_SERVICE_URL: str = "http://simulator-service:8007"
     SHIELD_SERVICE_URL: str = "http://shield-service:8009"
+    ANALYTICS_SERVICE_URL: str = "http://analytics-service:8008"
 
     RAG_TIMEOUT_SECONDS: float = 10.0
     LLM_TIMEOUT_SECONDS: float = 25.0
     FINETUNE_TIMEOUT_SECONDS: float = 15.0
     SIMULATOR_TIMEOUT_SECONDS: float = 30.0
     SHIELD_TIMEOUT_SECONDS: float = 30.0
+    ANALYTICS_TIMEOUT_SECONDS: float = 30.0
 
     KAFKA_ENABLED: bool = True
     KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"

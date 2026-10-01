@@ -22,14 +22,14 @@ context: |
        Evaluador; manual incremental fine-tuning batches. LangChain stays in RAG.
     6. Decision-Support Simulator: deterministic what-if, 3-5 scenarios w/ explicit
        traceable assumptions.
-    7. Life Analytics: React + Chart.js dashboard, >=2 interactive correlations (sleep/productivity).
+    7. User Interface: Encefalus web app. Analytics is one screen, with two interactive correlations (sleep/productivity, meetings/focus).
     8. Privacy & Scam Shield: phishing/scam detection via heuristics + embedding similarity.
     9. Alpha validation: pytest, FastAPI+Mongo integration, KPIs (mean latency, RAG Top-3
        precision), video demo.
 
   Tech stack (OSS, ~$0 budget; LOCAL-ONLY MVP — AWS is future work, not in scope):
     - Backend: Python 3.13, FastAPI, LangChain (loaders + RAG), LangGraph (agents).
-    - Frontend: React + Chart.js (web); React Native (iPhone) + Neural Engine / Metal
+    - Frontend: React (web); React Native (iPhone) + Neural Engine / Metal
       (mobile, on-device LLM).
     - Parsers: LangChain document loaders out-of-the-box (any format, incl. OCR/video).
     - Data: MongoDB (local Docker, GridFS for binaries), Chroma (local Docker, 2048-dim).
@@ -220,11 +220,11 @@ frames:
     parallel_with: ["frame-8"]
 
   frame-7:
-    directory: objective-7-life-analytics
-    title: "Life Analytics (Frontend)"
-    description: "React + Chart.js dashboard, >=2 interactive correlations (sleep/productivity)"
+    directory: objective-7-user-interface
+    title: "User Interface"
+    description: "Encefalus web app. Each product screen is built from the API Router. Analytics is the correlations screen (sleep/productivity, meetings/focus)."
     anteproyecto_objectives:
-      - "Objetivo Específico 7 (Analytics dashboard)"
+      - "Objetivo Específico 7 (User interface)"
     depends_on: ["frame-6", "frame-8"]
     execution_order: 7
 

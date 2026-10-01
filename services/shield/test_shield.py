@@ -219,12 +219,24 @@ class TestScan:
         assert isinstance(response.json()["likelihood"], float)
         assert FakeClient.chat_calls == 1
 
-    def test_ham_alert_false_does_not_persist(self, client):
+    def test_ham_alert_false_is_still_stored(self, client):
         response = _scan(client, text="Dinner at 7 at the usual place.", cid="cid-ham")
         assert response.status_code == 200
-        assert response.json()["alert"] is False
-        assert any(item["type"] == "llm" for item in response.json()["reasons"])
-        assert db.memory().by_id == {}
+        body = response.json()
+        assert body["alert"] is False
+        assert body["severity"] == "none"
+        assert body["rationale"]
+        assert body["incident_id"]
+        assert any(item["type"] == "llm" for item in body["reasons"])
+        assert len(db.memory().by_id) == 1
+        listed = client.get(
+            "/incidents",
+            params={"user_id": "user1", "subscription_tier": "premium"},
+        )
+        saved = listed.json()["incidents"][0]
+        assert saved["id"] == body["incident_id"]
+        assert saved["rationale"] == body["rationale"]
+        assert saved["reasons"]
 
     def test_missing_content_is_422(self, client):
         before = FakeClient.chat_calls

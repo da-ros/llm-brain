@@ -80,6 +80,8 @@ class SimulateResponse(BaseModel):
     llm_used: bool
     correlation_id: str
     model_id: str | None = None
+    question: str = ""
+    created_at: str = ""
 
 
 def create_app() -> FastAPI:
@@ -304,6 +306,8 @@ def _to_response(document: dict[str, Any]) -> SimulateResponse:
         llm_used=bool(document.get("llm_used")),
         correlation_id=document.get("correlation_id") or "",
         model_id=document.get("model_id"),
+        question=str(document.get("question") or ""),
+        created_at=str(document.get("created_at") or ""),
     )
 
 

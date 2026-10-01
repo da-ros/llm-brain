@@ -9,13 +9,30 @@ from __future__ import annotations
 import uuid
 from contextlib import asynccontextmanager
 
+import accounts
+import brain_store
 import db
 import kafka_io
 from config import get_settings
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from logging_setup import correlation_id_var, log_with_correlation, logger
-from routers import chat, documents, finetune, health, sessions, shield, simulate, tasks, upload
+from routers import (
+    account,
+    analytics,
+    calendar,
+    chat,
+    chats,
+    documents,
+    finetune,
+    health,
+    learning,
+    sessions,
+    shield,
+    simulate,
+    tasks,
+    upload,
+)
 
 
 @asynccontextmanager
@@ -24,6 +41,8 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     await db.connect()
     await db.ensure_indexes()
+    await accounts.ensure_indexes()
+    await brain_store.ensure_indexes()
     if settings.KAFKA_ENABLED:
         kafka_io.start_consumer_thread()
     else:
@@ -65,12 +84,17 @@ def create_app() -> FastAPI:
     )
     application.middleware("http")(add_correlation_id)
     application.include_router(health.router)
+    application.include_router(account.router)
     application.include_router(upload.router)
     application.include_router(chat.router)
+    application.include_router(chats.router)
+    application.include_router(calendar.router)
     application.include_router(sessions.router)
     application.include_router(finetune.router)
+    application.include_router(learning.router)
     application.include_router(simulate.router)
     application.include_router(shield.router)
+    application.include_router(analytics.router)
     application.include_router(documents.router)
     application.include_router(tasks.router)
     return application

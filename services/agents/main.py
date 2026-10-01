@@ -18,6 +18,7 @@ from evaluador import finalize_session, trigger_batch
 from exceptions import LLMTimeoutError, LLMUpstreamError, UnknownToolError
 from fastapi import FastAPI, HTTPException, Request, status
 from graphs import run_reason_graph
+from learning import build_learning
 from logging_setup import correlation_id_var, log_with_correlation, logger
 from pydantic import BaseModel, Field
 from tools import invoke_tool, list_tools
@@ -197,6 +198,11 @@ def create_app() -> FastAPI:
     @application.get("/batches")
     async def get_batches(user_id: str):
         return {"batches": await db.list_batches(user_id)}
+
+    @application.get("/learning")
+    async def learning(request: Request, user_id: str):
+        log_with_correlation(request.state.correlation_id, "info", f"GET /learning user_id={user_id}")
+        return await build_learning(user_id, request.state.correlation_id)
 
     @application.get("/interactions/{correlation_id}")
     async def get_interaction(correlation_id: str, user_id: str):

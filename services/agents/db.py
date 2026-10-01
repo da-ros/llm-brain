@@ -146,6 +146,13 @@ async def upsert_interaction(document: dict[str, Any]) -> dict[str, Any]:
         return _serialize(stored) or record
 
 
+async def count_interactions(user_id: str) -> int:
+    """How many premium turns are stored for this user."""
+    if use_memory():
+        return sum(1 for doc in memory().interactions.values() if doc.get("user_id") == user_id)
+    return await _db().agent_interactions.count_documents({"user_id": user_id})
+
+
 async def find_interaction(
     correlation_id: str, user_id: str | None = None
 ) -> dict[str, Any] | None:

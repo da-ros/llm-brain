@@ -21,6 +21,13 @@ IMAGE_TYPES = {"image", "image/jpeg", "image/png", "image/webp", "image/gif"}
 VIDEO_TYPES = {"video", "video/mp4", "video/webm", "video/quicktime"}
 
 
+def _clip_summary(texts: list[str], limit: int = 180) -> str:
+    compact = " ".join(" ".join(texts).split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3].rstrip() + "..."
+
+
 def modality_from_type(doc_type: str | None) -> str:
     """Map a document type / MIME to text | image | video."""
     value = (doc_type or "text").lower()
@@ -99,6 +106,7 @@ class RAGService:
         *,
         gridfs_id: str = "",
         doc_type: str = "text",
+        filename: str = "",
         correlation_id: str = "no-id",
     ) -> int:
         """Read Frame 2 JSONL, chunk, embed (2048-dim), encrypt, store in Chroma."""
@@ -196,6 +204,10 @@ class RAGService:
                 gridfs_id=gridfs_id,
                 triples_path=triples_path,
                 correlation_id=correlation_id,
+                filename=filename or (sources[0] if sources else ""),
+                content_type=doc_type,
+                summary=_clip_summary(texts),
+                source_id=doc_id,
             )
         except Exception as exc:
             log_with_correlation(
@@ -260,6 +272,12 @@ class RAGService:
     async def delete_document_embeddings(self, doc_id: str, user_id: str) -> int:
         """Delete Chroma rows for one document (user-scoped)."""
         return await self.vector_store.delete_where({"user_id": user_id, "doc_id": doc_id})
+
+    async def delete_user_memory(self, user_id: str) -> dict[str, int]:
+        """Drop every vector and raw document that belongs to this user."""
+        embeddings = await self.vector_store.delete_where({"user_id": user_id})
+        documents = await self.documents.delete_all_for_user(user_id)
+        return {"documents": documents, "embeddings": embeddings}
 
 
 rag_service = RAGService()

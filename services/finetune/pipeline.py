@@ -36,6 +36,7 @@ class TrainingJob:
     triples_count: int
     hyperparams: dict
     correlation_id: str = "no-id"
+    phase: str = "submitted"
     error: str | None = None
     metrics: dict = field(default_factory=dict)
     model_version: str | None = None
@@ -170,6 +171,7 @@ def _run_job(job_id: str) -> None:
         if job is None or job.status == "cancelled":
             return
         job.status = "in_progress"
+        job.phase = "preparing"
         job.updated_at = _now()
         correlation_id = job.correlation_id
         dataset_path = job.dataset_path
@@ -183,6 +185,12 @@ def _run_job(job_id: str) -> None:
 
     try:
         examples = convert_triples_to_training_format(dataset_path)
+        with _jobs_lock:
+            job = jobs.get(job_id)
+            if job is None or job.status == "cancelled":
+                return
+            job.phase = "training"
+            job.updated_at = _now()
         adapter_dir = Path(settings.ADAPTER_OUTPUT_DIR) / user_id / "adapter"
         metrics = run_lora_training(
             examples=examples,
@@ -197,6 +205,7 @@ def _run_job(job_id: str) -> None:
             if job.status == "cancelled":
                 return
             job.status = "completed"
+            job.phase = "completed"
             job.updated_at = _now()
             job.completed_at = job.updated_at
             job.adapter_path = str(adapter_dir)
@@ -220,6 +229,7 @@ def _run_job(job_id: str) -> None:
             if job is None:
                 return
             job.status = "failed"
+            job.phase = "failed"
             job.updated_at = _now()
             job.completed_at = job.updated_at
             job.error = str(exc)

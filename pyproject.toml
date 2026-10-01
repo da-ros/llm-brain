@@ -46,6 +46,8 @@ known-first-party = ["apps", "services"]
 "services/simulator/conftest.py" = ["E402"]
 "services/shield/test_shield.py" = ["E402"]
 "services/shield/conftest.py" = ["E402"]
+"services/analytics/test_analytics.py" = ["E402"]
+"services/analytics/conftest.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

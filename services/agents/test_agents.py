@@ -202,7 +202,12 @@ class TestLearnGraph:
     async def test_evaluador_does_not_auto_train(self):
         train = AsyncMock()
         with patch.dict(HANDLERS, {"finetune_trigger": train}):
-            result = await run_learn_graph(_learn_state(correlation_id="no-train"))
+            result = await run_learn_graph(
+                _learn_state(
+                    correlation_id="no-train",
+                    assumptions=["The answer is grounded in the user's retrieved personal documents."],
+                )
+            )
         train.assert_not_called()
         assert result["should_include_in_batch"] is True
         import db
@@ -219,6 +224,8 @@ class TestLearnGraph:
         assert score == 1.0
         assert include is True
         score, _reason, include = heuristic_score("an answer", [])
+        assert include is False
+        score, _reason, include = heuristic_score("an answer", [NO_PERSONAL_CONTEXT])
         assert include is False
 
 
@@ -1317,3 +1324,132 @@ class TestKafkaIo:
         from kafka_io import stop_consumer_thread
 
         stop_consumer_thread()
+
+
+class TestAnalyticsQuery:
+    """MCP analytics_query wraps Analytics GET /correlations. Graphs stay unchanged."""
+
+    def test_tool_is_listed(self, client):
+        response = client.get("/mcp/tools")
+        names = {tool["name"] for tool in response.json()["tools"]}
+        assert "analytics_query" in names
+
+    def test_forwards_to_analytics(self, client):
+        captured: dict = {}
+
+        class FakeResponse:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "pairs": {"sleep_productivity": {"r": 0.5, "n": 4, "status": "ok"}},
+                    "narrative": "Sleep tracks productivity.",
+                    "llm_used": True,
+                }
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def get(self, url, params=None, headers=None):
+                captured["url"] = url
+                captured["params"] = params
+                captured["headers"] = headers
+                return FakeResponse()
+
+        with patch("tools.httpx.AsyncClient", FakeClient):
+            response = client.post(
+                "/mcp/tools/analytics_query",
+                headers={"X-Request-ID": "cid-analytics"},
+                json={"user_id": "user1", "subscription_tier": "premium"},
+            )
+        assert response.status_code == 200
+        assert response.json()["pairs"]["sleep_productivity"]["r"] == 0.5
+        assert captured["url"].endswith("/correlations")
+        assert captured["params"]["user_id"] == "user1"
+        assert captured["headers"]["X-Request-ID"] == "cid-analytics"
+
+    def test_upstream_5xx_is_502(self, client):
+        class FakeResponse:
+            status_code = 500
+            text = "down"
+
+            def json(self):
+                return {"detail": "down"}
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def get(self, url, params=None, headers=None):
+                return FakeResponse()
+
+        with patch("tools.httpx.AsyncClient", FakeClient):
+            response = client.post(
+                "/mcp/tools/analytics_query",
+                json={"user_id": "user1", "subscription_tier": "premium"},
+            )
+        assert response.status_code == 502
+        assert "r" not in response.json()
+
+
+class TestLearning:
+    @pytest.mark.asyncio
+    async def test_snapshot_counts_turns_tag_and_cycles(self, client):
+        import db
+
+        await db.upsert_interaction(
+            {"user_id": "user1", "correlation_id": "c1", "query": "q", "response": "a"}
+        )
+        await db.append_batch_item(
+            user_id="user1",
+            item={
+                "correlation_id": "c1",
+                "query": "How do I sleep better?",
+                "response": "Earlier.",
+                "assumptions": ["x"],
+            },
+            min_items=10,
+        )
+        db.memory().batches["done"] = {
+            "_id": "done",
+            "user_id": "user1",
+            "iso_week": "1999-W01",
+            "items": [
+                {
+                    "correlation_id": "old",
+                    "query": "Prefer short answers.",
+                    "response": "ok",
+                    "assumptions": [],
+                }
+            ],
+            "status": "submitted",
+            "job_id": "job-1",
+            "job_status": "completed",
+            "model_version": "qwen3.5-4b-lora-v1",
+            "created_at": "2026-01-01T00:00:00",
+            "updated_at": "2026-01-02T00:00:00",
+        }
+        response = client.get("/learning", params={"user_id": "user1"})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["interactions"] == 1
+        assert body["model_tag"] == "qwen3.5-4b-lora-v1"
+        assert body["learned"] == ["Prefer short answers."]
+        assert body["batch"]["items"] == 1
+        assert body["batch"]["status"] == "accumulating"
+        assert body["cycles"][0]["version"] == "qwen3.5-4b-lora-v1"
+        assert body["cycles"][0]["status"] == "completed"
+        assert body["cycles"][0]["signals"] == 1

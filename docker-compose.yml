@@ -13,12 +13,16 @@ services:
       - JWT_EXPIRATION_MINUTES=60
       - RAG_SERVICE_URL=http://rag-service:8002
       - LLM_SERVICE_URL=http://llm-service:8003
+      - FINETUNE_SERVICE_URL=http://finetune-service:8004
       - ETL_SERVICE_URL=http://etl-service:8001
       - AGENTS_SERVICE_URL=http://agents-service:8006
       - SIMULATOR_SERVICE_URL=http://simulator-service:8007
       - SHIELD_SERVICE_URL=http://shield-service:8009
+      - ANALYTICS_SERVICE_URL=http://analytics-service:8008
       - RATE_LIMIT_SIMULATE=10
       - RATE_LIMIT_SHIELD_SCAN=30
+      - RATE_LIMIT_ANALYTICS_INGEST=10
+      - RATE_LIMIT_ANALYTICS_QUERY=30
       - CHAT_VIA_AGENTS=true
       - KAFKA_TOPIC_SESSION_TURN=session.turn.completed
       - MAX_RETRIES=3
@@ -37,6 +41,8 @@ services:
       simulator-service:
         condition: service_started
       shield-service:
+        condition: service_started
+      analytics-service:
         condition: service_started
     restart: unless-stopped
 
@@ -106,6 +112,7 @@ services:
       - FINETUNE_SERVICE_URL=http://finetune-service:8004
       - SIMULATOR_SERVICE_URL=http://simulator-service:8007
       - SHIELD_SERVICE_URL=http://shield-service:8009
+      - ANALYTICS_SERVICE_URL=http://analytics-service:8008
       - KAFKA_TOPIC_SESSION_TURN=session.turn.completed
       - EVAL_SCORE_THRESHOLD=0.6
       - BATCH_MIN_ITEMS=10
@@ -127,6 +134,8 @@ services:
       simulator-service:
         condition: service_started
       shield-service:
+        condition: service_started
+      analytics-service:
         condition: service_started
     restart: unless-stopped
 
@@ -167,6 +176,25 @@ services:
       - CORPUS_PATH=/app/data/shield/corpus.jsonl
     volumes:
       - ./data:/app/data
+    depends_on:
+      mongo:
+        condition: service_healthy
+      rag-service:
+        condition: service_started
+      llm-service:
+        condition: service_started
+    restart: unless-stopped
+
+  analytics-service:
+    build: ./services/analytics
+    ports:
+      - "8008:8008"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_DB=llm_brain
+      - RAG_SERVICE_URL=http://rag-service:8002
+      - LLM_SERVICE_URL=http://llm-service:8003
+      - LLM_TEMPERATURE=0
     depends_on:
       mongo:
         condition: service_healthy
@@ -245,6 +273,19 @@ services:
       - "8005:8000"
     volumes:
       - chroma_data:/chroma/chroma
+    restart: unless-stopped
+
+  web:
+    image: nginx:1.27-alpine
+    profiles: ["web"]
+    ports:
+      - "5173:80"
+    volumes:
+      - ./apps/web/dist:/usr/share/nginx/html:ro
+      - ./apps/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api-router:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

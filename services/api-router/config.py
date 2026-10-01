@@ -48,10 +48,12 @@ class Settings(BaseSettings):
     # --- Downstream HTTP services ---
     RAG_SERVICE_URL: str = "http://rag-service:8002"
     LLM_SERVICE_URL: str = "http://llm-service:8003"
+    FINETUNE_SERVICE_URL: str = "http://finetune-service:8004"
     ETL_SERVICE_URL: str = "http://etl-service:8001"
     AGENTS_SERVICE_URL: str = "http://agents-service:8006"
     SIMULATOR_SERVICE_URL: str = "http://simulator-service:8007"
     SHIELD_SERVICE_URL: str = "http://shield-service:8009"
+    ANALYTICS_SERVICE_URL: str = "http://analytics-service:8008"
     CHAT_VIA_AGENTS: bool = True
 
     # --- Retry / TTL ---
@@ -65,6 +67,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_TASKS: int = 60
     RATE_LIMIT_SIMULATE: int = 10
     RATE_LIMIT_SHIELD_SCAN: int = 30
+    RATE_LIMIT_ANALYTICS_INGEST: int = 10
+    RATE_LIMIT_ANALYTICS_QUERY: int = 30
 
     # --- Upload ---
     MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024

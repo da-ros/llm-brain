@@ -195,12 +195,22 @@ def public_result(document: dict[str, Any]) -> dict[str, Any]:
 
 def list_item(document: dict[str, Any]) -> dict[str, Any]:
     created = document.get("created_at")
+    stored = document.get("result") if isinstance(document.get("result"), dict) else {}
+    reasons = document.get("reasons") or stored.get("reasons") or []
+    rationale = str(stored.get("rationale") or "")
+    if not rationale:
+        for reason in reasons:
+            if isinstance(reason, dict) and reason.get("type") == "llm":
+                rationale = str(reason.get("detail") or "")
+                break
     return {
         "id": str(document.get("_id") or ""),
         "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
         "severity": document.get("severity"),
         "summary": document.get("summary"),
         "source": document.get("source"),
+        "rationale": rationale,
+        "reasons": reasons,
     }
 
 

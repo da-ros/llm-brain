@@ -410,6 +410,25 @@ class TestRAGHttp:
             response = client.get("/documents/doc1", params={"user_id": "user-b"})
         assert response.status_code == 404
 
+    def test_storage_and_delete_memory(self):
+        from main import create_app
+
+        with (
+            patch("main.document_store.connect", new_callable=AsyncMock),
+            patch("main.document_store.close", new_callable=AsyncMock),
+            patch("main.rag_service.documents.storage_usage", new_callable=AsyncMock) as usage,
+            patch("main.rag_service.delete_user_memory", new_callable=AsyncMock) as wipe,
+        ):
+            usage.return_value = {"bytes": 4096, "documents": 1}
+            wipe.return_value = {"documents": 1, "embeddings": 3}
+            client = TestClient(create_app())
+            stored = client.get("/storage", params={"user_id": "user1"})
+            removed = client.delete("/memory", params={"user_id": "user1"})
+        assert stored.status_code == 200
+        assert stored.json()["bytes"] == 4096
+        assert removed.status_code == 200
+        assert removed.json()["embeddings"] == 3
+
 
 class TestEmbed:
     def test_embed_modalities_do_not_grow_the_collection(self):
@@ -793,6 +812,25 @@ class TestDocumentStoreCoverage:
 
         with pytest.raises(DocumentStoreError, match="Document list failed"):
             await store.list_documents("user1")
+
+    @pytest.mark.asyncio
+    async def test_storage_usage_sums_raw_bytes(self):
+        from bson import ObjectId
+        from document_store import DocumentStore
+
+        store = DocumentStore()
+        file_id = ObjectId()
+        mock_db = MagicMock()
+        mock_db.documents.find.return_value = AsyncCursor(
+            [{"_id": "doc1", "user_id": "user1", "gridfs_id": str(file_id)}]
+        )
+        files = MagicMock()
+        files.find_one = AsyncMock(return_value={"_id": file_id, "length": 1200})
+        mock_db.__getitem__.return_value = files
+        store._db = mock_db
+
+        usage = await store.storage_usage("user1")
+        assert usage == {"bytes": 1200, "documents": 1}
 
     @pytest.mark.asyncio
     async def test_delete_document_success(self):

@@ -169,13 +169,10 @@ def create_app() -> FastAPI:
             "likelihood": verdict["likelihood"],
             "severity": verdict["severity"],
             "summary": verdict["summary"],
+            "rationale": verdict["rationale"],
             "reasons": reasons,
             "llm_used": True,
         }
-        if not verdict["alert"]:
-            log_with_correlation(correlation_id, "info", "alert false — not persisted")
-            return result
-
         stored = await persist_alert(
             user_id=user_id,
             correlation_id=correlation_id,

@@ -32,6 +32,7 @@ class JobStatusResponse(BaseModel):
 
     job_id: str
     status: str
+    phase: str = "submitted"
     created_at: str
     completed_at: str | None = None
     metrics: dict = {}
@@ -105,6 +106,7 @@ async def get_status(request: Request, job_id: str):
     return JobStatusResponse(
         job_id=job.job_id,
         status=job.status,
+        phase=job.phase,
         created_at=job.created_at,
         completed_at=job.completed_at,
         metrics=job.metrics,

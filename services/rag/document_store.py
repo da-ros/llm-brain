@@ -116,6 +116,8 @@ class DocumentStore:
         content: bytes | None = None,
         filename: str | None = None,
         content_type: str | None = None,
+        summary: str | None = None,
+        source_id: str | None = None,
     ) -> str:
         """Insert a Documents index row. Optionally upload `content` to GridFS first."""
         log_with_correlation(
@@ -137,6 +139,10 @@ class DocumentStore:
             "type": doc_type,
             "gridfs_id": resolved_gridfs_id,
             "triples_path": triples_path,
+            "filename": filename or "",
+            "content_type": content_type or doc_type,
+            "summary": (summary or "").strip(),
+            "source_id": source_id or "",
             "created_at": datetime.now(UTC),
         }
         try:
@@ -174,6 +180,44 @@ class DocumentStore:
             return documents
         except PyMongoError as exc:
             raise DocumentStoreError(f"Document list failed: {exc}") from exc
+
+    async def storage_usage(self, user_id: str) -> dict[str, int]:
+        """Bytes occupied by this user's raw document binaries."""
+        documents = await self.list_documents(user_id)
+        total = 0
+        seen: set[str] = set()
+        for document in documents:
+            gridfs_id = str(document.get("gridfs_id") or "")
+            if not gridfs_id or gridfs_id in seen:
+                continue
+            seen.add(gridfs_id)
+            try:
+                oid = ObjectId(gridfs_id)
+            except (InvalidId, TypeError):
+                continue
+            try:
+                stored = await self.db["fs.files"].find_one({"_id": oid})
+            except PyMongoError as exc:
+                raise DocumentStoreError(f"Storage lookup failed: {exc}") from exc
+            if stored is not None:
+                total += int(stored.get("length") or 0)
+        return {"bytes": total, "documents": len(documents)}
+
+    async def delete_all_for_user(self, user_id: str) -> int:
+        """Delete every document row and GridFS binary owned by user_id."""
+        documents = await self.list_documents(user_id)
+        removed = 0
+        for document in documents:
+            if await self.delete_document(document["_id"], user_id):
+                removed += 1
+        try:
+            cursor = self.db["fs.files"].find({"metadata.user_id": user_id})
+            async for row in cursor:
+                with suppress(Exception):
+                    await self.fs.delete(row["_id"])
+        except PyMongoError as exc:
+            raise DocumentStoreError(f"Storage cleanup failed: {exc}") from exc
+        return removed
 
     async def delete_document(self, doc_id: str, user_id: str) -> bool:
         """Delete the Documents row and its GridFS binary if owned by user_id."""

@@ -70,3 +70,13 @@ def rate_limit_simulate(user: Annotated[dict, Depends(require_premium)]) -> dict
 def rate_limit_shield(user: Annotated[dict, Depends(require_premium)]) -> dict:
     """Premium gate first, then 30 shield scans per minute. Free stays 403."""
     return _enforce(user, "shield", get_settings().RATE_LIMIT_SHIELD_SCAN)
+
+
+def rate_limit_analytics_ingest(user: Annotated[dict, Depends(require_premium)]) -> dict:
+    """Premium gate first, then 10 analytics ingests per minute. Free stays 403."""
+    return _enforce(user, "analytics-ingest", get_settings().RATE_LIMIT_ANALYTICS_INGEST)
+
+
+def rate_limit_analytics_query(user: Annotated[dict, Depends(require_premium)]) -> dict:
+    """Premium gate first, then 30 correlation reads per minute. Free stays 403."""
+    return _enforce(user, "analytics-query", get_settings().RATE_LIMIT_ANALYTICS_QUERY)

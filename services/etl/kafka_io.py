@@ -53,6 +53,17 @@ def publish_task_response(payload: dict[str, Any]) -> None:
     )
 
 
+def _clip_summary(triples: list, limit: int = 180) -> str:
+    parts = [
+        " ".join(part for part in (item.subject, item.predicate, item.object) if part)
+        for item in triples
+    ]
+    compact = " ".join(" ".join(parts).split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3].rstrip() + "..."
+
+
 def process_file_message(
     message: dict[str, Any],
     *,
@@ -108,6 +119,7 @@ def process_file_message(
             "result": {
                 "triples_count": len(triples),
                 "output_path": output_path,
+                "summary": _clip_summary(triples),
             },
         }
         if publish:

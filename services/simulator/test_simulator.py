@@ -421,3 +421,5 @@ class TestIsolation:
         rows = listed.json()["simulations"]
         assert len(rows) == 1
         assert rows[0]["correlation_id"] == "cid-u1"
+        assert rows[0]["question"] == "what if I sleep less"
+        assert rows[0]["created_at"]

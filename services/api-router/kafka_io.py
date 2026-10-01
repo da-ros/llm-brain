@@ -147,6 +147,7 @@ async def trigger_rag_ingest(
         "triples_path": output_path,
         "gridfs_id": str(task.get("file_id") or ""),
         "doc_type": task.get("content_type") or "text",
+        "filename": task.get("filename") or "",
     }
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:

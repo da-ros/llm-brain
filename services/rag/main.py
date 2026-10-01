@@ -33,6 +33,7 @@ class IngestRequest(BaseModel):
     triples_path: str
     gridfs_id: str = ""
     doc_type: str = "text"
+    filename: str = ""
 
 
 class IngestResponse(BaseModel):
@@ -171,6 +172,7 @@ def create_app() -> FastAPI:
                 triples_path=body.triples_path,
                 gridfs_id=body.gridfs_id,
                 doc_type=body.doc_type,
+                filename=body.filename,
                 correlation_id=correlation_id,
             )
             log_with_correlation(correlation_id, "info", f"Ingested {count} triples")
@@ -206,6 +208,15 @@ def create_app() -> FastAPI:
             f"POST /embed modality={modality} dim={len(vector)} stored=false",
         )
         return EmbedResponse(vector=vector, modality=modality)
+
+    @application.get("/storage")
+    async def storage(user_id: str = Query(..., description="User ID for isolation")):
+        usage = await rag_service.documents.storage_usage(user_id)
+        return usage
+
+    @application.delete("/memory")
+    async def delete_memory(user_id: str = Query(..., description="User ID for isolation")):
+        return await rag_service.delete_user_memory(user_id)
 
     @application.get("/documents")
     async def list_documents(user_id: str = Query(..., description="User ID for isolation")):

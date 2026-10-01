@@ -203,6 +203,7 @@ class TestTrainEndpoint:
             time.sleep(0.05)
 
         assert status_data["status"] == "completed"
+        assert status_data["phase"] == "completed"
         assert status_data["metrics"]["epochs"] == 5
         assert status_data["model_version"]
         assert status_data["adapter_path"]

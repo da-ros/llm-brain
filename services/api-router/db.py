@@ -1,8 +1,9 @@
-"""MongoDB access for task_status polling and GridFS uploads.
+"""MongoDB access for task_status polling, GridFS uploads, and lean Brain data.
 
-Business documents live in other services. The router only stores:
+Business documents live in other services. The router stores:
 - uploaded files in GridFS (so ETL can fetch them)
 - task_status documents with a TTL index on expires_at
+- chat threads and calendar notes (not document memory)
 """
 
 from __future__ import annotations
@@ -36,6 +37,11 @@ async def disconnect() -> None:
         _client.close()
     _client = None
     _database = None
+
+
+def database():
+    """Connected database, or None when the process has no Mongo client."""
+    return _database
 
 
 def _db():
@@ -100,6 +106,30 @@ async def insert_task(document: dict[str, Any]) -> None:
 
 async def find_task(correlation_id: str) -> dict[str, Any] | None:
     return await _db().task_status.find_one({"_id": correlation_id})
+
+
+async def list_user_tasks(user_id: str) -> list[dict[str, Any]]:
+    """Recent upload jobs for one user. Empty when Mongo is not connected."""
+    if database() is None:
+        return []
+    cursor = _db().task_status.find({"user_id": user_id}).sort("created_at", -1)
+    return await cursor.to_list(length=200)
+
+
+async def delete_user_uploads(user_id: str) -> int:
+    """Remove this user's GridFS uploads and queued task rows."""
+    if database() is None:
+        return 0
+    from motor.motor_asyncio import AsyncIOMotorGridFSBucket
+
+    bucket = AsyncIOMotorGridFSBucket(_db())
+    removed = 0
+    cursor = _db()["fs.files"].find({"metadata.user_id": user_id})
+    async for row in cursor:
+        await bucket.delete(row["_id"])
+        removed += 1
+    await _db().task_status.delete_many({"user_id": user_id})
+    return removed
 
 
 async def update_task(correlation_id: str, updates: dict[str, Any]) -> None:

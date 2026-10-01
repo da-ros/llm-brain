@@ -53,6 +53,7 @@ from config import clear_settings_cache, get_settings
 
 clear_settings_cache()
 
+import accounts
 import db as api_db
 import kafka_io as api_kafka
 from fastapi import HTTPException
@@ -85,6 +86,10 @@ def tasks():
 @pytest.fixture
 def client(tasks):
     limiter.reset()
+    import brain_store
+
+    accounts.reset_memory()
+    brain_store.reset_memory()
 
     async def fake_connect():
         return None
@@ -666,6 +671,43 @@ class TestFineTuneTrigger:
         assert response.status_code == 403
 
 
+class TestLearning:
+    def test_learning_adds_memory_count(self, client):
+        with patch("routers.learning.httpx.AsyncClient") as client_cls:
+            instance = AsyncMock()
+            agents = MagicMock()
+            agents.status_code = 200
+            agents.json = MagicMock(
+                return_value={
+                    "interactions": 3,
+                    "needed": 10,
+                    "model_tag": "qwen3.5-4b-lora-v1",
+                    "batch": {"id": "b1", "status": "ready", "items": 10, "needed": 10},
+                    "job": None,
+                    "learned": ["Prefer short answers."],
+                    "cycles": [],
+                }
+            )
+            rag = MagicMock()
+            rag.status_code = 200
+            rag.json = MagicMock(return_value={"documents": [{}, {}]})
+            instance.get = AsyncMock(side_effect=[agents, rag])
+            instance.__aenter__.return_value = instance
+            instance.__aexit__.return_value = False
+            client_cls.return_value = instance
+            response = client.get("/api/learning", headers=auth_header())
+        assert response.status_code == 200
+        body = response.json()
+        assert body["interactions"] == 3
+        assert body["memories"] == 2
+        assert body["model_tag"] == "qwen3.5-4b-lora-v1"
+        assert body["batch"]["status"] == "ready"
+
+    def test_free_learning_forbidden(self, client):
+        response = client.get("/api/learning", headers=auth_header(tier="free"))
+        assert response.status_code == 403
+
+
 class TestDocuments:
     def test_get_document_404_when_rag_says_missing(self, client):
         with patch("routers.documents.httpx.AsyncClient") as client_cls:
@@ -681,6 +723,120 @@ class TestDocuments:
                 headers=auth_header(tier="premium"),
             )
         assert http_response.status_code == 404
+
+    def _rag(self, documents: list[dict]):
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {"documents": documents}
+        instance = AsyncMock()
+        instance.get = AsyncMock(return_value=response)
+        instance.__aenter__.return_value = instance
+        instance.__aexit__.return_value = False
+        return instance
+
+    def test_search_matches_name_and_summary(self, client):
+        docs = [
+            {
+                "_id": "doc-1",
+                "filename": "acme-msa.pdf",
+                "content_type": "application/pdf",
+                "type": "text",
+                "summary": "Payment terms for the Acme engagement",
+                "created_at": "2026-03-15T00:00:00+00:00",
+                "source_id": "task-1",
+            },
+            {
+                "_id": "doc-2",
+                "filename": "launch.png",
+                "content_type": "image/png",
+                "type": "image",
+                "summary": "Screenshot of the launch board",
+                "created_at": "2026-03-10T00:00:00+00:00",
+            },
+            {
+                "_id": "doc-3",
+                "filename": "budget.xlsx",
+                "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "type": "text",
+                "summary": "Quarterly budget",
+                "created_at": "2026-03-09T00:00:00+00:00",
+            },
+        ]
+        with patch("routers.documents.httpx.AsyncClient") as client_cls:
+            client_cls.return_value = self._rag(docs)
+            found = client.get(
+                "/api/documents/search",
+                headers=auth_header(),
+                params={"q": "payment"},
+            )
+            listed = client.get("/api/documents", headers=auth_header())
+        assert found.status_code == 200
+        body = found.json()
+        assert [row["name"] for row in body["documents"]] == ["acme-msa.pdf"]
+        assert body["documents"][0]["status"] == "Embedded"
+        assert "source_id" not in body["documents"][0]
+        counts = listed.json()["counts"]
+        assert counts == {"document": 2, "image": 1, "video": 0}
+        sheet = next(row for row in listed.json()["documents"] if row["name"] == "budget.xlsx")
+        assert sheet["kind"] == "document"
+
+    def test_queue_and_distilled_are_separate_from_embedded(self, client):
+        docs = [
+            {
+                "_id": "doc-1",
+                "filename": "notes.md",
+                "content_type": "text/markdown",
+                "type": "text",
+                "summary": "Meeting notes",
+                "source_id": "done-task",
+            }
+        ]
+        tasks = [
+            {
+                "_id": "done-task",
+                "filename": "notes.md",
+                "content_type": "text/markdown",
+                "status": "success",
+                "result": {"summary": "Meeting notes"},
+            },
+            {
+                "_id": "queue-1",
+                "filename": "review.mp4",
+                "content_type": "video/mp4",
+                "status": "in_progress",
+            },
+            {
+                "_id": "facts-1",
+                "filename": "plan.docx",
+                "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "status": "success",
+                "result": {"summary": "Scope and payment terms"},
+            },
+            {
+                "_id": "audio-1",
+                "filename": "voice.m4a",
+                "content_type": "audio/mp4",
+                "status": "success",
+                "result": {"summary": "Spoken ideas"},
+            },
+        ]
+        with (
+            patch("routers.documents.httpx.AsyncClient") as client_cls,
+            patch("routers.documents.list_user_tasks", new_callable=AsyncMock) as jobs,
+        ):
+            client_cls.return_value = self._rag(docs)
+            jobs.return_value = tasks
+            response = client.get("/api/documents", headers=auth_header())
+        assert response.status_code == 200
+        rows = {row["name"]: row for row in response.json()["documents"]}
+        assert rows["notes.md"]["status"] == "Embedded"
+        assert "done-task" not in rows
+        assert rows["review.mp4"]["status"] == "Processing"
+        assert rows["review.mp4"]["kind"] == "video"
+        assert rows["plan.docx"]["status"] == "Distilled"
+        assert rows["plan.docx"]["summary"] == "Scope and payment terms"
+        assert "voice.m4a" not in rows
+        assert response.json()["counts"] == {"document": 2, "image": 0, "video": 1}
 
 
 def test_task_document_includes_ttl_expiry():
@@ -1741,3 +1897,572 @@ class TestTaskDocument:
         )
         expected_expires = doc["created_at"] + timedelta(days=settings.TASK_STATUS_TTL_DAYS)
         assert doc["expires_at"] == expected_expires
+
+
+class TestAnalytics:
+    """Premium analytics gateway: sync HTTP, no Kafka, 401/403/429."""
+
+    def _ok(self) -> dict:
+        return {
+            "rows_upserted": 2,
+            "llm_used": True,
+            "correlations": {
+                "sleep_productivity": {
+                    "r": 1.0,
+                    "n": 2,
+                    "status": "ok",
+                    "points": [{"date": "2026-01-01", "x": 6, "y": 4}],
+                },
+                "meetings_focus": {"r": None, "n": 1, "status": "insufficient", "points": []},
+            },
+            "insights": {"narrative": "Sleep tracks productivity.", "llm_used": True},
+        }
+
+    def test_premium_ingest_and_correlations(self, client):
+        with patch("routers.analytics._analytics", new_callable=AsyncMock) as call:
+            call.return_value = self._ok()
+            ingested = client.post(
+                "/api/analytics/ingest",
+                headers={**auth_header(), "X-Request-ID": "cid-analytics"},
+                files={"file": ("diary.csv", b"date,sleep_hours\n2026-01-01,6\n", "text/csv")},
+            )
+            call.return_value = {
+                "narrative": "Sleep tracks productivity.",
+                "llm_used": True,
+                "pairs": self._ok()["correlations"],
+            }
+            listed = client.get("/api/analytics/correlations", headers=auth_header())
+        assert ingested.status_code == 200
+        assert ingested.json()["rows_upserted"] == 2
+        assert ingested.json()["llm_used"] is True
+        assert listed.status_code == 200
+        assert listed.json()["pairs"]["sleep_productivity"]["r"] == 1.0
+        assert listed.json()["narrative"]
+        client.publish.assert_not_called()
+        client.publish_turn.assert_not_called()
+        assert call.await_args_list[0].kwargs["correlation_id"] == "cid-analytics"
+        assert call.await_args_list[0].args[1] == "/ingest"
+
+    def test_free_and_missing_jwt(self, client):
+        with patch("routers.analytics._analytics", new_callable=AsyncMock) as call:
+            free = client.post(
+                "/api/analytics/ingest",
+                headers=auth_header(tier="free"),
+                files={"file": ("diary.csv", b"a", "text/csv")},
+            )
+            missing = client.post(
+                "/api/analytics/ingest",
+                files={"file": ("diary.csv", b"a", "text/csv")},
+            )
+            free_read = client.get(
+                "/api/analytics/correlations",
+                headers=auth_header(tier="free"),
+            )
+            free_metrics = client.get("/api/analytics/metrics", headers=auth_header(tier="free"))
+        assert free.status_code == 403
+        assert missing.status_code == 401
+        assert free_read.status_code == 403
+        assert free_metrics.status_code == 403
+        call.assert_not_awaited()
+
+    def test_eleventh_ingest_is_429(self, client):
+        with patch("routers.analytics._analytics", new_callable=AsyncMock) as call:
+            call.return_value = self._ok()
+            headers = auth_header()
+            files = {"file": ("diary.csv", b"date\n2026-01-01\n", "text/csv")}
+            for _ in range(10):
+                ok = client.post("/api/analytics/ingest", headers=headers, files=files)
+                assert ok.status_code == 200
+            blocked = client.post("/api/analytics/ingest", headers=headers, files=files)
+        assert blocked.status_code == 429
+        assert call.await_count == 10
+        client.publish.assert_not_called()
+
+    def test_thirty_first_correlation_is_429(self, client):
+        with patch("routers.analytics._analytics", new_callable=AsyncMock) as call:
+            call.return_value = {
+                "narrative": "Sleep tracks productivity.",
+                "llm_used": True,
+                "pairs": self._ok()["correlations"],
+            }
+            headers = auth_header("user-corr")
+            for _ in range(30):
+                ok = client.get("/api/analytics/correlations", headers=headers)
+                assert ok.status_code == 200
+            blocked = client.get("/api/analytics/correlations", headers=headers)
+        assert blocked.status_code == 429
+        assert call.await_count == 30
+
+    def test_cross_user_metric_is_404(self, client):
+        with patch("routers.analytics._analytics", new_callable=AsyncMock) as call:
+            call.side_effect = HTTPException(status_code=404, detail="Not found")
+            hidden = client.get("/api/analytics/metrics/metric-other", headers=auth_header())
+        assert hidden.status_code == 404
+        call.assert_awaited()
+
+
+class TestBrain:
+    def test_new_chat_is_a_thread(self, client):
+        created = client.post("/api/chats", headers=auth_header())
+        assert created.status_code == 201
+        assert created.json()["title"] == "New chat"
+        chat_id = created.json()["id"]
+        listed = client.get("/api/chats", headers=auth_header())
+        assert listed.json()["chats"][0]["id"] == chat_id
+        hidden = client.get("/api/chats", headers=auth_header("user2"))
+        assert hidden.json()["chats"] == []
+
+    def test_turns_stay_on_the_chat(self, client):
+        created = client.post("/api/chats", headers=auth_header())
+        chat_id = created.json()["id"]
+        today = datetime.now().date().isoformat()
+        client.put(
+            f"/api/calendar/{today}",
+            headers=auth_header(),
+            json={"note": "Launch review"},
+        )
+        with (
+            patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
+            patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            rag.return_value = ("notes", ["Acme MSA"])
+            llm.return_value = "Finish the draft."
+            posted = client.post(
+                "/api/chat",
+                headers=auth_header(),
+                json={"message": "What is due?", "session_id": chat_id, "use_rag": True},
+            )
+        assert posted.status_code == 200
+        listed = client.get(f"/api/chats/{chat_id}/turns", headers=auth_header())
+        assert listed.status_code == 200
+        turns = listed.json()["turns"]
+        assert turns[0] == {"role": "user", "text": "What is due?", "cards": [], "assumptions": []}
+        assert turns[1]["role"] == "assistant"
+        assert turns[1]["text"] == "Finish the draft."
+        assert turns[1]["cards"][0]["origin"] == "memory"
+        reason.assert_not_awaited()
+        hidden = client.get(f"/api/chats/{chat_id}/turns", headers=auth_header("user2"))
+        assert hidden.status_code == 404
+
+    def test_free_chat_uses_one_file_without_memory_or_rag(self, client):
+        created = client.post("/api/chats", headers=auth_header(tier="free"))
+        chat_id = created.json()["id"]
+        with (
+            patch("routers.chat.load_attachment", return_value="clause 4") as load,
+            patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+            patch("db.save_upload", new_callable=AsyncMock) as save,
+        ):
+            llm.return_value = "From the file."
+            response = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={
+                    "message": "What does it say?",
+                    "session_id": chat_id,
+                    "use_rag": True,
+                    "attachment_filename": "notes.docx",
+                    "attachment_base64": "bm90ZXM=",
+                },
+            )
+        assert response.status_code == 200
+        assert response.json()["context_used"] is False
+        assert response.json()["sources"] == []
+        assert response.json()["source_cards"] == [
+            {"n": 1, "label": "notes.docx", "origin": "attachment"},
+        ]
+        rag.assert_not_awaited()
+        save.assert_not_awaited()
+        load.assert_called_once()
+        prompt = llm.await_args.kwargs["prompt"]
+        assert "clause 4" in prompt
+        assert "not saved to memory" in prompt
+        stored = client.get(f"/api/chats/{chat_id}/turns", headers=auth_header(tier="free"))
+        assert stored.json()["turns"][1]["text"] == "From the file."
+
+    def test_free_chat_accepts_five_files_and_rejects_six(self, client):
+        files = [
+            {"filename": f"note-{index}.txt", "content_base64": "bm90ZXM="}
+            for index in range(5)
+        ]
+        with (
+            patch("routers.chat.load_attachment", side_effect=lambda name, _data: name),
+            patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+            patch("db.save_upload", new_callable=AsyncMock) as save,
+        ):
+            llm.return_value = "From the files."
+            accepted = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={"message": "Compare these.", "use_rag": True, "attachments": files},
+            )
+            rejected = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={
+                    "message": "Too many.",
+                    "attachments": files + [{"filename": "extra.txt", "content_base64": "bm90ZXM="}],
+                },
+            )
+        assert accepted.status_code == 200
+        assert accepted.json()["context_used"] is False
+        assert [card["label"] for card in accepted.json()["source_cards"]] == [
+            f"note-{index}.txt" for index in range(5)
+        ]
+        prompt = llm.await_args.kwargs["prompt"]
+        assert "note-0.txt" in prompt and "note-4.txt" in prompt
+        rag.assert_not_awaited()
+        save.assert_not_awaited()
+        assert rejected.status_code == 422
+
+    def test_next_question_includes_earlier_files(self, client):
+        created = client.post("/api/chats", headers=auth_header(tier="free"))
+        chat_id = created.json()["id"]
+        with (
+            patch("routers.chat.load_attachment", return_value="clause 4"),
+            patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+            patch("db.save_upload", new_callable=AsyncMock) as save,
+        ):
+            llm.side_effect = ["First answer.", "Second answer."]
+            first = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={
+                    "message": "What is due?",
+                    "session_id": chat_id,
+                    "attachment_filename": "notes.docx",
+                    "attachment_base64": "bm90ZXM=",
+                },
+            )
+            second = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={"message": "What changed?", "session_id": chat_id},
+            )
+        assert first.status_code == 200
+        assert second.status_code == 200
+        prompt = llm.await_args.kwargs["prompt"]
+        assert "Earlier in this chat" in prompt
+        assert "clause 4" in prompt
+        assert "First answer." in prompt
+        assert "What changed?" in prompt
+        rag.assert_not_awaited()
+        save.assert_not_awaited()
+        stored = client.get(f"/api/chats/{chat_id}/turns", headers=auth_header(tier="free"))
+        assert "clause 4" not in stored.text
+
+    def test_premium_follow_up_sends_earlier_files_to_agents(self, client):
+        created = client.post("/api/chats", headers=auth_header())
+        chat_id = created.json()["id"]
+        with (
+            patch("routers.chat.load_attachment", return_value="clause 4"),
+            patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            llm.return_value = "First answer."
+            reason.return_value = {
+                "response": "Still due.",
+                "assumptions": [],
+                "sources": [],
+                "tokens_used": 1,
+                "session_id": chat_id,
+            }
+            first = client.post(
+                "/api/chat",
+                headers=auth_header(),
+                json={
+                    "message": "What is due?",
+                    "session_id": chat_id,
+                    "attachment_filename": "notes.docx",
+                    "attachment_base64": "bm90ZXM=",
+                },
+            )
+            second = client.post(
+                "/api/chat",
+                headers=auth_header(),
+                json={"message": "What changed?", "session_id": chat_id},
+            )
+        assert first.status_code == 200
+        assert second.status_code == 200
+        reason.assert_awaited()
+        message = reason.await_args.kwargs["message"]
+        assert "clause 4" in message
+        assert "First answer." in message
+        assert "What changed?" in message
+
+    def test_free_calendar_and_memory_are_forbidden(self, client):
+        today = datetime.now().date().isoformat()
+        saved = client.put(
+            f"/api/calendar/{today}",
+            headers=auth_header(tier="free"),
+            json={"note": "Ship the draft"},
+        )
+        listed = client.get(
+            "/api/calendar",
+            headers=auth_header(tier="free"),
+            params={"start": today, "end": today},
+        )
+        documents = client.get("/api/documents", headers=auth_header(tier="free"))
+        assert saved.status_code == 403
+        assert listed.status_code == 403
+        assert documents.status_code == 403
+
+    def test_calendar_notes_stay_with_the_owner(self, client):
+        today = datetime.now().date().isoformat()
+        saved = client.put(
+            f"/api/calendar/{today}",
+            headers=auth_header(),
+            json={"note": "Ship the draft"},
+        )
+        assert saved.status_code == 200
+        visible = client.get(
+            "/api/calendar",
+            headers=auth_header(),
+            params={"start": today, "end": today},
+        )
+        assert visible.json()["notes"] == [{"date": today, "note": "Ship the draft"}]
+        hidden = client.get(
+            "/api/calendar",
+            headers=auth_header("user2"),
+            params={"start": today, "end": today},
+        )
+        assert hidden.json()["notes"] == []
+
+    def test_attachment_is_used_once_and_not_saved(self, client):
+        with (
+            patch("routers.chat.load_attachment", return_value="clause 4") as load,
+            patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
+            patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+            patch("db.save_upload", new_callable=AsyncMock) as save,
+        ):
+            rag.return_value = ("msa notes", ["Acme MSA"])
+            llm.return_value = "Finish the draft."
+            response = client.post(
+                "/api/chat",
+                headers=auth_header(),
+                json={
+                    "message": "What is due?",
+                    "attachment_filename": "notes.docx",
+                    "attachment_base64": "bm90ZXM=",
+                },
+            )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["response"] == "Finish the draft."
+        assert body["sources"] == ["Acme MSA"]
+        assert body["source_cards"] == [
+            {"n": 1, "label": "Acme MSA", "origin": "memory"},
+            {"n": 2, "label": "notes.docx", "origin": "attachment"},
+        ]
+        reason.assert_not_awaited()
+        save.assert_not_awaited()
+        load.assert_called_once()
+        prompt = llm.await_args.kwargs["prompt"]
+        assert "What is due?" in prompt
+        assert "clause 4" in prompt
+        assert "not saved to memory" in prompt
+        published = client.publish_turn.call_args.args[0]
+        assert published["query"] == "What is due?"
+        assert "clause 4" not in published["query"]
+
+    def test_calendar_note_is_numbered_with_memory(self, client):
+        today = datetime.now().date().isoformat()
+        client.put(
+            f"/api/calendar/{today}",
+            headers=auth_header(),
+            json={"note": "Launch review"},
+        )
+        with (
+            patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
+            patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            rag.return_value = ("notes", ["Product notes", "Acme MSA"])
+            llm.return_value = "Prepare the review."
+            response = client.post(
+                "/api/chat",
+                headers=auth_header(),
+                json={"message": "this week"},
+            )
+        assert response.status_code == 200
+        cards = response.json()["source_cards"]
+        assert [card["n"] for card in cards] == [1, 2, 3]
+        assert cards[0]["origin"] == "memory"
+        assert cards[1]["origin"] == "memory"
+        assert cards[2]["origin"] == "calendar"
+        assert "Launch review" in llm.await_args.kwargs["prompt"]
+        reason.assert_not_awaited()
+
+    def test_every_source_is_numbered(self, client):
+        today = datetime.now().date().isoformat()
+        client.put(
+            f"/api/calendar/{today}",
+            headers=auth_header(),
+            json={"note": "Launch review"},
+        )
+        with (
+            patch("routers.chat.load_attachment", return_value="section 2") as load,
+            patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            rag.return_value = ("notes", ["One", "Two", "Three", "Four"])
+            llm.return_value = "All four."
+            response = client.post(
+                "/api/chat",
+                headers=auth_header(),
+                json={
+                    "message": "this week",
+                    "attachment_filename": "plan.pdf",
+                    "attachment_base64": "bm90ZXM=",
+                },
+            )
+        assert response.status_code == 200
+        cards = response.json()["source_cards"]
+        assert [card["n"] for card in cards] == [1, 2, 3, 4, 5, 6]
+        assert [card["origin"] for card in cards] == [
+            "memory",
+            "memory",
+            "memory",
+            "memory",
+            "calendar",
+            "attachment",
+        ]
+        assert cards[-1]["label"] == "plan.pdf"
+        load.assert_called_once()
+
+    def test_unsupported_attachment_is_422(self, client):
+        with patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason:
+            response = client.post(
+                "/api/chat",
+                headers=auth_header(),
+                json={
+                    "message": "hi",
+                    "attachment_filename": "notes.zip",
+                    "attachment_base64": "cGRm",
+                },
+            )
+        assert response.status_code == 422
+        reason.assert_not_awaited()
+        client.publish_turn.assert_not_called()
+
+
+class TestAccount:
+    def test_signup_signin_and_plan(self, client):
+        created = client.post(
+            "/api/auth/signup",
+            json={
+                "name": "Ada Lovelace",
+                "email": "ada@example.com",
+                "password": "password1",
+                "plan": "premium",
+            },
+        )
+        assert created.status_code == 201
+        body = created.json()
+        assert body["user"]["name"] == "Ada Lovelace"
+        assert body["user"]["plan"] == "premium"
+        token = body["access_token"]
+        account = client.get("/api/account", headers={"Authorization": f"Bearer {token}"})
+        assert account.status_code == 200
+        assert account.json()["email"] == "ada@example.com"
+
+        duplicate = client.post(
+            "/api/auth/signup",
+            json={
+                "name": "Ada",
+                "email": "ada@example.com",
+                "password": "password1",
+            },
+        )
+        assert duplicate.status_code == 409
+
+        signed = client.post(
+            "/api/auth/signin",
+            json={"email": "ada@example.com", "password": "password1"},
+        )
+        assert signed.status_code == 200
+        wrong = client.post(
+            "/api/auth/signin",
+            json={"email": "ada@example.com", "password": "nope-nope"},
+        )
+        assert wrong.status_code == 401
+
+        changed = client.patch(
+            "/api/account",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"plan": "free"},
+        )
+        assert changed.status_code == 200
+        assert changed.json()["user"]["plan"] == "free"
+        refreshed = client.get(
+            "/api/account",
+            headers={"Authorization": f"Bearer {changed.json()['access_token']}"},
+        )
+        assert refreshed.json()["plan"] == "free"
+
+    def test_short_password_is_422(self, client):
+        response = client.post(
+            "/api/auth/signup",
+            json={"name": "Ada", "email": "ada@example.com", "password": "short"},
+        )
+        assert response.status_code == 422
+
+    def test_status_marks_each_service(self, client):
+        llm_url = get_settings().LLM_SERVICE_URL
+
+        async def fake_get(url, *args, **kwargs):
+            response = MagicMock()
+            response.status_code = 200 if str(url).startswith(llm_url) else 503
+            return response
+
+        with patch("routers.account.httpx.AsyncClient") as client_cls:
+            instance = AsyncMock()
+            instance.get = fake_get
+            instance.__aenter__.return_value = instance
+            instance.__aexit__.return_value = False
+            client_cls.return_value = instance
+            response = client.get("/api/status", headers=auth_header())
+        assert response.status_code == 200
+        services = {row["id"]: row for row in response.json()["services"]}
+        assert services["llm"]["label"] == "LLM core"
+        assert services["llm"]["status"] == "online"
+        assert services["personal"]["label"] == "Personal model"
+        assert services["personal"]["status"] == "offline"
+        assert set(services) == {"llm", "memory", "personal", "analytics", "agents", "shield"}
+
+    def test_storage_reports_document_bytes(self, client):
+        with patch("routers.account.httpx.AsyncClient") as client_cls:
+            instance = AsyncMock()
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {"bytes": 2048, "documents": 2}
+            instance.get = AsyncMock(return_value=response)
+            instance.__aenter__.return_value = instance
+            instance.__aexit__.return_value = False
+            client_cls.return_value = instance
+            http_response = client.get("/api/storage", headers=auth_header())
+        assert http_response.status_code == 200
+        assert http_response.json() == {"bytes": 2048, "documents": 2}
+
+    def test_delete_data_clears_rag_memory_and_uploads(self, client):
+        with (
+            patch("routers.account.httpx.AsyncClient") as client_cls,
+            patch("routers.account.delete_user_uploads", new_callable=AsyncMock) as uploads,
+        ):
+            instance = AsyncMock()
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {"documents": 2, "embeddings": 5}
+            instance.delete = AsyncMock(return_value=response)
+            instance.__aenter__.return_value = instance
+            instance.__aexit__.return_value = False
+            client_cls.return_value = instance
+            uploads.return_value = 1
+            http_response = client.delete("/api/data", headers=auth_header())
+        assert http_response.status_code == 200
+        assert http_response.json() == {"documents": 2, "embeddings": 5, "uploads": 1}
+        uploads.assert_awaited_once()
