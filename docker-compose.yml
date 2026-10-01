@@ -23,17 +23,21 @@ services:
       - KAFKA_TOPIC_SESSION_TURN=session.turn.completed
       - MAX_RETRIES=3
       - TASK_STATUS_TTL_DAYS=30
-      - FERNET_KEY=${FERNET_KEY:-change-me-in-production}
     volumes:
       - ./data:/app/data
-      - ./.env:/app/.env
     depends_on:
-      - mongo
-      - kafka
-      - rag-service
-      - agents-service
-      - simulator-service
-      - shield-service
+      mongo:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      rag-service:
+        condition: service_started
+      agents-service:
+        condition: service_started
+      simulator-service:
+        condition: service_started
+      shield-service:
+        condition: service_started
     restart: unless-stopped
 
   llm-service:
@@ -79,11 +83,13 @@ services:
       - TRIPLES_OUTPUT_DIR=/app/data/triples
     volumes:
       - ./data:/app/data
-      - ./.env:/app/.env
     depends_on:
-      - mongo
-      - kafka
-      - llm-service
+      mongo:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      llm-service:
+        condition: service_started
     restart: unless-stopped
 
   agents-service:
@@ -107,15 +113,21 @@ services:
       - AGENTS_STORE=mongo
     volumes:
       - ./data:/app/data
-      - ./.env:/app/.env
     depends_on:
-      - mongo
-      - kafka
-      - rag-service
-      - llm-service
-      - finetune-service
-      - simulator-service
-      - shield-service
+      mongo:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      rag-service:
+        condition: service_started
+      llm-service:
+        condition: service_started
+      finetune-service:
+        condition: service_started
+      simulator-service:
+        condition: service_started
+      shield-service:
+        condition: service_started
     restart: unless-stopped
 
   simulator-service:
@@ -132,9 +144,12 @@ services:
       - DEFAULT_MEETING_HOURS=3
       - DEFAULT_FOCUS_HOURS=4
     depends_on:
-      - mongo
-      - rag-service
-      - llm-service
+      mongo:
+        condition: service_healthy
+      rag-service:
+        condition: service_started
+      llm-service:
+        condition: service_started
     restart: unless-stopped
 
   shield-service:
@@ -153,9 +168,12 @@ services:
     volumes:
       - ./data:/app/data
     depends_on:
-      - mongo
-      - rag-service
-      - llm-service
+      mongo:
+        condition: service_healthy
+      rag-service:
+        condition: service_started
+      llm-service:
+        condition: service_started
     restart: unless-stopped
 
   rag-service:
@@ -174,13 +192,14 @@ services:
       - RAG_TOP_K=3
       - RAG_CHUNK_SIZE=1000
       - RAG_CHUNK_OVERLAP=200
-      - FERNET_KEY=${FERNET_KEY:-change-me-in-production}
+      - FERNET_KEY=${FERNET_KEY:-JEWS9jt7GqTkkv1N8y-Kld5V8IeFZMw_UFFhn4h-xsU=}
     volumes:
       - ./data:/app/data
-      - ./.env:/app/.env
     depends_on:
-      - mongo
-      - chroma
+      mongo:
+        condition: service_healthy
+      chroma:
+        condition: service_started
     restart: unless-stopped
 
   mongo:
@@ -189,6 +208,12 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
   kafka:
@@ -206,6 +231,12 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     volumes:
       - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   chroma:

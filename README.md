@@ -68,8 +68,12 @@ In Cursor, drive the workflow with slash commands: `/opsx-propose`, `/opsx-apply
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env      # JWT_SECRET_KEY is required
 ```
+
+The Docker Compose stack is self-contained: every service gets its variables from
+`docker-compose.yml` (local-dev defaults, mock providers). A `.env` file is **optional**
+— only needed to run services outside Docker or to override defaults
+(`cp .env.example .env`); see `.env.example` for the variable reference.
 
 Local stack (MongoDB, Chroma, Kafka, services):
 

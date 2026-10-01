@@ -47,7 +47,9 @@ class Settings(BaseSettings):
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 200
 
-    FERNET_KEY: str = "change-me-in-production"
+    # Default = urlsafe_b64(sha256("FERNET_KEY@TESIS_MESTRIA_UPS")) — valid Fernet key for local dev.
+    # Production: stable key from the secret store. Rotating the key makes stored ciphertext unreadable.
+    FERNET_KEY: str = "JEWS9jt7GqTkkv1N8y-Kld5V8IeFZMw_UFFhn4h-xsU="
 
 
 def fernet_key_bytes(raw: str | None = None) -> bytes:
