@@ -79,6 +79,13 @@ ignore:
         reason: No fixed version available for Debian 13 (trixie).
         expires: '2027-01-01T00:00:00.000Z'
 
+  # gcc-14 / libstdc++6 - Expired Pointer Dereference (affects all services;
+  # pulled in by apt on the python:3.13-slim Debian 13 base)
+  SNYK-DEBIAN13-GCC14-20335537:
+    - '*':
+        reason: No fixed version available for Debian 13 (trixie).
+        expires: '2027-01-01T00:00:00.000Z'
+
   # ============================================================
   # ETL Service - Additional Debian 13 Vulnerabilities
   # ============================================================
