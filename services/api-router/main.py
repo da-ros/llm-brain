@@ -27,6 +27,7 @@ from routers import (
     finetune,
     health,
     learning,
+    models,
     sessions,
     shield,
     simulate,
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     application.include_router(sessions.router)
     application.include_router(finetune.router)
     application.include_router(learning.router)
+    application.include_router(models.router)
     application.include_router(simulate.router)
     application.include_router(shield.router)
     application.include_router(analytics.router)

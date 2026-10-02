@@ -3,21 +3,22 @@
 ### Context
 
 The platform needs two backend LLM services:
-1. **LLM Service** (port 8003): Handles multimodal inference requests from the API Router for premium users using **Qwen3.5-4B** served in a **local Docker container** ("cloud" = local container).
+1. **LLM Service** (port 8003): Handles multimodal inference requests from the API Router for web free and premium users using **Qwen3.5-4B** served in a **local Docker container** ("cloud" = local container). Web free is the same base model, with no RAG and no memory.
 2. **Fine-Tune Service** (port 8004): Handles **local** LoRA fine-tuning jobs (PEFT / ms-swift / Unsloth) over Qwen3.5-4B as a background worker.
 
 Currently, the LLM provider code lives in the monolith (`services/api/llm/`). This frame
 extracts it into dedicated microservices and adds the local fine-tuning pipeline.
 
 > **Note**: On-device LLM is NOT part of this frame. It goes in Frame 10 (Mobile App):
-> Free = Qwen3.5-4B **base** quantized; Premium = Qwen3.5-4B **fine-tuned** quantized —
-> both via React Native / Neural Engine / Metal.
+> Phone free = Qwen3.5-4B **base** quantized and never calls this container.
+> Web free calls this container's base model. Premium on device = Qwen3.5-4B
+> **fine-tuned** quantized. Both phone builds use React Native / Neural Engine / Metal.
 
 ### Why
 
 1. **Microservice separation**: The LLM provider logic must be an independent service so the API Router can call it via HTTP (`http://llm-service:8003/generate`).
 2. **Scaling independence**: LLM inference and fine-tuning have different resource profiles — they scale separately.
-3. **Thesis OE4**: Anteproyecto specifies the main LLM plus LoRA fine-tuning. Here it is realized as a single model, **Qwen3.5-4B** (dense, natively multimodal: text/image/video; 262K ctx; Apache 2.0), served locally for premium and fine-tuned locally with LoRA.
+3. **Thesis OE4**: Anteproyecto specifies the main LLM plus LoRA fine-tuning. Here it is realized as a single model, **Qwen3.5-4B** (dense, natively multimodal: text/image/video; 262K ctx; Apache 2.0), served locally for web free and premium, and fine-tuned locally with LoRA for the premium on-device pack.
 4. **Monolith removal**: The `services/api/` monolith will be eliminated once all functionality is distributed across microservices.
 
 ### Deliverables
@@ -25,7 +26,7 @@ extracts it into dedicated microservices and adds the local fine-tuning pipeline
 **LLM Service (`services/llm/`)**
 - FastAPI app with `/generate` and `/chat` endpoints (multimodal: text, image, video)
 - `LLMProvider` Protocol (migrated from monolith)
-- Local Qwen3.5-4B provider implementation (**base** model, full precision — **not** fine-tuned; Premium cloud only)
+- Local Qwen3.5-4B provider implementation (**base** model, full precision — **not** fine-tuned; web free and premium share these weights)
 - Provider resolver: selects by subscription tier
 - Health endpoint with provider status (local Qwen3.5-4B container)
 - Correlation ID support

@@ -2466,3 +2466,114 @@ class TestAccount:
         assert http_response.status_code == 200
         assert http_response.json() == {"documents": 2, "embeddings": 5, "uploads": 1}
         uploads.assert_awaited_once()
+
+
+def _write_pack(directory: Path, pack_id: str, tier: str, payload: bytes, user_id: str | None = None, sha: str | None = None) -> dict:
+    import hashlib
+    import json
+
+    directory.mkdir(parents=True, exist_ok=True)
+    filename = f"{pack_id}.pte"
+    (directory / filename).write_bytes(payload)
+    body = {
+        "id": pack_id,
+        "family": "Qwen3.5-4B",
+        "tier": tier,
+        "quantization": "Q4",
+        "parameters": "4.0B",
+        "filename": filename,
+        "bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest() if sha is None else sha,
+    }
+    if user_id:
+        body["user_id"] = user_id
+    (directory / "manifest.json").write_text(json.dumps(body), encoding="utf-8")
+    return body
+
+
+class TestOnDeviceModels:
+    def test_free_download_is_base_and_ignores_tier_query(self, client, tmp_path):
+        settings = get_settings()
+        settings.ONDEVICE_MODEL_DIR = str(tmp_path)
+        _write_pack(tmp_path / "base", "qwen3.5-4b-base-q4", "free", b"base-weights")
+        _write_pack(tmp_path / "users" / "user1", "qwen3.5-4b-finetuned-q4", "premium", b"lora-weights", "user1")
+        meta = client.get("/api/models/on-device?tier=premium", headers=auth_header(tier="free"))
+        assert meta.status_code == 200
+        assert meta.json()["id"] == "qwen3.5-4b-base-q4"
+        assert meta.json()["ready"] is True
+        assert meta.json()["quantization"] == "Q4"
+        downloaded = client.get(
+            "/api/models/on-device/file",
+            headers={**auth_header(tier="free"), "X-Request-ID": "corr-model"},
+        )
+        assert downloaded.status_code == 200
+        assert downloaded.content == b"base-weights"
+        assert b"lora-weights" not in downloaded.content
+
+    def test_premium_missing_pack_is_404_and_not_base(self, client, tmp_path):
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path)
+        _write_pack(tmp_path / "base", "qwen3.5-4b-base-q4", "free", b"base-weights")
+        meta = client.get("/api/models/on-device", headers=auth_header(tier="premium"))
+        assert meta.status_code == 200
+        assert meta.json()["id"] == "qwen3.5-4b-finetuned-q4"
+        assert meta.json()["ready"] is False
+        assert meta.json()["sha256"] == ""
+        missing = client.get("/api/models/on-device/file", headers=auth_header(tier="premium"))
+        assert missing.status_code == 404
+        assert missing.content != b"base-weights"
+
+    def test_premium_user_cannot_read_another_users_pack(self, client, tmp_path):
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path)
+        own = _write_pack(
+            tmp_path / "users" / "user-a",
+            "qwen3.5-4b-finetuned-q4",
+            "premium",
+            b"user-a-weights",
+            "user-a",
+        )
+        meta = client.get("/api/models/on-device", headers=auth_header("user-b", tier="premium"))
+        assert meta.json()["ready"] is False
+        assert own["sha256"] not in meta.text
+        downloaded = client.get("/api/models/on-device/file", headers=auth_header("user-b", tier="premium"))
+        assert downloaded.status_code == 404
+        assert b"user-a-weights" not in downloaded.content
+
+    def test_checksum_mismatch_is_not_ready(self, client, tmp_path):
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path)
+        _write_pack(tmp_path / "base", "qwen3.5-4b-base-q4", "free", b"base-weights", sha="ab" * 32)
+        meta = client.get("/api/models/on-device", headers=auth_header(tier="free"))
+        assert meta.json()["ready"] is False
+        assert client.get("/api/models/on-device/file", headers=auth_header(tier="free")).status_code == 404
+
+    def test_model_routes_require_a_token_and_health_stays_public(self, client):
+        assert client.get("/api/models/on-device").status_code == 401
+        assert client.get("/api/models/on-device/file").status_code == 401
+        assert client.get("/health").status_code == 200
+
+    def test_free_web_chat_still_skips_rag(self, client):
+        with (
+            patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
+            patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            llm.return_value = "Hello."
+            response = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={"message": "hi", "use_rag": True},
+            )
+        assert response.status_code == 200
+        assert response.json()["context_used"] is False
+        reason.assert_not_awaited()
+        rag.assert_not_awaited()
+        llm.assert_awaited()
+
+    def test_file_download_is_rate_limited(self, client, tmp_path):
+        settings = get_settings()
+        settings.ONDEVICE_MODEL_DIR = str(tmp_path)
+        settings.RATE_LIMIT_MODEL_FILE = 1
+        _write_pack(tmp_path / "base", "qwen3.5-4b-base-q4", "free", b"base-weights")
+        headers = auth_header(tier="free")
+        assert client.get("/api/models/on-device/file", headers=headers).status_code == 200
+        assert client.get("/api/models/on-device/file", headers=headers).status_code == 429
+

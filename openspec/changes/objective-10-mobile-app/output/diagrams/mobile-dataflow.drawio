@@ -1,0 +1,136 @@
+<mxfile host="65bd71144e">
+  <diagram id="mobile-dataflow" name="Frame 10 — Mobile data flow">
+    <mxGraphModel dx="1500" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1180" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="auth" value="Auth&#10;email + password" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="40" y="40" width="200" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="router" value="API Router :8000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="360" y="200" width="200" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="keychain" value="Keychain&#10;access_token + user" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="680" y="40" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="err401" value="401&#10;stay on auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="680" y="150" width="180" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="question" value="On-device question&#10;text + up to 5 local files" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="40" y="300" width="240" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="engine" value="OnDeviceEngine&#10;base Q4, or that user's LoRA Q4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="400" y="300" width="280" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="refuse6" value="Sixth file refused" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="40" y="420" width="180" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="refuseimg" value="On-device image refused" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="250" y="420" width="200" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="nopack" value="No base pack&#10;download it. No /api/chat" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="480" y="420" width="240" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="reinstall" value="Reinstall Model" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="40" y="540" width="180" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="checksum" value="sha256 on the phone" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="680" y="540" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="swap" value="Swap installed pack" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="960" y="540" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="keepold" value="Keep the old pack" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="960" y="650" width="200" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="err404" value="404&#10;do not send another user's pack or the base file" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="360" y="650" width="280" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="switch" value="Premium switch&#10;default On device" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="40" y="760" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="chats" value="POST /api/chats&#10;once per cloud thread" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="320" y="860" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="chat" value="POST /api/chat&#10;use_rag true · up to 5 attachments" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="600" y="860" width="260" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="rag" value="RAG :8002" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="960" y="800" width="160" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="llm" value="LLM :8003" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="960" y="900" width="160" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend" value="Solid = call, head on the callee. Dashed = response, head on the caller. Red sinks have no outgoing edge. No Apple, Google, microphone, Kafka, or /api/upload." style="text;html=1;align=left;strokeColor=none;fillColor=none;fontSize=12;" parent="1" vertex="1">
+          <mxGeometry x="40" y="1000" width="1200" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_auth_router" value="POST /api/auth/signin or signup" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="auth" target="router" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_key" value="JWT" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;dashed=1;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;" parent="1" source="router" target="auth" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_auth_key" value="store session" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="auth" target="keychain" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_401" value="bad credentials" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;dashed=1;endArrow=classic;startArrow=none;strokeColor=#b85450;" parent="1" source="router" target="err401" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_q_engine" value="local prompt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="question" target="engine" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_engine_reply" value="reply" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;dashed=1;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="engine" target="question" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_q_6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#b85450;" parent="1" source="question" target="refuse6" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_q_img" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#b85450;" parent="1" source="question" target="refuseimg" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_q_nopack" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#b85450;" parent="1" source="question" target="nopack" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_re_router" value="GET metadata, then GET file" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="reinstall" target="router" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_sum" value="pack bytes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;dashed=1;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;" parent="1" source="router" target="reinstall" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_re_sum" value="verify" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="reinstall" target="checksum" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_sum_swap" value="sha256 matches" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="checksum" target="swap" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_sum_keep" value="mismatch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;dashed=1;endArrow=classic;startArrow=none;strokeColor=#b85450;" parent="1" source="checksum" target="keepold" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_404" value="premium pack not ready" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;dashed=1;endArrow=classic;startArrow=none;strokeColor=#b85450;" parent="1" source="router" target="err404" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_sw_engine" value="On device" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="switch" target="engine" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_sw_chats" value="Digital Brain" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="switch" target="chats" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_chats_chat" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="chats" target="chat" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_chat_router" value="use_rag true" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="chat" target="router" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_rag" value="Digital Brain" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;" parent="1" source="router" target="rag" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_llm" value="Digital Brain" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;" parent="1" source="router" target="llm" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_reply" value="cloud reply" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;dashed=1;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;" parent="1" source="router" target="chat" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
