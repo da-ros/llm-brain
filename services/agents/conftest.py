@@ -64,5 +64,12 @@ def _reload_this_service():
     import db
 
     db.reset_memory()
+    # A sibling suite may have dropped `db` from sys.modules after `learning`
+    # bound to it at import time; reload so it sees this test's fresh `db`.
+    import importlib
+
+    import learning
+
+    importlib.reload(learning)
     yield
     db.reset_memory()
