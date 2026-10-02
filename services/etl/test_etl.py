@@ -485,3 +485,121 @@ class TestSampleCorpus:
         produced = list((output_dir / "corpus-user").glob("*.jsonl"))
         assert len(produced) == 100
         assert not (output_dir / "other-user").exists()
+
+
+class TestNewLoaderKinds:
+    """CSV, TSV, Excel, markdown, and ICS — chat attachment types."""
+
+    def test_resolve_maps_new_mimes(self):
+        from loaders import (
+            CsvLoaderAdapter,
+            ExcelLoaderAdapter,
+            TsvLoaderAdapter,
+            is_supported_mime,
+            resolve_loader_class,
+        )
+
+        assert resolve_loader_class("text/csv") is CsvLoaderAdapter
+        assert resolve_loader_class("text/tab-separated-values") is TsvLoaderAdapter
+        assert resolve_loader_class("text/markdown") is not None
+        assert resolve_loader_class("text/calendar") is not None
+        assert resolve_loader_class("application/vnd.ms-excel") is ExcelLoaderAdapter
+        assert (
+            resolve_loader_class(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            is ExcelLoaderAdapter
+        )
+        for mime in ("text/csv", "text/calendar", "text/markdown", "application/vnd.ms-excel"):
+            assert is_supported_mime(mime)
+
+    def test_csv_adapter_passes_comma_delimiter(self):
+        from loaders import CsvLoaderAdapter
+
+        fake = MagicMock()
+        fake.return_value.load.return_value = [FakeDoc("a,b")]
+        with patch("loaders._csv_loader_class", return_value=fake):
+            docs = CsvLoaderAdapter("/tmp/x.csv").load()
+        assert docs[0].page_content == "a,b"
+        fake.assert_called_once_with("/tmp/x.csv", csv_args={"delimiter": ","})
+
+    def test_tsv_adapter_passes_tab_delimiter(self):
+        from loaders import TsvLoaderAdapter
+
+        fake = MagicMock()
+        fake.return_value.load.return_value = [FakeDoc("a\tb")]
+        with patch("loaders._csv_loader_class", return_value=fake):
+            TsvLoaderAdapter("/tmp/x.tsv").load()
+        fake.assert_called_once_with("/tmp/x.tsv", csv_args={"delimiter": "\t"})
+
+    def test_excel_adapter_uses_unstructured_excel_loader(self):
+        from loaders import ExcelLoaderAdapter
+
+        fake = MagicMock()
+        fake.return_value.load.return_value = [FakeDoc("sheet")]
+        with patch("loaders._excel_loader_class", return_value=fake):
+            docs = ExcelLoaderAdapter("/tmp/x.xlsx").load()
+        assert docs[0].page_content == "sheet"
+
+
+class TestParseEndpoint:
+    """POST /parse — ephemeral text extraction for chat attachments."""
+
+    def test_empty_body_is_422(self):
+        from main import app
+
+        with TestClient(app) as client:
+            response = client.post("/parse", params={"filename": "a.txt"}, content=b"")
+        assert response.status_code == 422
+
+    def test_markdown_returns_text_via_text_loader(self):
+        from main import app
+
+        with (
+            patch("loaders._text_loader_class", return_value=BuiltinTextLoader),
+            TestClient(app) as client,
+        ):
+            response = client.post(
+                "/parse", params={"filename": "notes.md"}, content=b"hello markdown"
+            )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["mime"] == "text/markdown"
+        assert "hello markdown" in body["text"]
+
+    def test_image_is_out_of_scope(self):
+        from main import app
+
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 16
+        with TestClient(app) as client:
+            response = client.post("/parse", params={"filename": "photo.png"}, content=png)
+        assert response.status_code == 422
+        assert "out of scope" in response.json()["detail"]
+
+    def test_video_is_out_of_scope(self):
+        from main import app
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/parse", params={"filename": "clip.mp4"}, content=b"\x00\x00\x00\x18ftypmp42"
+            )
+        assert response.status_code == 422
+        assert "out of scope" in response.json()["detail"]
+
+    def test_unsupported_type_is_422(self):
+        from main import app
+
+        with TestClient(app) as client:
+            response = client.post("/parse", params={"filename": "data.zip"}, content=b"PK\x03\x04")
+        assert response.status_code == 422
+
+    def test_loader_crash_is_clean_422(self):
+        from main import app
+
+        with (
+            patch("loaders._text_loader_class", side_effect=RuntimeError("boom")),
+            TestClient(app) as client,
+        ):
+            response = client.post("/parse", params={"filename": "a.txt"}, content=b"data")
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Could not read that file"

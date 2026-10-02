@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import jwt
 import pytest
 
@@ -2049,7 +2050,11 @@ class TestBrain:
         created = client.post("/api/chats", headers=auth_header(tier="free"))
         chat_id = created.json()["id"]
         with (
-            patch("routers.chat.load_attachment", return_value="clause 4") as load,
+            patch(
+                "routers.chat._parse_via_etl",
+                new_callable=AsyncMock,
+                return_value="clause 4",
+            ) as load,
             patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
             patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
             patch("db.save_upload", new_callable=AsyncMock) as save,
@@ -2083,11 +2088,14 @@ class TestBrain:
 
     def test_free_chat_accepts_five_files_and_rejects_six(self, client):
         files = [
-            {"filename": f"note-{index}.txt", "content_base64": "bm90ZXM="}
-            for index in range(5)
+            {"filename": f"note-{index}.txt", "content_base64": "bm90ZXM="} for index in range(5)
         ]
         with (
-            patch("routers.chat.load_attachment", side_effect=lambda name, _data: name),
+            patch(
+                "routers.chat._parse_via_etl",
+                new_callable=AsyncMock,
+                side_effect=lambda name, _data, **kwargs: name,
+            ),
             patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
             patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
             patch("db.save_upload", new_callable=AsyncMock) as save,
@@ -2103,7 +2111,10 @@ class TestBrain:
                 headers=auth_header(tier="free"),
                 json={
                     "message": "Too many.",
-                    "attachments": files + [{"filename": "extra.txt", "content_base64": "bm90ZXM="}],
+                    "attachments": [
+                        *files,
+                        {"filename": "extra.txt", "content_base64": "bm90ZXM="},
+                    ],
                 },
             )
         assert accepted.status_code == 200
@@ -2117,11 +2128,34 @@ class TestBrain:
         save.assert_not_awaited()
         assert rejected.status_code == 422
 
+    def test_attachment_parse_down_returns_503(self, client):
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("etl down"))
+        async_client_cm = MagicMock()
+        async_client_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        async_client_cm.__aexit__ = AsyncMock(return_value=None)
+        with (
+            patch("routers.chat.httpx.AsyncClient", return_value=async_client_cm),
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            response = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={
+                    "message": "What does it say?",
+                    "attachment_filename": "notes.docx",
+                    "attachment_base64": "bm90ZXM=",
+                },
+            )
+        assert response.status_code == 503
+        assert "unavailable" in response.json()["detail"].lower()
+        llm.assert_not_awaited()
+
     def test_next_question_includes_earlier_files(self, client):
         created = client.post("/api/chats", headers=auth_header(tier="free"))
         chat_id = created.json()["id"]
         with (
-            patch("routers.chat.load_attachment", return_value="clause 4"),
+            patch("routers.chat._parse_via_etl", new_callable=AsyncMock, return_value="clause 4"),
             patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
             patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
             patch("db.save_upload", new_callable=AsyncMock) as save,
@@ -2158,7 +2192,7 @@ class TestBrain:
         created = client.post("/api/chats", headers=auth_header())
         chat_id = created.json()["id"]
         with (
-            patch("routers.chat.load_attachment", return_value="clause 4"),
+            patch("routers.chat._parse_via_etl", new_callable=AsyncMock, return_value="clause 4"),
             patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
             patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
         ):
@@ -2233,7 +2267,11 @@ class TestBrain:
 
     def test_attachment_is_used_once_and_not_saved(self, client):
         with (
-            patch("routers.chat.load_attachment", return_value="clause 4") as load,
+            patch(
+                "routers.chat._parse_via_etl",
+                new_callable=AsyncMock,
+                return_value="clause 4",
+            ) as load,
             patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
             patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
             patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
@@ -2305,7 +2343,11 @@ class TestBrain:
             json={"note": "Launch review"},
         )
         with (
-            patch("routers.chat.load_attachment", return_value="section 2") as load,
+            patch(
+                "routers.chat._parse_via_etl",
+                new_callable=AsyncMock,
+                return_value="section 2",
+            ) as load,
             patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
             patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
         ):
@@ -2335,7 +2377,16 @@ class TestBrain:
         load.assert_called_once()
 
     def test_unsupported_attachment_is_422(self, client):
-        with patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason:
+        from fastapi import HTTPException
+
+        with (
+            patch("routers.chat._parse_via_etl", new_callable=AsyncMock) as parse,
+            patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
+        ):
+            parse.side_effect = HTTPException(
+                status_code=422,
+                detail="Unsupported file type: application/zip, Supported types: ...",
+            )
             response = client.post(
                 "/api/chat",
                 headers=auth_header(),
@@ -2346,6 +2397,7 @@ class TestBrain:
                 },
             )
         assert response.status_code == 422
+        assert "Unsupported file type" in response.json()["detail"]
         reason.assert_not_awaited()
         client.publish_turn.assert_not_called()
 
