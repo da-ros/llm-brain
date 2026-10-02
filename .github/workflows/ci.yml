@@ -44,7 +44,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libmagic1
       - name: Install dependencies
         run: |
-          for svc in services/*/requirements.txt; do pip install -r "$svc" 2>/dev/null || true; done
+          for svc in services/*/requirements.txt; do pip install -r "$svc"; done
           pip install pytest pytest-asyncio pytest-cov
 
       # ── 3. Tests + Coverage (services are healthy by now) ───

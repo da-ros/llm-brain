@@ -21,6 +21,7 @@ jobs:
           - agents
           - simulator
           - shield
+          - analytics
     steps:
       - uses: actions/checkout@v7
 
