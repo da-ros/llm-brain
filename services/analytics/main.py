@@ -1,8 +1,8 @@
 """Analytics Service — FastAPI application on port 8008.
 
 Clients never call this port. The API Router is the facade. Ingest is
-synchronous HTTP: LangChain load, RAG excerpts, one LLM call, Pearson.
-No Kafka and no Google OAuth.
+synchronous HTTP: ETL parse (POST /parse), RAG excerpts, one LLM call,
+Pearson. Analytics never parses documents itself. No Kafka, no Google OAuth.
 """
 
 from __future__ import annotations
@@ -14,7 +14,13 @@ import db
 import pipeline
 from base import ensure_premium, owned_or_404
 from config import get_settings
-from exceptions import EmptyFileError, LLMTimeoutError, LLMUpstreamError, UnsupportedFileError
+from exceptions import (
+    EmptyFileError,
+    ETLUpstreamError,
+    LLMTimeoutError,
+    LLMUpstreamError,
+    UnsupportedFileError,
+)
 from fastapi import FastAPI, HTTPException, Request, status
 from logging_setup import correlation_id_var, log_with_correlation, logger
 
@@ -93,6 +99,12 @@ def create_app() -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="empty or unsupported file",
+            ) from exc
+        except ETLUpstreamError as exc:
+            log_with_correlation(correlation_id, "error", f"ETL parse error: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="attachment parsing is unavailable (ETL service)",
             ) from exc
         except LLMTimeoutError as exc:
             log_with_correlation(correlation_id, "error", "LLM service timeout")
