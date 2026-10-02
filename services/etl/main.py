@@ -114,9 +114,8 @@ def create_app() -> FastAPI:
                 suffix = ext
                 break
         try:
-            mime = _PARSE_SUFFIX_MIME.get(suffix) or detect_mime(
-                file_path=filename or None, content=file
-            )
+            # Content-only detection: the request filename never reaches a Path.
+            mime = _PARSE_SUFFIX_MIME.get(suffix) or detect_mime(content=file)
         except UnsupportedFileTypeError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
