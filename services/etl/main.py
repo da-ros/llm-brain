@@ -8,6 +8,7 @@ stored. Health stays 200 regardless of Kafka / distillation activity.
 
 from __future__ import annotations
 
+import re
 import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -43,6 +44,9 @@ _PARSE_SUFFIX_MIME = {
     ".mpeg": "video/mpeg",
     ".mpg": "video/mpeg",
 }
+
+# Only these suffixes may reach the temp path built from the filename.
+_SUFFIX_RE = re.compile(r"\.[a-z0-9]{1,8}")
 
 
 async def add_correlation_id(request: Request, call_next):
@@ -104,7 +108,12 @@ def create_app() -> FastAPI:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Attachment is empty",
             )
-        suffix = Path(filename or "").suffix.lower()
+        # Basename first and a whitelist suffix: the filename never reaches a
+        # Path unchecked (Snyk SAST path-traversal taint).
+        raw_name = (filename or "").replace("\\", "/").rsplit("/", 1)[-1]
+        suffix = Path(raw_name).suffix.lower()
+        if not _SUFFIX_RE.fullmatch(suffix):
+            suffix = ""
         try:
             mime = _PARSE_SUFFIX_MIME.get(suffix) or detect_mime(
                 file_path=filename or None, content=file

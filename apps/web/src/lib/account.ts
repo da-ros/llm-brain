@@ -7,11 +7,11 @@ export type Account = {
   plan: "free" | "premium";
 };
 
-const ACCOUNT_KEY = "encefalus_account";
+const ACCOUNT_STORAGE_FIELD = "encefalus_account";
 
 export function readAccount(): Account | null {
   try {
-    const raw = sessionStorage.getItem(ACCOUNT_KEY);
+    const raw = sessionStorage.getItem(ACCOUNT_STORAGE_FIELD);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Account;
     if (!parsed?.name || !parsed?.email) return null;
@@ -23,13 +23,13 @@ export function readAccount(): Account | null {
 
 export function saveSession(token: string, user: Account) {
   sessionStorage.setItem("access_token", token);
-  sessionStorage.setItem(ACCOUNT_KEY, JSON.stringify(user));
+  sessionStorage.setItem(ACCOUNT_STORAGE_FIELD, JSON.stringify(user));
   window.dispatchEvent(new Event("encefalus-auth"));
 }
 
 export function clearSession() {
   sessionStorage.removeItem("access_token");
-  sessionStorage.removeItem(ACCOUNT_KEY);
+  sessionStorage.removeItem(ACCOUNT_STORAGE_FIELD);
   window.dispatchEvent(new Event("encefalus-auth"));
 }
 
