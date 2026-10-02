@@ -7,10 +7,24 @@ RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run build
 
-FROM node:22-slim AS runtime
+# Runtime: trixie base like the rest of the fleet (the fleet's Debian 13
+# .snyk policy applies), and no npm/yarn — nothing here uses them (the app
+# is a bundled .mjs), and their manifests make Snyk scan phantom npm
+# projects that are not part of the shipped runtime.
+FROM node:22-trixie-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NITRO_PORT=3000
+RUN apt-get update && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/* \
+        /opt/yarn* \
+        /usr/local/lib/node_modules/npm \
+        /usr/local/lib/node_modules/corepack \
+        /usr/local/bin/npm \
+        /usr/local/bin/npx \
+        /usr/local/bin/yarn \
+        /usr/local/bin/yarnpkg \
+        /usr/local/bin/corepack
 COPY --from=build /app/.output ./.output
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
