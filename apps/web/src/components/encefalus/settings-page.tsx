@@ -20,7 +20,13 @@ import {
   saveSession,
   type Account,
 } from "@/lib/account";
-import { Notice, PageHeader, Panel, PanelTitle, StatusDot } from "@/components/encefalus/primitives";
+import {
+  Notice,
+  PageHeader,
+  Panel,
+  PanelTitle,
+  StatusDot,
+} from "@/components/encefalus/primitives";
 
 type ServiceRow = { id: string; label: string; status: "online" | "offline" };
 type Storage = { bytes: number; documents: number };
@@ -265,7 +271,8 @@ function DeleteDialog({ onDeleted }: { onDeleted: () => void }) {
             Delete all personal data?
           </DialogTitle>
           <DialogDescription>
-            This permanently removes your uploaded files and the memory Brain uses to answer. This cannot be undone.
+            This permanently removes your uploaded files and the memory Brain uses to answer. This
+            cannot be undone.
           </DialogDescription>
         </DialogHeader>
         {error && <Notice>{error}</Notice>}

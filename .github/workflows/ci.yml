@@ -76,3 +76,21 @@ jobs:
         run: snyk code test --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  web:
+    name: Web → Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        working-directory: apps/web
+        run: bun install --frozen-lockfile
+      - name: Run eslint
+        working-directory: apps/web
+        run: bun run lint
+      - name: Build (vite + nitro node-server)
+        working-directory: apps/web
+        run: bun run build

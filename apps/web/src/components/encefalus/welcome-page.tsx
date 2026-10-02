@@ -61,19 +61,27 @@ export function WelcomePage() {
         />
         <BrainScene />
         <div className="absolute inset-0 -z-10 bg-background/80 lg:hidden" />
-        <header className={`flex items-center justify-between gap-6 px-6 pt-6 sm:px-10 lg:px-12 lg:pt-7 short:lg:pt-5`}>
+        <header
+          className={`flex items-center justify-between gap-6 px-6 pt-6 sm:px-10 lg:px-12 lg:pt-7 short:lg:pt-5`}
+        >
           <div className="flex min-w-0 items-center gap-3">
             <img src="/encefalus-mark.png" alt="" className="size-9 shrink-0" />
-            <span className="truncate text-[1.35rem] font-semibold tracking-[-0.01em]">Encefalus</span>
+            <span className="truncate text-[1.35rem] font-semibold tracking-[-0.01em]">
+              Encefalus
+            </span>
             <span className="hidden h-5 w-px bg-foreground/15 sm:block" />
-            <span className="hidden text-sm text-muted-foreground sm:block">AI-Augmented Brain</span>
+            <span className="hidden text-sm text-muted-foreground sm:block">
+              AI-Augmented Brain
+            </span>
           </div>
           <p className="hidden items-center gap-2.5 text-xs text-muted-foreground lg:flex">
             Private <span className="size-1 rounded-full bg-muted-foreground/60" /> Personal
             <span className="size-1 rounded-full bg-muted-foreground/60" /> More Capable You.
           </p>
         </header>
-        <div className={`grid flex-1 gap-8 px-6 pb-8 pt-8 sm:px-10 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_min(33rem,36%)] lg:gap-10 lg:px-12 lg:pb-6 lg:pt-2 short:lg:pb-4`}>
+        <div
+          className={`grid flex-1 gap-8 px-6 pb-8 pt-8 sm:px-10 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_min(33rem,36%)] lg:gap-10 lg:px-12 lg:pb-6 lg:pt-2 short:lg:pb-4`}
+        >
           <Story />
           <AuthCard />
         </div>
@@ -83,10 +91,38 @@ export function WelcomePage() {
 }
 
 const sources = [
-  { icon: FileText, label: "Your notes", left: "35.2%", top: "21.4%", width: "11.3%", bars: [72, 60, 38] },
-  { icon: ImageIcon, label: "Your files", left: "45%", top: "34.2%", width: "11.3%", bars: [66, 56, 34] },
-  { icon: MessageCircle, label: "Your conversations", left: "24.5%", top: "58.3%", width: "13.4%", bars: [70, 58, 36] },
-  { icon: ChartLine, label: "Your insights", left: "43.1%", top: "69.1%", width: "12.9%", bars: [74, 62, 40] },
+  {
+    icon: FileText,
+    label: "Your notes",
+    left: "35.2%",
+    top: "21.4%",
+    width: "11.3%",
+    bars: [72, 60, 38],
+  },
+  {
+    icon: ImageIcon,
+    label: "Your files",
+    left: "45%",
+    top: "34.2%",
+    width: "11.3%",
+    bars: [66, 56, 34],
+  },
+  {
+    icon: MessageCircle,
+    label: "Your conversations",
+    left: "24.5%",
+    top: "58.3%",
+    width: "13.4%",
+    bars: [70, 58, 36],
+  },
+  {
+    icon: ChartLine,
+    label: "Your insights",
+    left: "43.1%",
+    top: "69.1%",
+    width: "12.9%",
+    bars: [74, 62, 40],
+  },
 ];
 
 function BrainScene() {
@@ -106,10 +142,16 @@ function BrainScene() {
             <source.icon className="size-[1.35cqw]" strokeWidth={1.8} />
           </span>
           <span className="min-w-0 flex-1 pt-[0.1cqw]">
-            <span className="block whitespace-nowrap text-[0.78cqw] font-semibold leading-[1.1] text-[#3a2a22]">{source.label}</span>
+            <span className="block whitespace-nowrap text-[0.78cqw] font-semibold leading-[1.1] text-[#3a2a22]">
+              {source.label}
+            </span>
             <span className="mt-[0.7cqw] block space-y-[0.45cqw]">
               {source.bars.map((width) => (
-                <span key={width} className="block h-[0.26cqw] rounded-full bg-[#e6ddd4]" style={{ width: `${width}%` }} />
+                <span
+                  key={width}
+                  className="block h-[0.26cqw] rounded-full bg-[#e6ddd4]"
+                  style={{ width: `${width}%` }}
+                />
               ))}
             </span>
           </span>
@@ -123,16 +165,20 @@ function Story() {
   return (
     <section className="flex min-w-0 flex-col lg:max-w-[31rem] xl:max-w-[35rem]">
       <div className={`lg:pt-8 short:lg:pt-4`}>
-        <h1 className={`max-w-[32rem] text-[2.5rem] font-semibold leading-[1.12] tracking-[-0.025em] sm:text-5xl lg:text-[2.45rem] xl:text-[2.85rem] short:lg:text-[2.35rem]`}>
+        <h1
+          className={`max-w-[32rem] text-[2.5rem] font-semibold leading-[1.12] tracking-[-0.025em] sm:text-5xl lg:text-[2.45rem] xl:text-[2.85rem] short:lg:text-[2.35rem]`}
+        >
           Your memories.
           <br />
           Sharper decisions.
           <br />
           <span className="text-[#6e5242]">A more intentional you.</span>
         </h1>
-        <p className={`mt-6 max-w-[27rem] text-[15px] leading-6 text-muted-foreground short:lg:mt-4`}>
-          Encefalus helps you capture your knowledge, understand your context, and make better decisions with a
-          private, AI-augmented brain.
+        <p
+          className={`mt-6 max-w-[27rem] text-[15px] leading-6 text-muted-foreground short:lg:mt-4`}
+        >
+          Encefalus helps you capture your knowledge, understand your context, and make better
+          decisions with a private, AI-augmented brain.
         </p>
       </div>
       <ul className={`mt-9 space-y-7 short:lg:mt-6 short:lg:space-y-5`}>
@@ -143,13 +189,21 @@ function Story() {
             </span>
             <span className="max-w-[16rem]">
               <span className="block text-[15px] font-semibold">{feature.title}</span>
-              <span className="mt-1 block text-[13px] leading-5 text-muted-foreground">{feature.text}</span>
+              <span className="mt-1 block text-[13px] leading-5 text-muted-foreground">
+                {feature.text}
+              </span>
             </span>
           </li>
         ))}
       </ul>
-      <div className={`mt-10 grid gap-4 border-t border-foreground/10 pt-5 sm:grid-cols-[auto_auto] sm:gap-0 lg:mt-auto short:lg:pt-4`}>
-        <PlatformNote icon={<Smartphone className="size-5" strokeWidth={1.6} />} title="Free local AI on iPhone" text="Private, fast, and offline-ready." />
+      <div
+        className={`mt-10 grid gap-4 border-t border-foreground/10 pt-5 sm:grid-cols-[auto_auto] sm:gap-0 lg:mt-auto short:lg:pt-4`}
+      >
+        <PlatformNote
+          icon={<Smartphone className="size-5" strokeWidth={1.6} />}
+          title="Free local AI on iPhone"
+          text="Private, fast, and offline-ready."
+        />
         <PlatformNote
           icon={<Laptop className="size-5" strokeWidth={1.6} />}
           title="Premium Digital Brain on web"
@@ -161,7 +215,17 @@ function Story() {
   );
 }
 
-function PlatformNote({ icon, title, text, className = "" }: { icon: ReactNode; title: string; text: string; className?: string }) {
+function PlatformNote({
+  icon,
+  title,
+  text,
+  className = "",
+}: {
+  icon: ReactNode;
+  title: string;
+  text: string;
+  className?: string;
+}) {
   return (
     <div className={`flex items-center gap-3.5 pr-6 xl:whitespace-nowrap ${className}`}>
       <span className="shrink-0 text-[#5b4032]">{icon}</span>
@@ -203,7 +267,8 @@ function AuthCard() {
     }
     setBusy(true);
     const path = mode === "signup" ? "/api/auth/signup" : "/api/auth/signin";
-    const payload = mode === "signup" ? { name, email, password, plan: "free" } : { email, password };
+    const payload =
+      mode === "signup" ? { name, email, password, plan: "free" } : { email, password };
     try {
       const response = await fetch(path, {
         method: "POST",
@@ -247,7 +312,9 @@ function AuthCard() {
         {tab("signin", "Sign in")}
         {tab("signup", "Create account")}
       </div>
-      <h2 className={`mt-6 text-[1.5rem] font-semibold leading-tight tracking-[-0.02em] short:mt-4 short:text-[1.35rem]`}>
+      <h2
+        className={`mt-6 text-[1.5rem] font-semibold leading-tight tracking-[-0.02em] short:mt-4 short:text-[1.35rem]`}
+      >
         {mode === "signup" ? "Create your Encefalus account" : "Welcome back"}
       </h2>
       <p className="mt-1.5 max-w-sm text-sm leading-5 text-muted-foreground">
@@ -258,17 +325,36 @@ function AuthCard() {
       <form className={`mt-5 space-y-3.5 short:mt-3 short:space-y-2`} onSubmit={submit}>
         {mode === "signup" && (
           <Field id="full-name" label="Full name" icon={<User className="size-4" />}>
-            <WelcomeInput id="full-name" autoComplete="name" placeholder="Jane Doe" value={name} onChange={setName} />
+            <WelcomeInput
+              id="full-name"
+              autoComplete="name"
+              placeholder="Jane Doe"
+              value={name}
+              onChange={setName}
+            />
           </Field>
         )}
         <Field id="email" label="Email" icon={<Mail className="size-4" />}>
-          <WelcomeInput id="email" type="email" autoComplete="email" placeholder="jane@company.com" value={email} onChange={setEmail} />
+          <WelcomeInput
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="jane@company.com"
+            value={email}
+            onChange={setEmail}
+          />
         </Field>
         <Field
           id="password"
           label="Password"
           icon={<Lock className="size-4" />}
-          trailing={<VisibilityButton shown={showPassword} onToggle={() => setShowPassword((value) => !value)} label="password" />}
+          trailing={
+            <VisibilityButton
+              shown={showPassword}
+              onToggle={() => setShowPassword((value) => !value)}
+              label="password"
+            />
+          }
         >
           <WelcomeInput
             id="password"
@@ -286,7 +372,13 @@ function AuthCard() {
             id="confirm-password"
             label="Confirm password"
             icon={<Lock className="size-4" />}
-            trailing={<VisibilityButton shown={showConfirm} onToggle={() => setShowConfirm((value) => !value)} label="confirm password" />}
+            trailing={
+              <VisibilityButton
+                shown={showConfirm}
+                onToggle={() => setShowConfirm((value) => !value)}
+                label="confirm password"
+              />
+            }
           >
             <WelcomeInput
               id="confirm-password"
@@ -308,7 +400,9 @@ function AuthCard() {
               className="size-[18px] rounded-[5px] border-foreground/30 bg-white"
             />
             <span>
-              I agree to the <span className="text-[#5b4032] underline underline-offset-2">Terms of Service</span> and{" "}
+              I agree to the{" "}
+              <span className="text-[#5b4032] underline underline-offset-2">Terms of Service</span>{" "}
+              and{" "}
               <span className="text-[#5b4032] underline underline-offset-2">Privacy Policy</span>.
             </span>
           </label>
@@ -335,7 +429,9 @@ function AuthCard() {
           )}
         </button>
       </form>
-      <div className={`mt-5 border-t border-foreground/10 pt-4 text-center text-[13px] text-muted-foreground short:mt-3 short:pt-3`}>
+      <div
+        className={`mt-5 border-t border-foreground/10 pt-4 text-center text-[13px] text-muted-foreground short:mt-3 short:pt-3`}
+      >
         {mode === "signup" ? "Already have an account? " : "New here? "}
         <button
           type="button"
@@ -345,10 +441,14 @@ function AuthCard() {
           {mode === "signup" ? "Sign in" : "Create an account"}
         </button>
       </div>
-      <div className={`mt-4 flex items-center gap-3.5 rounded-xl bg-[#f3eee8] px-4 py-3 short:mt-3 short:py-2.5`}>
+      <div
+        className={`mt-4 flex items-center gap-3.5 rounded-xl bg-[#f3eee8] px-4 py-3 short:mt-3 short:py-2.5`}
+      >
         <ShieldCheck className="size-5 shrink-0 text-[#5b4032]" strokeWidth={1.6} />
         <p className="text-xs leading-5 text-muted-foreground">
-          <span className="block font-semibold text-foreground">Private by design. Your data stays under your control.</span>
+          <span className="block font-semibold text-foreground">
+            Private by design. Your data stays under your control.
+          </span>
           Your content is encrypted and never used to train public models.
         </p>
       </div>
@@ -375,7 +475,9 @@ function Field({
         {label}
       </label>
       <div className="relative">
-        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">{icon}</span>
+        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+          {icon}
+        </span>
         {children}
         {trailing}
       </div>
@@ -407,7 +509,15 @@ function WelcomeInput({
   );
 }
 
-function VisibilityButton({ shown, onToggle, label }: { shown: boolean; onToggle: () => void; label: string }) {
+function VisibilityButton({
+  shown,
+  onToggle,
+  label,
+}: {
+  shown: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
   return (
     <button
       type="button"
