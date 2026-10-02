@@ -1,0 +1,12 @@
+node_modules
+.output
+.wrangler
+.nitro
+dist
+dist-ssr
+*.local
+.env
+.env.*
+.git
+AGENTS.md
+README.md
