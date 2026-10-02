@@ -13,21 +13,31 @@ import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from base import detect_mime, documents_to_content, select
+from base import documents_to_content, select, supported_types_message
 from config import get_settings
 from exceptions import CorruptFileError, LoaderError, UnsupportedFileTypeError
 from fastapi import Body, FastAPI, HTTPException, Request, status
 from logging_setup import correlation_id_var, log_with_correlation, logger
 
-# Suffixes python-magic cannot pin down reliably; mapped before MIME detection.
-# Image/video suffixes are listed so the out-of-scope answer does not depend
-# on libmagic being present in the environment.
+# Whitelist suffix → MIME for everything /parse accepts. Detection here is
+# suffix-only on purpose: the endpoint is ephemeral (chat attachments always
+# arrive with the UI's extension list), and no request input may reach a Path.
+# Image/video suffixes are listed so the out-of-scope answer stays deterministic.
 _PARSE_SUFFIX_MIME = {
-    ".csv": "text/csv",
-    ".tsv": "text/tab-separated-values",
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
     ".md": "text/markdown",
     ".markdown": "text/markdown",
+    ".csv": "text/csv",
+    ".tsv": "text/tab-separated-values",
     ".ics": "text/calendar",
+    ".html": "text/html",
+    ".htm": "text/html",
+    ".eml": "message/rfc822",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -105,21 +115,23 @@ def create_app() -> FastAPI:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Attachment is empty",
             )
-        # The temp filename is built only from whitelisted constant suffixes:
-        # the raw request filename never reaches the Path (Snyk SAST taint).
+        # Whitelist suffix only: the raw request filename never reaches a Path
+        # and MIME comes from constant map values, never from request bytes.
         raw_name = os.path.basename((filename or "").replace("\\", "/")).lower()
         suffix = ""
         for ext in _PARSE_SUFFIX_MIME:
             if raw_name.endswith(ext):
                 suffix = ext
                 break
-        try:
-            # Content-only detection: the request filename never reaches a Path.
-            mime = _PARSE_SUFFIX_MIME.get(suffix) or detect_mime(content=file)
-        except UnsupportedFileTypeError as exc:
+        mime = _PARSE_SUFFIX_MIME.get(suffix)
+        if mime is None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-            ) from exc
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Unsupported file type: {suffix or 'missing extension'}. "
+                    f"{supported_types_message()}"
+                ),
+            )
         log_with_correlation(
             correlation_id, "info", f"POST /parse filename={filename!r} mime={mime}"
         )
