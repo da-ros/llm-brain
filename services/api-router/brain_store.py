@@ -139,8 +139,7 @@ async def chat_history(user_id: str, chat_id: str) -> list[dict[str, Any]] | Non
         rows = [row for row in _turns if row["user_id"] == user_id and row["chat_id"] == chat_id]
         rows.sort(key=lambda row: (row["created_at"], row["seq"]))
     return [
-        {"role": row["role"], "text": row["text"], "files": row.get("files") or []}
-        for row in rows
+        {"role": row["role"], "text": row["text"], "files": row.get("files") or []} for row in rows
     ]
 
 

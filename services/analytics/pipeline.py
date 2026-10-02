@@ -83,7 +83,7 @@ async def ingest_file(
     correlation_id: str,
 ) -> dict[str, Any]:
     """Load, infer, persist. LLM failure raises before any write."""
-    text, image = load_upload(filename, data)
+    text, image = await load_upload(filename, data, correlation_id=correlation_id)
     log_with_correlation(
         correlation_id,
         "info",

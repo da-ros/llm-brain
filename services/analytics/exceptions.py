@@ -12,7 +12,11 @@ class UnsupportedFileError(AnalyticsError):
 
 
 class EmptyFileError(AnalyticsError):
-    """File is empty or the loader produced no text."""
+    """File is empty or parsing produced no text."""
+
+
+class ETLUpstreamError(AnalyticsError):
+    """ETL Service could not parse the file — unreachable or non-200 (HTTP 503)."""
 
 
 class LLMTimeoutError(AnalyticsError):

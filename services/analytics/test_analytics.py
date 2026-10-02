@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 _SERVICE_ROOT = Path(__file__).resolve().parent
@@ -20,6 +20,7 @@ _TOP_LEVEL = (
     "loaders",
     "llm_client",
     "rag_client",
+    "etl_client",
     "pearson",
     "pipeline",
 )
@@ -41,9 +42,9 @@ def _isolate_service_imports() -> None:
 
 _isolate_service_imports()
 
-from exceptions import EmptyFileError, LLMUpstreamError, UnsupportedFileError
+from exceptions import EmptyFileError, ETLUpstreamError, LLMUpstreamError, UnsupportedFileError
 from fastapi.testclient import TestClient
-from loaders import _load_path, kind_for
+from loaders import kind_for, load_upload
 from main import app
 from pearson import normalize_day, pearson
 
@@ -148,33 +149,83 @@ class TestLoaders:
         with pytest.raises(UnsupportedFileError):
             kind_for("notes.pdf")
 
-    @pytest.mark.parametrize("kind", ["csv", "xlsx", "docx", "ics", "image"])
-    def test_loader_kind_and_image_ocr_text(self, monkeypatch, kind):
-        seen: dict[str, str] = {}
+    async def test_load_upload_text_asks_etl(self):
+        with patch("loaders.etl_client.parse_text", new_callable=AsyncMock) as parse:
+            parse.return_value = "date,sleep_hours"
+            text, image = await load_upload("day.csv", b"date,sleep", correlation_id="c1")
+        assert text == "date,sleep_hours"
+        assert image == b""
+        parse.assert_awaited_once()
+        assert parse.await_args.kwargs["filename"] == "day.csv"
 
-        class FakeLoader:
-            def __init__(self, path):
-                seen["path"] = path
+    async def test_load_upload_image_skips_etl(self):
+        with patch("loaders.etl_client.parse_text", new_callable=AsyncMock) as parse:
+            text, image = await load_upload("page.png", b"png-bytes", correlation_id="c1")
+        assert text == ""
+        assert image == b"png-bytes"
+        parse.assert_not_awaited()
 
-            def load(self):
-                text = "ocr diary page" if kind == "image" else "date,sleep_hours"
-                return [SimpleNamespace(page_content=text)]
+    async def test_load_upload_empty_file(self):
+        with pytest.raises(EmptyFileError):
+            await load_upload("day.csv", b"", correlation_id="c1")
 
-        def cls(requested):
-            seen["kind"] = requested
-            return FakeLoader
+    async def test_load_upload_etl_no_text(self):
+        with patch("loaders.etl_client.parse_text", new_callable=AsyncMock) as parse:
+            parse.return_value = ""
+            with pytest.raises(EmptyFileError):
+                await load_upload("day.csv", b"data", correlation_id="c1")
 
-        monkeypatch.setattr("loaders._loader_cls", cls)
-        text = _load_path(kind, "/tmp/upload")
-        assert seen["kind"] == kind
-        if kind == "image":
-            assert text == "ocr diary page"
+
+class TestEtlClient:
+    """ETL POST /parse client — analytics never parses documents itself."""
+
+    def _cm(self, response=None, enter_side=None):
+        client_cm = MagicMock()
+        client_cm.__aenter__ = AsyncMock(side_effect=enter_side)
+        if response is not None:
+            client_cm.__aenter__ = AsyncMock(return_value=client_cm)
+            client_cm.post = AsyncMock(return_value=response)
+        client_cm.__aexit__ = AsyncMock(return_value=None)
+        return client_cm
+
+    async def test_parse_text_success(self):
+        import etl_client
+
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"text": "date,sleep", "mime": "text/csv"}
+        client_cm = self._cm(response=response)
+        with patch("etl_client.httpx.AsyncClient", return_value=client_cm):
+            text = await etl_client.parse_text(filename="d.csv", data=b"x", correlation_id="c1")
+        assert text == "date,sleep"
+        client_cm.post.assert_awaited_once()
+
+    async def test_parse_text_http_error_raises(self):
+        import etl_client
+
+        client_cm = self._cm(response=MagicMock(status_code=422))
+        with (
+            patch("etl_client.httpx.AsyncClient", return_value=client_cm),
+            pytest.raises(ETLUpstreamError),
+        ):
+            await etl_client.parse_text(filename="d.pdf", data=b"x", correlation_id="c1")
+
+    async def test_parse_text_unreachable_raises(self):
+        import etl_client
+
+        client_cm = self._cm(enter_side=httpx.ConnectError("etl down"))
+        with (
+            patch("etl_client.httpx.AsyncClient", return_value=client_cm),
+            pytest.raises(ETLUpstreamError),
+        ):
+            await etl_client.parse_text(filename="d.csv", data=b"x", correlation_id="c1")
 
 
 class TestIngest:
     def test_csv_calls_llm_and_stores(self, client):
         with (
-            patch("pipeline.load_upload", return_value=(CSV, b"")) as loaded,
+            patch(
+                "pipeline.load_upload", new_callable=AsyncMock, return_value=(CSV, b"")
+            ) as loaded,
             patch("pipeline.rag_client.excerpts", new_callable=AsyncMock) as search,
             patch("pipeline.llm_client.infer", new_callable=AsyncMock) as infer,
         ):
@@ -214,7 +265,11 @@ class TestIngest:
 
     def test_image_sends_bytes_to_llm(self, client):
         with (
-            patch("pipeline.load_upload", return_value=("ocr diary page", b"png-bytes")),
+            patch(
+                "pipeline.load_upload",
+                new_callable=AsyncMock,
+                return_value=("", b"png-bytes"),
+            ),
             patch("pipeline.rag_client.excerpts", new_callable=AsyncMock, return_value=""),
             patch("pipeline.llm_client.infer", new_callable=AsyncMock) as infer,
         ):
@@ -226,7 +281,7 @@ class TestIngest:
 
     def test_llm_5xx_does_not_write(self, client):
         with (
-            patch("pipeline.load_upload", return_value=(CSV, b"")),
+            patch("pipeline.load_upload", new_callable=AsyncMock, return_value=(CSV, b"")),
             patch("pipeline.rag_client.excerpts", new_callable=AsyncMock, return_value=""),
             patch(
                 "pipeline.llm_client.infer",
@@ -254,13 +309,30 @@ class TestIngest:
         assert response.status_code == 422
         infer.assert_not_awaited()
 
-    def test_loader_empty_text_422(self, client):
+    def test_parse_empty_text_422(self, client):
         with (
-            patch("pipeline.load_upload", side_effect=EmptyFileError("no text")),
+            patch(
+                "pipeline.load_upload",
+                new_callable=AsyncMock,
+                side_effect=EmptyFileError("no text"),
+            ),
             patch("pipeline.llm_client.infer", new_callable=AsyncMock) as infer,
         ):
             response = _post(client, name="day.docx", body=b" ")
         assert response.status_code == 422
+        infer.assert_not_awaited()
+
+    def test_etl_down_503(self, client):
+        with (
+            patch(
+                "pipeline.load_upload",
+                new_callable=AsyncMock,
+                side_effect=ETLUpstreamError("ETL parse unreachable"),
+            ),
+            patch("pipeline.llm_client.infer", new_callable=AsyncMock) as infer,
+        ):
+            response = _post(client)
+        assert response.status_code == 503
         infer.assert_not_awaited()
 
     def test_free_403(self, client):
@@ -274,7 +346,7 @@ class TestIngest:
 
     def test_cross_user_404(self, client):
         with (
-            patch("pipeline.load_upload", return_value=(CSV, b"")),
+            patch("pipeline.load_upload", new_callable=AsyncMock, return_value=(CSV, b"")),
             patch("pipeline.rag_client.excerpts", new_callable=AsyncMock, return_value="x"),
             patch("pipeline.llm_client.infer", new_callable=AsyncMock, side_effect=_infer_ok),
         ):
