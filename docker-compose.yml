@@ -252,6 +252,9 @@ services:
     ports:
       - "9092:9092"
     environment:
+      # KRaft mode requires a cluster id (cp-kafka refuses to boot without it).
+      # Must be base64 of exactly 16 bytes (URL-safe, unpadded UUID).
+      CLUSTER_ID: RDQHY2vVTzyAD01vcB_Mfw
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
