@@ -8,7 +8,7 @@ on:
 
 jobs:
   pipeline:
-    name: Lint → Test → Snyk Code
+    name: Backend → Lint → Test → Snyk Code
     runs-on: ubuntu-latest
     services:
       mongo:
