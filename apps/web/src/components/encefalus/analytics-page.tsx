@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Lightbulb, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Notice, PageHeader, Panel, PanelTitle, PremiumNotice } from "@/components/encefalus/primitives";
+import {
+  Notice,
+  PageHeader,
+  Panel,
+  PanelTitle,
+  PremiumNotice,
+} from "@/components/encefalus/primitives";
 import { useAccount } from "@/lib/account";
 
 type Point = { date: string; x: number; y: number };
@@ -159,8 +165,8 @@ export function AnalyticsPage() {
         {empty && !error && (
           <div className="mb-4">
             <Notice>
-              Import a CSV, spreadsheet, Word diary, calendar file, or photo. CSV columns can include
-              date, sleep hours, productivity score, meeting hours, and focus hours.
+              Import a CSV, spreadsheet, Word diary, calendar file, or photo. CSV columns can
+              include date, sleep hours, productivity score, meeting hours, and focus hours.
             </Notice>
           </div>
         )}
@@ -171,10 +177,14 @@ export function AnalyticsPage() {
         </div>
         <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <Panel>
-            <PanelTitle title="Latest reading" icon={<Lightbulb className="size-4 text-warning" />} />
+            <PanelTitle
+              title="Latest reading"
+              icon={<Lightbulb className="size-4 text-warning" />}
+            />
             <div className="p-5">
               <p className="max-w-2xl text-sm leading-6">
-                {narrative || "No reading yet. Import a file and one will be written from that upload."}
+                {narrative ||
+                  "No reading yet. Import a file and one will be written from that upload."}
               </p>
               {facts.length > 0 && (
                 <ul className="mt-4 space-y-2">
@@ -205,7 +215,10 @@ export function AnalyticsPage() {
           </Panel>
         </div>
         <Panel className="mt-5">
-          <PanelTitle title="Stored days" aside={<span className="text-xs text-muted-foreground">{days.length}</span>} />
+          <PanelTitle
+            title="Stored days"
+            aside={<span className="text-xs text-muted-foreground">{days.length}</span>}
+          />
           {days.length === 0 ? (
             <p className="p-5 text-xs text-muted-foreground">No daily measures stored yet.</p>
           ) : (
@@ -240,13 +253,7 @@ export function AnalyticsPage() {
   );
 }
 
-function PairPanel({
-  spec,
-  pair,
-}: {
-  spec: (typeof PAIRS)[number];
-  pair?: Pair;
-}) {
+function PairPanel({ spec, pair }: { spec: (typeof PAIRS)[number]; pair?: Pair }) {
   const status = pair?.status ?? "insufficient";
   const n = pair?.n ?? 0;
   const ready = status === "ok" && pair?.r != null;
@@ -303,7 +310,9 @@ function Scatter({ points, xLabel, yLabel }: { points: Point[]; xLabel: string; 
           {points[active].date}: {xLabel} {points[active].x}, {yLabel} {points[active].y}
         </span>
       )}
-      <span className="absolute -bottom-6 left-0 text-[10px] text-muted-foreground">{points[0].date}</span>
+      <span className="absolute -bottom-6 left-0 text-[10px] text-muted-foreground">
+        {points[0].date}
+      </span>
       <span className="absolute -bottom-6 right-0 text-[10px] text-muted-foreground">
         {points[points.length - 1].date}
       </span>

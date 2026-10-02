@@ -1,7 +1,14 @@
 import { useEffect, useState, type ClipboardEvent } from "react";
 import { AlertTriangle, CheckCircle2, FileUp, Search, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Notice, PageHeader, Panel, PanelTitle, PremiumNotice, StatusDot } from "@/components/encefalus/primitives";
+import {
+  Notice,
+  PageHeader,
+  Panel,
+  PanelTitle,
+  PremiumNotice,
+  StatusDot,
+} from "@/components/encefalus/primitives";
 import { useAccount } from "@/lib/account";
 
 type Reason = { type?: string; id?: string; detail?: string; label?: string };
@@ -211,7 +218,9 @@ export function ShieldPage() {
           <div className="mt-5 grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
             <select
               value={sourceId}
-              onChange={(event) => setSourceId(event.target.value as (typeof SOURCES)[number]["id"])}
+              onChange={(event) =>
+                setSourceId(event.target.value as (typeof SOURCES)[number]["id"])
+              }
               className="h-10 rounded-md border border-input bg-card px-3 text-sm outline-none"
             >
               {SOURCES.map((item) => (
@@ -226,7 +235,10 @@ export function ShieldPage() {
             </Button>
           </div>
           <Panel className="mt-8">
-            <PanelTitle title="Recent scans" aside={<span className="text-[11px] text-muted-foreground">{scans.length}</span>} />
+            <PanelTitle
+              title="Recent scans"
+              aside={<span className="text-[11px] text-muted-foreground">{scans.length}</span>}
+            />
             {scans.length === 0 ? (
               <p className="px-4 py-3 text-xs text-muted-foreground">No scans yet.</p>
             ) : (
@@ -271,25 +283,37 @@ function Outcome({ scan }: { scan: Scan }) {
         </div>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">{risk.detail}</p>
       </div>
-      <h3 className="mt-6 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">Key evidence</h3>
+      <h3 className="mt-6 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">
+        Key evidence
+      </h3>
       {evidence.length === 0 ? (
-        <p className="mt-3 text-xs leading-5 text-muted-foreground">No separate evidence was recorded.</p>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">
+          No separate evidence was recorded.
+        </p>
       ) : (
         <ul className="mt-3 space-y-3 text-xs leading-5">
           {evidence.map((line) => (
             <li key={line.text} className="flex gap-2">
-              <AlertTriangle className={`size-4 shrink-0 ${line.sharp ? "text-destructive" : "text-warning"}`} />
+              <AlertTriangle
+                className={`size-4 shrink-0 ${line.sharp ? "text-destructive" : "text-warning"}`}
+              />
               {line.text}
             </li>
           ))}
         </ul>
       )}
-      <h3 className="mt-6 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">Reasoning summary</h3>
+      <h3 className="mt-6 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">
+        Reasoning summary
+      </h3>
       <p className="mt-3 text-xs leading-5 text-muted-foreground">
         {scan.summary || "No reasoning summary was returned."}
       </p>
-      <h3 className="mt-6 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">Full analysis</h3>
-      <p className="mt-3 text-sm leading-6">{scan.rationale || "No inference was returned for this scan."}</p>
+      <h3 className="mt-6 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">
+        Full analysis
+      </h3>
+      <p className="mt-3 text-sm leading-6">
+        {scan.rationale || "No inference was returned for this scan."}
+      </p>
     </>
   );
 }
@@ -299,7 +323,8 @@ function riskStyle(severity: string) {
   if (value === "high") {
     return {
       title: "High risk",
-      detail: "This content strongly resembles a phishing attempt and may be trying to steal your information.",
+      detail:
+        "This content strongly resembles a phishing attempt and may be trying to steal your information.",
       box: "border-destructive/25 bg-destructive/10",
       text: "text-destructive",
       icon: ShieldAlert,
@@ -337,11 +362,17 @@ function evidenceLines(reasons: Reason[]) {
   for (const reason of reasons) {
     if (reason.type === "llm") continue;
     if (reason.type === "heuristic" && reason.id && EVIDENCE[reason.id]) {
-      lines.push({ text: EVIDENCE[reason.id], sharp: reason.id === "credential" || reason.id === "lookalike_host" });
+      lines.push({
+        text: EVIDENCE[reason.id],
+        sharp: reason.id === "credential" || reason.id === "lookalike_host",
+      });
     } else if (reason.id === "embedding_unavailable") {
       lines.push({ text: EVIDENCE.embedding_unavailable, sharp: false });
     } else if (reason.type === "embedding" && reason.label) {
-      lines.push({ text: `Similar to a known ${reason.label} example.`, sharp: reason.label !== "ham" });
+      lines.push({
+        text: `Similar to a known ${reason.label} example.`,
+        sharp: reason.label !== "ham",
+      });
     } else if (reason.id === "ocr_text" && reason.detail) {
       lines.push({ text: `Text read from the image: ${clip(reason.detail)}`, sharp: false });
     } else if (reason.id === "ocr_empty") {

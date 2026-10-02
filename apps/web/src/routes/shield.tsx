@@ -7,7 +7,8 @@ export const Route = createFileRoute("/shield")({
       { title: "Shield — Encefalus" },
       {
         name: "description",
-        content: "Scan suspicious messages and files. Every scan is kept, and the analysis is the model inference.",
+        content:
+          "Scan suspicious messages and files. Every scan is kept, and the analysis is the model inference.",
       },
       { property: "og:title", content: "Shield — Encefalus" },
       { property: "og:description", content: "Explainable protection for suspicious content." },

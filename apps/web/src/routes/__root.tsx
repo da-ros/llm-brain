@@ -1,5 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Outlet, Link, createRootRouteWithContext, useRouter, HeadContent, Scripts } from "@tanstack/react-router";
+import {
+  Outlet,
+  Link,
+  createRootRouteWithContext,
+  useRouter,
+  HeadContent,
+  Scripts,
+} from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/encefalus/app-shell";
 import { WelcomePage } from "@/components/encefalus/welcome-page";
@@ -9,12 +16,47 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
-  return <div className="grid min-h-screen place-items-center bg-background px-4"><div className="text-center"><p className="font-mono text-sm text-muted-foreground">404</p><h1 className="mt-3 text-3xl font-bold">Memory not found</h1><p className="mt-2 text-sm text-muted-foreground">This part of your Brain does not exist.</p><Button asChild className="mt-6"><Link to="/">Return home</Link></Button></div></div>;
+  return (
+    <div className="grid min-h-screen place-items-center bg-background px-4">
+      <div className="text-center">
+        <p className="font-mono text-sm text-muted-foreground">404</p>
+        <h1 className="mt-3 text-3xl font-bold">Memory not found</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This part of your Brain does not exist.
+        </p>
+        <Button asChild className="mt-6">
+          <Link to="/">Return home</Link>
+        </Button>
+      </div>
+    </div>
+  );
 }
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
-  useEffect(() => { reportLovableError(error, { boundary: "tanstack_root_error_component" }); }, [error]);
-  return <div className="grid min-h-screen place-items-center bg-background px-4"><div className="text-center"><h1 className="text-2xl font-bold">This page didn’t load</h1><p className="mt-2 text-sm text-muted-foreground">Try again or return to your Brain.</p><div className="mt-5 flex justify-center gap-2"><Button onClick={() => { router.invalidate(); reset(); }}>Try again</Button><Button asChild variant="outline"><Link to="/">Go home</Link></Button></div></div></div>;
+  useEffect(() => {
+    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+  }, [error]);
+  return (
+    <div className="grid min-h-screen place-items-center bg-background px-4">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold">This page didn’t load</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Try again or return to your Brain.</p>
+        <div className="mt-5 flex justify-center gap-2">
+          <Button
+            onClick={() => {
+              router.invalidate();
+              reset();
+            }}
+          >
+            Try again
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/">Go home</Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
@@ -29,7 +71,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap",
+      },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
@@ -38,7 +83,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
-function RootShell({ children }: { children: ReactNode }) { return <html lang="en"><head><HeadContent /></head><body>{children}<Scripts /></body></html>; }
+function RootShell({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  );
+}
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (

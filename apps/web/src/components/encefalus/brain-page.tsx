@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, CalendarDays, FileText, Paperclip, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Notice, PageHeader, Panel, PanelTitle, StatusDot } from "@/components/encefalus/primitives";
+import {
+  Notice,
+  PageHeader,
+  Panel,
+  PanelTitle,
+  StatusDot,
+} from "@/components/encefalus/primitives";
 import { useAccount } from "@/lib/account";
 
 type ChatThread = { id: string; title: string };
 type SourceCard = { n: number; label: string; origin: "memory" | "calendar" | "attachment" };
-type Turn = { role: "user" | "assistant"; text: string; cards?: SourceCard[]; assumptions?: string[] };
+type Turn = {
+  role: "user" | "assistant";
+  text: string;
+  cards?: SourceCard[];
+  assumptions?: string[];
+};
 type Note = { date: string; note: string };
 
 const FILE_KINDS = [
@@ -20,12 +31,38 @@ const FILE_KINDS = [
 const FILE_LIMIT = 5;
 
 const ACCEPT = [
-  ".pdf", ".doc", ".docx", ".txt", ".md", ".markdown", ".ics",
-  ".csv", ".tsv", ".xls", ".xlsx",
-  ".html", ".htm", ".eml", ".msg",
-  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".bmp",
-  ".mp4", ".mov", ".webm", ".avi", ".mkv", ".mpeg", ".mpg",
-  "image/*", "video/*",
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".txt",
+  ".md",
+  ".markdown",
+  ".ics",
+  ".csv",
+  ".tsv",
+  ".xls",
+  ".xlsx",
+  ".html",
+  ".htm",
+  ".eml",
+  ".msg",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".tif",
+  ".tiff",
+  ".bmp",
+  ".mp4",
+  ".mov",
+  ".webm",
+  ".avi",
+  ".mkv",
+  ".mpeg",
+  ".mpg",
+  "image/*",
+  "video/*",
 ].join(",");
 
 function authHeaders(): HeadersInit {
@@ -60,7 +97,7 @@ export function BrainPage() {
   const [selected, setSelected] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const turns = activeId ? threads[activeId] ?? [] : [];
+  const turns = activeId ? (threads[activeId] ?? []) : [];
   const latest = [...turns].reverse().find((turn) => turn.role === "assistant");
   const cards = latest?.cards ?? [];
 
@@ -103,7 +140,9 @@ export function BrainPage() {
     const end = iso(month.getFullYear(), month.getMonth(), daysInMonth(month));
     setSelected((current) => (current.startsWith(start.slice(0, 7)) ? current : start));
     try {
-      const response = await fetch(`/api/calendar?start=${start}&end=${end}`, { headers: authHeaders() });
+      const response = await fetch(`/api/calendar?start=${start}&end=${end}`, {
+        headers: authHeaders(),
+      });
       if (!response.ok) return;
       const body = await response.json();
       const next: Record<string, string> = {};
@@ -265,13 +304,17 @@ export function BrainPage() {
           <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:px-7">
             {turns.length === 0 && (
               <p className="text-sm leading-6 text-muted-foreground">
-                Start a chat. Attached files stay in this chat for later questions and are not saved to Memory.
+                Start a chat. Attached files stay in this chat for later questions and are not saved
+                to Memory.
               </p>
             )}
             <div className="space-y-7">
               {turns.map((turn, index) =>
                 turn.role === "user" ? (
-                  <div key={index} className="ml-auto max-w-lg rounded-lg border border-border bg-muted px-4 py-3 text-sm">
+                  <div
+                    key={index}
+                    className="ml-auto max-w-lg rounded-lg border border-border bg-muted px-4 py-3 text-sm"
+                  >
                     {turn.text}
                   </div>
                 ) : (
@@ -310,13 +353,20 @@ export function BrainPage() {
                 {files.length > 0 && (
                   <ul className="mb-1 flex flex-wrap gap-1.5 px-1">
                     {files.map((item, index) => (
-                      <li key={`${item.name}-${index}`} className="flex max-w-full items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px]">
+                      <li
+                        key={`${item.name}-${index}`}
+                        className="flex max-w-full items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px]"
+                      >
                         <span className="truncate">{item.name}</span>
                         <button
                           type="button"
                           className="text-muted-foreground"
                           aria-label={`Remove ${item.name}`}
-                          onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                          onClick={() =>
+                            setFiles((current) =>
+                              current.filter((_, itemIndex) => itemIndex !== index),
+                            )
+                          }
                         >
                           ×
                         </button>
@@ -325,7 +375,12 @@ export function BrainPage() {
                   </ul>
                 )}
                 <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
-                  <Button variant="ghost" size="icon" aria-label="Attach files" onClick={() => fileRef.current?.click()}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Attach files"
+                    onClick={() => fileRef.current?.click()}
+                  >
                     <Paperclip />
                   </Button>
                   <span className="truncate text-right text-[11px] text-muted-foreground">
@@ -335,7 +390,12 @@ export function BrainPage() {
                         ? "Personal Brain · Memory on"
                         : "Up to five files for this question · not saved to Memory"}
                   </span>
-                  <Button size="icon" aria-label="Send" disabled={busy || !message.trim()} onClick={() => void send()}>
+                  <Button
+                    size="icon"
+                    aria-label="Send"
+                    disabled={busy || !message.trim()}
+                    onClick={() => void send()}
+                  >
                     <ArrowUp />
                   </Button>
                 </div>
@@ -353,7 +413,10 @@ export function BrainPage() {
               </div>
               <ul className="mt-3 flex flex-wrap gap-2">
                 {FILE_KINDS.map((kind) => (
-                  <li key={kind.label} className="rounded-md border border-border bg-card px-2.5 py-1.5 text-[11px] leading-4">
+                  <li
+                    key={kind.label}
+                    className="rounded-md border border-border bg-card px-2.5 py-1.5 text-[11px] leading-4"
+                  >
                     <span className="font-semibold">{kind.label}</span>
                     <span className="text-muted-foreground"> · {kind.detail}</span>
                   </li>
@@ -366,7 +429,14 @@ export function BrainPage() {
           <h2 className="text-sm font-semibold">Context used</h2>
           <div className="mt-4 space-y-3">
             <Panel>
-              <PanelTitle title="Sources" aside={<StatusDot label={`${cards.length} ${cards.length === 1 ? "source" : "sources"}`} />} />
+              <PanelTitle
+                title="Sources"
+                aside={
+                  <StatusDot
+                    label={`${cards.length} ${cards.length === 1 ? "source" : "sources"}`}
+                  />
+                }
+              />
               <p className="p-4 text-xs leading-5 text-muted-foreground">
                 {cards.length
                   ? "Memory, calendar notes, and files attached to this question."
@@ -375,61 +445,91 @@ export function BrainPage() {
             </Panel>
             <Panel>
               <PanelTitle title="General model knowledge" />
-              <p className="p-4 text-xs leading-5 text-muted-foreground">Used only to organize and explain your personal context.</p>
+              <p className="p-4 text-xs leading-5 text-muted-foreground">
+                Used only to organize and explain your personal context.
+              </p>
             </Panel>
           </div>
-          <h3 className="mt-7 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Calendar</h3>
+          <h3 className="mt-7 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Calendar
+          </h3>
           {!premium ? (
-            <p className="mt-3 text-xs leading-5 text-muted-foreground">Calendar notes are on the Premium plan.</p>
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">
+              Calendar notes are on the Premium plan.
+            </p>
           ) : (
-          <div className="mt-3 rounded-lg border border-border bg-card p-3">
-            <div className="mb-2 flex items-center justify-between text-xs font-semibold">
-              <button type="button" className="px-1" onClick={() => setCursor(shiftMonth(cursor, -1))} aria-label="Previous month">‹</button>
-              <span>{cursor.toLocaleString("en", { month: "long", year: "numeric" })}</span>
-              <button type="button" className="px-1" onClick={() => setCursor(shiftMonth(cursor, 1))} aria-label="Next month">›</button>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-muted-foreground">
-              {["S", "M", "T", "W", "T", "F", "S"].map((label, index) => (
-                <span key={`${label}-${index}`}>{label}</span>
-              ))}
-              {cells.map((day, index) =>
-                day ? (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => setSelected(day)}
-                    className={`rounded py-1 text-xs ${day === selected ? "bg-primary text-primary-foreground" : notes[day] ? "bg-muted font-semibold" : ""}`}
-                  >
-                    {Number(day.slice(8))}
-                  </button>
-                ) : (
-                  <span key={`pad-${index}`} />
-                ),
+            <div className="mt-3 rounded-lg border border-border bg-card p-3">
+              <div className="mb-2 flex items-center justify-between text-xs font-semibold">
+                <button
+                  type="button"
+                  className="px-1"
+                  onClick={() => setCursor(shiftMonth(cursor, -1))}
+                  aria-label="Previous month"
+                >
+                  ‹
+                </button>
+                <span>{cursor.toLocaleString("en", { month: "long", year: "numeric" })}</span>
+                <button
+                  type="button"
+                  className="px-1"
+                  onClick={() => setCursor(shiftMonth(cursor, 1))}
+                  aria-label="Next month"
+                >
+                  ›
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-muted-foreground">
+                {["S", "M", "T", "W", "T", "F", "S"].map((label, index) => (
+                  <span key={`${label}-${index}`}>{label}</span>
+                ))}
+                {cells.map((day, index) =>
+                  day ? (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setSelected(day)}
+                      className={`rounded py-1 text-xs ${day === selected ? "bg-primary text-primary-foreground" : notes[day] ? "bg-muted font-semibold" : ""}`}
+                    >
+                      {Number(day.slice(8))}
+                    </button>
+                  ) : (
+                    <span key={`pad-${index}`} />
+                  ),
+                )}
+              </div>
+              {selected && (
+                <textarea
+                  value={notes[selected] ?? ""}
+                  onChange={(event) =>
+                    setNotes((current) => ({ ...current, [selected]: event.target.value }))
+                  }
+                  onBlur={(event) => void saveNote(selected, event.target.value)}
+                  placeholder="Note for this day"
+                  className="mt-3 min-h-16 w-full resize-none rounded-md border border-border bg-transparent p-2 text-xs outline-none"
+                />
               )}
             </div>
-            {selected && (
-              <textarea
-                value={notes[selected] ?? ""}
-                onChange={(event) => setNotes((current) => ({ ...current, [selected]: event.target.value }))}
-                onBlur={(event) => void saveNote(selected, event.target.value)}
-                placeholder="Note for this day"
-                className="mt-3 min-h-16 w-full resize-none rounded-md border border-border bg-transparent p-2 text-xs outline-none"
-              />
-            )}
-          </div>
           )}
-          <h3 className="mt-7 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Evidence</h3>
+          <h3 className="mt-7 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Evidence
+          </h3>
           <ul className="mt-3 space-y-3 text-xs">
-            {cards.length === 0 && <li className="text-muted-foreground">Sources show up here after an answer.</li>}
+            {cards.length === 0 && (
+              <li className="text-muted-foreground">Sources show up here after an answer.</li>
+            )}
             {cards.map((card) => (
               <li key={card.n}>
                 {card.n}. {card.label} · {sourceNote(card.origin)}
               </li>
             ))}
           </ul>
-          <h3 className="mt-7 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Assumptions</h3>
+          <h3 className="mt-7 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Assumptions
+          </h3>
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
-            {latest?.assumptions?.length ? latest.assumptions.join(" ") : "Assumptions from the answer appear here."}
+            {latest?.assumptions?.length
+              ? latest.assumptions.join(" ")
+              : "Assumptions from the answer appear here."}
           </p>
         </aside>
       </div>
@@ -457,7 +557,8 @@ function sourceNote(origin: SourceCard["origin"]) {
 }
 
 function SourceCardView({ card }: { card: SourceCard }) {
-  const Icon = card.origin === "calendar" ? CalendarDays : card.origin === "attachment" ? Paperclip : FileText;
+  const Icon =
+    card.origin === "calendar" ? CalendarDays : card.origin === "attachment" ? Paperclip : FileText;
   return (
     <div className="flex min-w-0 max-w-full items-center gap-2 rounded-md border border-border bg-card p-3 text-left sm:max-w-[16rem]">
       <span className="text-primary">
@@ -467,7 +568,9 @@ function SourceCardView({ card }: { card: SourceCard }) {
         <span className="block truncate text-xs font-semibold">
           {card.n}. {card.label}
         </span>
-        <span className="block truncate text-[10px] text-muted-foreground">{sourceNote(card.origin)}</span>
+        <span className="block truncate text-[10px] text-muted-foreground">
+          {sourceNote(card.origin)}
+        </span>
       </span>
     </div>
   );

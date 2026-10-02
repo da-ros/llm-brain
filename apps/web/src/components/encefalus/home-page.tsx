@@ -34,8 +34,15 @@ function useToday() {
     const now = new Date();
     const firstName = readAccount()?.name.trim().split(/\s+/)[0];
     setToday({
-      date: now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
-      greeting: firstName ? `${greeting(now.getHours())}, ${firstName}.` : `${greeting(now.getHours())}.`,
+      date: now.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }),
+      greeting: firstName
+        ? `${greeting(now.getHours())}, ${firstName}.`
+        : `${greeting(now.getHours())}.`,
     });
   }, []);
   return today;
@@ -47,7 +54,9 @@ export function HomePage() {
     <main className="mx-auto w-full max-w-6xl px-5 py-6 sm:px-7 lg:py-8">
       <header className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-foreground sm:text-[1.75rem]">Welcome to Encefalus</h1>
+          <h1 className="text-2xl font-bold text-foreground sm:text-[1.75rem]">
+            Welcome to Encefalus
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Your AI-augmented brain for clearer thinking, better decisions, and a more capable you.
           </p>
@@ -72,7 +81,9 @@ export function HomePage() {
             </span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-foreground">{item.label}</span>
-              <span className="mt-1 block max-w-[11.5rem] text-xs leading-5 text-muted-foreground">{descriptions[item.to]}</span>
+              <span className="mt-1 block max-w-[11.5rem] text-xs leading-5 text-muted-foreground">
+                {descriptions[item.to]}
+              </span>
             </span>
             <span className="grid size-8 place-items-center self-center rounded-full border border-border bg-background text-muted-foreground transition-colors group-hover:border-ring/40 group-hover:text-foreground">
               <ArrowRight className="size-4" />

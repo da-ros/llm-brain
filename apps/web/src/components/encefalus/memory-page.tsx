@@ -1,9 +1,30 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { FileImage, FileSpreadsheet, FileText, FileVideo, Plus, Search, Upload } from "lucide-react";
+import {
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  FileVideo,
+  Plus,
+  Search,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Notice, PageHeader, Panel, PremiumNotice, StatusDot } from "@/components/encefalus/primitives";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Notice,
+  PageHeader,
+  Panel,
+  PremiumNotice,
+  StatusDot,
+} from "@/components/encefalus/primitives";
 import { useAccount } from "@/lib/account";
 
 type Kind = "document" | "image" | "video";
@@ -111,17 +132,46 @@ export function MemoryPage() {
             />
           </label>
           <div className="mt-4 flex gap-1 overflow-x-auto">
-            <KindButton label="All" count={counts.document + counts.image + counts.video} active={kind === "all"} onClick={() => setKind("all")} />
-            <KindButton label="Document" count={counts.document} active={kind === "document"} onClick={() => setKind("document")} />
-            <KindButton label="Image" count={counts.image} active={kind === "image"} onClick={() => setKind("image")} />
-            <KindButton label="Video" count={counts.video} active={kind === "video"} onClick={() => setKind("video")} />
+            <KindButton
+              label="All"
+              count={counts.document + counts.image + counts.video}
+              active={kind === "all"}
+              onClick={() => setKind("all")}
+            />
+            <KindButton
+              label="Document"
+              count={counts.document}
+              active={kind === "document"}
+              onClick={() => setKind("document")}
+            />
+            <KindButton
+              label="Image"
+              count={counts.image}
+              active={kind === "image"}
+              onClick={() => setKind("image")}
+            />
+            <KindButton
+              label="Video"
+              count={counts.video}
+              active={kind === "video"}
+              onClick={() => setKind("video")}
+            />
           </div>
-          {error && <div className="mt-4"><Notice>{error}</Notice></div>}
+          {error && (
+            <div className="mt-4">
+              <Notice>{error}</Notice>
+            </div>
+          )}
           <Panel className="mt-5 overflow-hidden">
             <div className="hidden grid-cols-[minmax(0,1.5fr)_1fr_1fr_auto] gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-semibold uppercase text-muted-foreground sm:grid">
-              <span>Name</span><span>Type</span><span>Added</span><span>Status</span>
+              <span>Name</span>
+              <span>Type</span>
+              <span>Added</span>
+              <span>Status</span>
             </div>
-            {files.length === 0 && <p className="px-4 py-6 text-sm text-muted-foreground">No files in this view.</p>}
+            {files.length === 0 && (
+              <p className="px-4 py-6 text-sm text-muted-foreground">No files in this view.</p>
+            )}
             {files.map((file) => {
               const Icon = fileIcon(file);
               return (
@@ -135,16 +185,33 @@ export function MemoryPage() {
                     <Icon className="size-4 shrink-0 text-primary" />
                     <span className="truncate text-sm font-medium">{file.name}</span>
                   </span>
-                  <span className="hidden text-xs capitalize text-muted-foreground sm:block">{file.kind}</span>
-                  <span className="hidden text-xs text-muted-foreground sm:block">{formatAdded(file.added)}</span>
-                  <StatusDot tone={file.status === "Processing" ? "warn" : file.status === "Distilled" ? "neutral" : "good"} label={file.status} />
+                  <span className="hidden text-xs capitalize text-muted-foreground sm:block">
+                    {file.kind}
+                  </span>
+                  <span className="hidden text-xs text-muted-foreground sm:block">
+                    {formatAdded(file.added)}
+                  </span>
+                  <StatusDot
+                    tone={
+                      file.status === "Processing"
+                        ? "warn"
+                        : file.status === "Distilled"
+                          ? "neutral"
+                          : "good"
+                    }
+                    label={file.status}
+                  />
                 </button>
               );
             })}
           </Panel>
         </section>
         <aside className="bg-card/45 p-5">
-          {selected ? <Detail file={selected} /> : <p className="text-sm text-muted-foreground">Select a file to see its summary.</p>}
+          {selected ? (
+            <Detail file={selected} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Select a file to see its summary.</p>
+          )}
         </aside>
       </div>
     </main>
@@ -197,7 +264,17 @@ function Detail({ file }: { file: MemoryFile }) {
   );
 }
 
-function KindButton({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+function KindButton({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <Button size="sm" variant={active ? "secondary" : "ghost"} onClick={onClick}>
       {label} ({count})
@@ -229,22 +306,37 @@ function UploadDialog({ onUploaded }: { onUploaded: () => void }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button><Plus />Add memory</Button>
+        <Button>
+          <Plus />
+          Add memory
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add to your Brain</DialogTitle>
-          <DialogDescription>Documents, images, and video become searchable personal context.</DialogDescription>
+          <DialogDescription>
+            Documents, images, and video become searchable personal context.
+          </DialogDescription>
         </DialogHeader>
         <label className="mt-2 grid min-h-64 cursor-pointer place-items-center rounded-lg border border-dashed border-input bg-muted/30 p-8 text-center">
-          <input className="sr-only" type="file" onChange={(event) => void upload(event.target.files)} />
+          <input
+            className="sr-only"
+            type="file"
+            onChange={(event) => void upload(event.target.files)}
+          />
           <span>
             <Upload className="mx-auto size-7 text-primary" />
             <b className="mt-4 block text-sm">Choose a file</b>
-            <span className="mt-2 block text-xs leading-5 text-muted-foreground">PDF, Word, text, images, and video</span>
+            <span className="mt-2 block text-xs leading-5 text-muted-foreground">
+              PDF, Word, text, images, and video
+            </span>
           </span>
         </label>
-        {error && <div className="mt-3"><Notice>{error}</Notice></div>}
+        {error && (
+          <div className="mt-3">
+            <Notice>{error}</Notice>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -253,7 +345,8 @@ function UploadDialog({ onUploaded }: { onUploaded: () => void }) {
 function summaryText(file: MemoryFile) {
   if (file.summary) return file.summary;
   if (file.status === "Processing") return "This file is still in the queue.";
-  if (file.status === "Distilled") return "Facts were extracted. They are not searchable until embedding finishes.";
+  if (file.status === "Distilled")
+    return "Facts were extracted. They are not searchable until embedding finishes.";
   return "No summary was extracted.";
 }
 
