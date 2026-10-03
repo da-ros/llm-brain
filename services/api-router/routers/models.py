@@ -114,4 +114,6 @@ async def on_device_file(
             detail="On-device pack is not ready",
         )
     manifest, weight = loaded
-    return FileResponse(weight, filename=manifest["filename"], media_type="application/octet-stream")
+    return FileResponse(
+        weight, filename=manifest["filename"], media_type="application/octet-stream"
+    )

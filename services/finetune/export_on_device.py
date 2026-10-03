@@ -74,7 +74,9 @@ def export_base(out_dir: Path, *, fixture: bool) -> dict:
 def export_premium(out_dir: Path, user_id: str, adapter_dir: Path, *, fixture: bool) -> dict | None:
     if not _adapter_present(adapter_dir):
         return None
-    payload = f"Q4-FIXTURE-PREMIUM-{user_id}".encode() if fixture else _real_premium_bytes(adapter_dir)
+    payload = (
+        f"Q4-FIXTURE-PREMIUM-{user_id}".encode() if fixture else _real_premium_bytes(adapter_dir)
+    )
     return _write_pack(
         out_dir / "users" / user_id,
         pack_id=PREMIUM_ID,
