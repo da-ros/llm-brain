@@ -21,6 +21,7 @@ def test_base_fixture_manifest_matches_file(tmp_path: Path):
 
 def test_checksum_mismatch_is_not_ready(tmp_path: Path):
     from export_on_device import export_base, pack_ready
+
     export_base(tmp_path, fixture=True)
     manifest_path = tmp_path / "base" / "manifest.json"
     body = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -31,6 +32,7 @@ def test_checksum_mismatch_is_not_ready(tmp_path: Path):
 
 def test_premium_fixture_includes_user_and_leaves_base(tmp_path: Path):
     from export_on_device import export_base, export_premium, pack_ready
+
     export_base(tmp_path, fixture=True)
     adapter = tmp_path / "adapters" / "user-a" / "adapter"
     adapter.mkdir(parents=True)
@@ -46,6 +48,7 @@ def test_premium_fixture_includes_user_and_leaves_base(tmp_path: Path):
 
 def test_missing_adapter_writes_nothing(tmp_path: Path):
     from export_on_device import export_base, export_premium, pack_ready
+
     export_base(tmp_path, fixture=True)
     missing = tmp_path / "nope" / "adapter"
     assert export_premium(tmp_path, "user-b", missing, fixture=True) is None
@@ -55,6 +58,7 @@ def test_missing_adapter_writes_nothing(tmp_path: Path):
 
 def test_real_flag_does_not_touch_a_container_dir(tmp_path: Path):
     from export_on_device import export_base
+
     container = tmp_path / "llm-container"
     container.mkdir()
     marker = container / "weights.bin"

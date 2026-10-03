@@ -2551,7 +2551,14 @@ class TestAccount:
         uploads.assert_awaited_once()
 
 
-def _write_pack(directory: Path, pack_id: str, tier: str, payload: bytes, user_id: str | None = None, sha: str | None = None) -> dict:
+def _write_pack(
+    directory: Path,
+    pack_id: str,
+    tier: str,
+    payload: bytes,
+    user_id: str | None = None,
+    sha: str | None = None,
+) -> dict:
     import hashlib
     import json
 
@@ -2579,7 +2586,13 @@ class TestOnDeviceModels:
         settings = get_settings()
         settings.ONDEVICE_MODEL_DIR = str(tmp_path)
         _write_pack(tmp_path / "base", "qwen3.5-4b-base-q4", "free", b"base-weights")
-        _write_pack(tmp_path / "users" / "user1", "qwen3.5-4b-finetuned-q4", "premium", b"lora-weights", "user1")
+        _write_pack(
+            tmp_path / "users" / "user1",
+            "qwen3.5-4b-finetuned-q4",
+            "premium",
+            b"lora-weights",
+            "user1",
+        )
         meta = client.get("/api/models/on-device?tier=premium", headers=auth_header(tier="free"))
         assert meta.status_code == 200
         assert meta.json()["id"] == "qwen3.5-4b-base-q4"
@@ -2617,7 +2630,9 @@ class TestOnDeviceModels:
         meta = client.get("/api/models/on-device", headers=auth_header("user-b", tier="premium"))
         assert meta.json()["ready"] is False
         assert own["sha256"] not in meta.text
-        downloaded = client.get("/api/models/on-device/file", headers=auth_header("user-b", tier="premium"))
+        downloaded = client.get(
+            "/api/models/on-device/file", headers=auth_header("user-b", tier="premium")
+        )
         assert downloaded.status_code == 404
         assert b"user-a-weights" not in downloaded.content
 
@@ -2640,7 +2655,10 @@ class TestOnDeviceModels:
         manifest_path.write_text(json.dumps(written), encoding="utf-8")
         meta = client.get("/api/models/on-device", headers=auth_header(tier="free"))
         assert meta.json()["ready"] is False
-        assert client.get("/api/models/on-device/file", headers=auth_header(tier="free")).status_code == 404
+        assert (
+            client.get("/api/models/on-device/file", headers=auth_header(tier="free")).status_code
+            == 404
+        )
 
     def test_model_routes_require_a_token_and_health_stays_public(self, client):
         assert client.get("/api/models/on-device").status_code == 401
@@ -2673,4 +2691,3 @@ class TestOnDeviceModels:
         headers = auth_header(tier="free")
         assert client.get("/api/models/on-device/file", headers=headers).status_code == 200
         assert client.get("/api/models/on-device/file", headers=headers).status_code == 429
-

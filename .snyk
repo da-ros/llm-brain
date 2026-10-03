@@ -85,6 +85,10 @@ ignore:
     - '*':
         reason: No fixed version available for Debian 13 (trixie).
         expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-GCC14-20386241:
+    - '*':
+        reason: No fixed version available for Debian 13 (trixie).
+        expires: '2027-01-01T00:00:00.000Z'
 
   # ============================================================
   # ETL Service - Additional Debian 13 Vulnerabilities
