@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import json
 import os
 import sys
 import uuid
@@ -10,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import jwt
 import pytest
 
@@ -83,13 +85,42 @@ def tasks():
     return store
 
 
+def _conversation_app():
+    """In-process RAG conversation routes, so router tests forward over HTTP."""
+    import importlib.util
+
+    name = "rag_conversations_for_router_tests"
+    if name not in sys.modules:
+        path = Path(__file__).resolve().parents[1] / "rag" / "conversations.py"
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec is not None and spec.loader is not None
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    else:
+        module = sys.modules[name]
+    module.reset_memory()
+    module.bind(None)
+    app = getattr(module, "_router_test_app", None)
+    if app is None:
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        app.include_router(module.router)
+        module._router_test_app = app
+    return app
+
+
 @pytest.fixture
 def client(tasks):
     limiter.reset()
-    import brain_store
-
     accounts.reset_memory()
-    brain_store.reset_memory()
+    transport = httpx.ASGITransport(app=_conversation_app())
+
+    class _RagClient(httpx.AsyncClient):
+        def __init__(self, *args, **kwargs):
+            kwargs["transport"] = transport
+            super().__init__(*args, **kwargs)
 
     async def fake_connect():
         return None
@@ -140,6 +171,7 @@ def client(tasks):
         patch("routers.upload.db.insert_task", fake_insert),
         patch("routers.upload.publish_file_uploaded", publish),
         patch("routers.upload.detect_mime", fake_detect_mime),
+        patch("brain_client.httpx.AsyncClient", _RagClient),
         TestClient(app) as test_client,
     ):
         test_client.publish = publish
@@ -2538,9 +2570,23 @@ class TestOnDeviceModels:
         assert downloaded.status_code == 404
         assert b"user-a-weights" not in downloaded.content
 
-    def test_checksum_mismatch_is_not_ready(self, client, tmp_path):
+    def test_manifest_sha_is_returned_without_reading_the_weight(self, client, tmp_path):
         get_settings().ONDEVICE_MODEL_DIR = str(tmp_path)
-        _write_pack(tmp_path / "base", "qwen3.5-4b-base-q4", "free", b"base-weights", sha="ab" * 32)
+        published = "ab" * 32
+        _write_pack(tmp_path / "base", "qwen3.5-4b-base-q4", "free", b"base-weights", sha=published)
+        meta = client.get("/api/models/on-device", headers=auth_header(tier="free"))
+        assert meta.json()["ready"] is True
+        assert meta.json()["sha256"] == published
+        downloaded = client.get("/api/models/on-device/file", headers=auth_header(tier="free"))
+        assert downloaded.status_code == 200
+        assert downloaded.content == b"base-weights"
+
+    def test_size_mismatch_is_not_ready(self, client, tmp_path):
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path)
+        written = _write_pack(tmp_path / "base", "qwen3.5-4b-base-q4", "free", b"base-weights")
+        manifest_path = tmp_path / "base" / "manifest.json"
+        written["bytes"] = written["bytes"] + 1
+        manifest_path.write_text(json.dumps(written), encoding="utf-8")
         meta = client.get("/api/models/on-device", headers=auth_header(tier="free"))
         assert meta.json()["ready"] is False
         assert client.get("/api/models/on-device/file", headers=auth_header(tier="free")).status_code == 404

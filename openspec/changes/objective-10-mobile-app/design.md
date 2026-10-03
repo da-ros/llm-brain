@@ -147,7 +147,10 @@ Router:
 
 - `GET /api/models/on-device` returns the manifest plus `ready`. Plan
   comes from the JWT. A `tier` query is ignored. Premium `ready: false`
-  uses empty `filename` and `sha256` and `bytes: 0`.
+  uses empty `filename` and `sha256` and `bytes: 0`. `ready` is true
+  when the weight file is present and its size equals manifest `bytes`.
+  The response `sha256` is the manifest value. The route does not hash
+  the file. The phone checks `sha256` after the download.
 - `GET /api/models/on-device/file` streams the weight file. Premium
   without a ready pack is HTTP 404. Free always gets `base/`.
 - Both routes log `X-Request-ID` and the path. They do not log bytes.

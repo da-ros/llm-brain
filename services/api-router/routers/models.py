@@ -1,6 +1,9 @@
-"""On-device Q4 pack metadata and download. No LLM call and no Kafka."""
+"""On-device Q4 pack metadata and download. No LLM call and no Kafka.
 
-import hashlib
+The checksum is written once, when the pack is exported. The phone checks
+it after download. These routes do not read the weight file to hash it again.
+"""
+
 import json
 from pathlib import Path
 from typing import Annotated
@@ -42,6 +45,10 @@ def _empty(tier: str) -> dict:
 
 
 def _load(directory: Path) -> tuple[dict, Path] | None:
+    """Return the manifest and weight path when the file is present and its size matches.
+
+    `sha256` is the value stored at export. This does not open the weight file.
+    """
     manifest_path = directory / "manifest.json"
     if not manifest_path.is_file():
         return None
@@ -50,10 +57,17 @@ def _load(directory: Path) -> tuple[dict, Path] | None:
     except json.JSONDecodeError:
         return None
     filename = str(manifest.get("filename") or "")
-    weight = directory / filename if filename else directory / "missing"
-    digest = hashlib.sha256(weight.read_bytes()).hexdigest() if weight.is_file() else ""
-    ready = bool(filename) and digest == str(manifest.get("sha256") or "")
-    if not ready:
+    if not filename or filename != Path(filename).name or filename in {".", ".."}:
+        return None
+    weight = directory / filename
+    if not weight.is_file():
+        return None
+    try:
+        declared = int(manifest.get("bytes"))
+    except (TypeError, ValueError):
+        return None
+    digest = str(manifest.get("sha256") or "")
+    if not digest or weight.stat().st_size != declared:
         return None
     body = {
         "id": manifest.get("id"),
@@ -62,7 +76,7 @@ def _load(directory: Path) -> tuple[dict, Path] | None:
         "quantization": manifest.get("quantization") or "Q4",
         "parameters": manifest.get("parameters") or "4.0B",
         "filename": filename,
-        "bytes": int(manifest.get("bytes") or weight.stat().st_size),
+        "bytes": declared,
         "sha256": digest,
         "ready": True,
     }

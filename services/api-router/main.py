@@ -10,7 +10,6 @@ import uuid
 from contextlib import asynccontextmanager
 
 import accounts
-import brain_store
 import db
 import kafka_io
 from config import get_settings
@@ -43,7 +42,6 @@ async def lifespan(app: FastAPI):
     await db.connect()
     await db.ensure_indexes()
     await accounts.ensure_indexes()
-    await brain_store.ensure_indexes()
     if settings.KAFKA_ENABLED:
         kafka_io.start_consumer_thread()
     else:

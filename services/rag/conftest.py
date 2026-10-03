@@ -24,6 +24,7 @@ _TOP_LEVEL = (
     "vector_store",
     "embeddings",
     "rag_service",
+    "conversations",
 )
 
 

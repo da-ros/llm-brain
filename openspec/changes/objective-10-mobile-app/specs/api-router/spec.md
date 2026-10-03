@@ -9,8 +9,11 @@ A client-supplied tier SHALL be ignored. The JSON SHALL include `id`,
 `sha256`, and `ready`. A free token SHALL receive `id`
 `qwen3.5-4b-base-q4` and SHALL NOT receive `qwen3.5-4b-finetuned-q4`.
 A premium token SHALL receive `qwen3.5-4b-finetuned-q4` for that token's
-`user_id`, with `ready` true only when that user's pack checksum
-matches. When that user's pack is absent or its checksum does not
+`user_id`, with `ready` true only when that user's weight file is present
+and its size equals the manifest `bytes`. The `sha256` in the response
+SHALL be the value stored in the manifest at export. The route SHALL NOT
+read the weight file to recompute it. The phone checks that value after
+download. When that user's pack is absent or the file size does not
 match, `ready` SHALL be false. The route SHALL NOT return another
 user's pack. The route SHALL NOT call the LLM container and SHALL NOT
 publish Kafka.

@@ -6,7 +6,7 @@
 ## 2. API Router download
 
 - [x] 2.1 Add `ONDEVICE_MODEL_DIR`, `GET /api/models/on-device`, and `GET /api/models/on-device/file`. Plan comes from the JWT. Ignore a client `tier` query. Free metadata and file are the base pack. Premium metadata is that user's pack (`ready` false, empty `filename` and `sha256`, `bytes` 0 when missing). Premium file is HTTP 404 when not ready, and never another user's bytes or the base file. Log `X-Request-ID` and the path, not the bytes. No LLM call and no Kafka. Rate limits 30/min metadata and 5/min file (HTTP 429). `GET /health` stays public. (≤2h)
-- [x] 2.2 Router tests: free base file, free query cannot select the premium pack, premium 404 without a pack, user B does not receive user A's file, 401 without a JWT, checksum mismatch is not ready, web `POST /api/chat` still behaves as before. (≤2h)
+- [x] 2.2 Router tests: free base file, free query cannot select the premium pack, premium 404 without a pack, user B does not receive user A's file, 401 without a JWT, a file whose size does not match manifest bytes is not ready, the route returns the manifest sha256 without hashing the weight, web `POST /api/chat` still behaves as before. (≤2h)
 
 ## 3. App shell and auth
 
