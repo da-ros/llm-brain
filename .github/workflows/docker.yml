@@ -12,20 +12,32 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service:
-          - api-router
-          - etl
-          - rag
-          - llm
-          - finetune
-          - agents
-          - simulator
-          - shield
+        include:
+          - service: api-router
+            path: ./services/api-router
+          - service: etl
+            path: ./services/etl
+          - service: rag
+            path: ./services/rag
+          - service: llm
+            path: ./services/llm
+          - service: finetune
+            path: ./services/finetune
+          - service: agents
+            path: ./services/agents
+          - service: simulator
+            path: ./services/simulator
+          - service: shield
+            path: ./services/shield
+          - service: analytics
+            path: ./services/analytics
+          - service: web
+            path: ./apps/web
     steps:
       - uses: actions/checkout@v7
 
       - name: Build Docker image
-        run: docker build -t llm-brain/${{ matrix.service }}:latest ./services/${{ matrix.service }}
+        run: docker build -t llm-brain/${{ matrix.service }}:latest ${{ matrix.path }}
 
       - uses: snyk/actions/setup@master
       - name: Run Snyk container scan

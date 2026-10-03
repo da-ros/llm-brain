@@ -23,9 +23,7 @@ Use one dominant task per screen. Avoid clutter, neon AI aesthetics, excessive g
 
 Memory supports documents, images, audio and video. Do not implement a knowledge-graph visualization in the MVP.
 
-
 You have the wireframes attached and a reference images of how it should look
-
 
 **,
 

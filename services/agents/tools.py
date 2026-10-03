@@ -252,7 +252,9 @@ def heuristic_score(response: str, assumptions: list[str]) -> tuple[float, str, 
         reasons.append("non-empty answer")
     else:
         reasons.append("empty answer")
-    personal = [item for item in assumptions if (item or "").strip() and item != NO_PERSONAL_CONTEXT]
+    personal = [
+        item for item in assumptions if (item or "").strip() and item != NO_PERSONAL_CONTEXT
+    ]
     if personal:
         score += 0.5
         reasons.append("personal context")

@@ -201,7 +201,9 @@ def create_app() -> FastAPI:
 
     @application.get("/learning")
     async def learning(request: Request, user_id: str):
-        log_with_correlation(request.state.correlation_id, "info", f"GET /learning user_id={user_id}")
+        log_with_correlation(
+            request.state.correlation_id, "info", f"GET /learning user_id={user_id}"
+        )
         return await build_learning(user_id, request.state.correlation_id)
 
     @application.get("/interactions/{correlation_id}")

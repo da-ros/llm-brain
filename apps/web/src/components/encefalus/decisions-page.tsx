@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { BrainCircuit, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Notice, PageHeader, Panel, PanelTitle, PremiumNotice } from "@/components/encefalus/primitives";
+import {
+  Notice,
+  PageHeader,
+  Panel,
+  PanelTitle,
+  PremiumNotice,
+} from "@/components/encefalus/primitives";
 import { useAccount } from "@/lib/account";
 
 type Scenario = {
@@ -42,7 +48,8 @@ function authHeaders(): HeadersInit {
 async function readError(response: Response): Promise<string> {
   const body = await response.json().catch(() => ({}));
   if (typeof body?.detail === "string") return body.detail;
-  if (response.status === 401 || response.status === 403) return "Sign in with a premium token to run a simulation.";
+  if (response.status === 401 || response.status === 403)
+    return "Sign in with a premium token to run a simulation.";
   return "The simulation could not be completed.";
 }
 
@@ -112,7 +119,10 @@ export function DecisionsPage() {
       };
       setResult(saved);
       setActiveRun(saved.simulation_id);
-      setRuns((current) => [saved, ...current.filter((item) => item.simulation_id !== saved.simulation_id)]);
+      setRuns((current) => [
+        saved,
+        ...current.filter((item) => item.simulation_id !== saved.simulation_id),
+      ]);
     } catch {
       setError("Decisions is not reachable. Start the API router and sign in.");
     }
@@ -158,20 +168,30 @@ export function DecisionsPage() {
           </div>
         )}
         <Panel className="mt-6">
-          <PanelTitle title="Past runs" aside={<span className="text-xs text-muted-foreground">{runs.length}</span>} />
+          <PanelTitle
+            title="Past runs"
+            aside={<span className="text-xs text-muted-foreground">{runs.length}</span>}
+          />
           {runs.length === 0 ? (
             <p className="px-4 py-3 text-xs text-muted-foreground">No simulations yet.</p>
           ) : (
             <ul>
               {runs.map((run) => (
-                <li key={run.simulation_id || run.created_at} className="border-t border-border first:border-0">
+                <li
+                  key={run.simulation_id || run.created_at}
+                  className="border-t border-border first:border-0"
+                >
                   <button
                     type="button"
                     onClick={() => openRun(run)}
                     className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left ${activeRun === run.simulation_id ? "bg-accent/60" : "hover:bg-muted/50"}`}
                   >
-                    <span className="truncate text-sm font-medium">{run.question || "Simulation"}</span>
-                    <span className="text-[11px] text-muted-foreground">{formatWhen(run.created_at)}</span>
+                    <span className="truncate text-sm font-medium">
+                      {run.question || "Simulation"}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {formatWhen(run.created_at)}
+                    </span>
                   </button>
                 </li>
               ))}
@@ -189,7 +209,9 @@ export function DecisionsPage() {
             return (
               <Panel key={slot.severity} className={slot.tone}>
                 <div className="p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{slot.label}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    {slot.label}
+                  </p>
                   <h3 className="mt-1 text-sm font-bold">{scenario?.title || slot.label}</h3>
                   <p className="mt-3 text-xs leading-5 text-muted-foreground">
                     {scenario?.outcome || "Run a simulation to fill this case."}
@@ -203,7 +225,10 @@ export function DecisionsPage() {
           <Panel>
             <PanelTitle title="Key assumptions" />
             <ul className="space-y-2 p-4 text-xs leading-5 text-muted-foreground">
-              {(result?.assumptions.length ? result.assumptions : ["Assumptions appear here after a simulation."]).map((item) => (
+              {(result?.assumptions.length
+                ? result.assumptions
+                : ["Assumptions appear here after a simulation."]
+              ).map((item) => (
                 <li key={item}>• {item}</li>
               ))}
             </ul>
@@ -219,11 +244,15 @@ export function DecisionsPage() {
                     className="rounded-md bg-muted p-3 text-left text-xs font-medium hover:bg-accent"
                   >
                     {source.split(/[/\\]/).pop()}
-                    <span className="mt-1 block text-[10px] text-muted-foreground">Open memory</span>
+                    <span className="mt-1 block text-[10px] text-muted-foreground">
+                      Open memory
+                    </span>
                   </a>
                 ))
               ) : (
-                <p className="text-xs text-muted-foreground">Memory references appear here after a simulation.</p>
+                <p className="text-xs text-muted-foreground">
+                  Memory references appear here after a simulation.
+                </p>
               )}
             </div>
           </Panel>

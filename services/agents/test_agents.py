@@ -205,7 +205,9 @@ class TestLearnGraph:
             result = await run_learn_graph(
                 _learn_state(
                     correlation_id="no-train",
-                    assumptions=["The answer is grounded in the user's retrieved personal documents."],
+                    assumptions=[
+                        "The answer is grounded in the user's retrieved personal documents."
+                    ],
                 )
             )
         train.assert_not_called()

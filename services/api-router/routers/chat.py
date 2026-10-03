@@ -4,19 +4,15 @@ CHAT_VIA_AGENTS=false restores the previous Router → RAG → LLM path (rollbac
 
 An attachment is not written to documents, GridFS, or RAG.
 Its text stays on the chat and is sent again with later questions in that chat.
+Parsing is delegated to the ETL service (POST /parse); the router stays a gateway.
 """
 
 import base64
+import contextlib
 from datetime import date, timedelta
 from typing import Annotated, Literal
 
 import httpx
-from attachment_loader import (
-    EmptyAttachmentError,
-    UnsupportedAttachmentError,
-    load_attachment,
-    supported_summary,
-)
 from auth import verify_token
 from brain_client import append_turns, chat_history, list_notes, touch_chat
 from config import get_settings
@@ -31,6 +27,7 @@ router = APIRouter(prefix="/api", tags=["chat"])
 EMPTY_CONTEXT = "No relevant context found in your documents."
 MAX_ATTACHMENT_BYTES = 8_000_000
 MAX_CHAT_FILES = 5
+ETL_PARSE_TIMEOUT = 30.0
 
 
 class ChatAttachment(BaseModel):
@@ -177,15 +174,12 @@ async def chat(
         f"JWT validated: user_id={user_id}, tier={tier}",
     )
 
-    attachments = _read_attachments(chat_request)
-    history = await _history(user_id, chat_request.session_id, correlation_id)
-    notes = await _prompt_notes(user_id, correlation_id) if tier == "premium" else []
-    use_agents = (
-        tier == "premium"
-        and settings.CHAT_VIA_AGENTS
-        and not attachments
-        and not notes
+    attachments = await _read_attachments(
+        chat_request, correlation_id=correlation_id, etl_url=settings.ETL_SERVICE_URL
     )
+    history = await _history(user_id, chat_request.session_id)
+    notes = await _prompt_notes(user_id) if tier == "premium" else []
+    use_agents = tier == "premium" and settings.CHAT_VIA_AGENTS and not attachments and not notes
 
     if use_agents:
         log_with_correlation(correlation_id, "info", "Calling Agents Service POST /reason")
@@ -354,7 +348,9 @@ async def chat(
     )
 
 
-def _read_attachments(chat_request: ChatRequest) -> list[tuple[str, str]]:
+async def _read_attachments(
+    chat_request: ChatRequest, *, correlation_id: str, etl_url: str
+) -> list[tuple[str, str]]:
     items = list(chat_request.attachments)
     if chat_request.attachment_base64:
         items.append(
@@ -368,10 +364,22 @@ def _read_attachments(chat_request: ChatRequest) -> list[tuple[str, str]]:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="You can attach up to five files for one question.",
         )
-    return [_decode_attachment(item.filename, item.content_base64) for item in items]
+    parsed: list[tuple[str, str]] = []
+    for item in items:
+        parsed.append(
+            await _decode_attachment(
+                item.filename,
+                item.content_base64,
+                correlation_id=correlation_id,
+                etl_url=etl_url,
+            )
+        )
+    return parsed
 
 
-def _decode_attachment(filename: str, content_base64: str) -> tuple[str, str]:
+async def _decode_attachment(
+    filename: str, content_base64: str, *, correlation_id: str, etl_url: str
+) -> tuple[str, str]:
     name = (filename or "attachment").strip() or "attachment"
     try:
         data = base64.b64decode(content_base64, validate=True)
@@ -385,23 +393,36 @@ def _decode_attachment(filename: str, content_base64: str) -> tuple[str, str]:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Attachment is empty or larger than 8 MB",
         )
+    return name, await _parse_via_etl(name, data, correlation_id=correlation_id, etl_url=etl_url)
+
+
+async def _parse_via_etl(filename: str, data: bytes, *, correlation_id: str, etl_url: str) -> str:
+    """Parse one attachment through the ETL service (POST /parse).
+
+    The router stays a gateway: text in, text out. Nothing is stored here.
+    """
     try:
-        return name, load_attachment(name, data)
-    except UnsupportedAttachmentError as exc:
+        async with httpx.AsyncClient(timeout=ETL_PARSE_TIMEOUT) as client:
+            response = await client.post(
+                f"{etl_url}/parse",
+                content=data,
+                params={"filename": filename},
+                headers={"X-Request-ID": correlation_id},
+            )
+    except httpx.HTTPError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Unsupported file. {supported_summary()}",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Attachment parsing is unavailable (ETL service). "
+                "Try again later or send the question without the file."
+            ),
         ) from exc
-    except EmptyAttachmentError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Attachment is empty",
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Could not read that file",
-        ) from exc
+    if response.status_code != 200:
+        detail = "Could not read that file"
+        with contextlib.suppress(ValueError):
+            detail = response.json().get("detail") or detail
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+    return response.json().get("text") or ""
 
 
 async def _history(user_id: str, session_id: str | None, correlation_id: str) -> list[dict]:

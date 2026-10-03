@@ -40,12 +40,22 @@ DOCX_MIMES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/msword",
 }
+EXCEL_MIMES = {
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+CSV_MIMES = {"text/csv", "text/tab-separated-values"}
+# Text formats handled by TextLoader (chat attachments: diaries, calendars).
+TEXT_EXTRA_MIMES = {"text/markdown", "text/calendar"}
 
 SUPPORTED_MIMES = (
     {"application/pdf", "text/plain"}
     | HTML_MIMES
     | EMAIL_MIMES
     | DOCX_MIMES
+    | EXCEL_MIMES
+    | CSV_MIMES
+    | TEXT_EXTRA_MIMES
     | IMAGE_MIMES
     | VIDEO_MIMES
 )
@@ -94,6 +104,18 @@ def _word_loader_class() -> Any:
     from langchain_community.document_loaders import UnstructuredWordDocumentLoader
 
     return UnstructuredWordDocumentLoader
+
+
+def _csv_loader_class() -> Any:
+    from langchain_community.document_loaders import CSVLoader
+
+    return CSVLoader
+
+
+def _excel_loader_class() -> Any:
+    from langchain_community.document_loaders import UnstructuredExcelLoader
+
+    return UnstructuredExcelLoader
 
 
 def _image_loader_class() -> Any:
@@ -184,6 +206,43 @@ class UnstructuredWordLoaderAdapter:
         return documents
 
 
+class CsvLoaderAdapter:
+    """CSV strategy wrapping LangChain CSVLoader."""
+
+    def __init__(self, file_path: str, delimiter: str = ",") -> None:
+        self.file_path = file_path
+        self.delimiter = delimiter
+
+    def load(self) -> list[Any]:
+        documents = _run_loader(
+            _csv_loader_class(),
+            self.file_path,
+            "CSVLoader",
+            csv_args={"delimiter": self.delimiter},
+        )
+        logger.info("LangChain loader selected: CSVLoader (delimiter=%r)", self.delimiter)
+        return documents
+
+
+class TsvLoaderAdapter(CsvLoaderAdapter):
+    """TSV strategy — the same CSVLoader with a tab delimiter."""
+
+    def __init__(self, file_path: str) -> None:
+        super().__init__(file_path, delimiter="\t")
+
+
+class ExcelLoaderAdapter:
+    """XLS/XLSX strategy wrapping UnstructuredExcelLoader."""
+
+    def __init__(self, file_path: str) -> None:
+        self.file_path = file_path
+
+    def load(self) -> list[Any]:
+        documents = _run_loader(_excel_loader_class(), self.file_path, "UnstructuredExcelLoader")
+        logger.info("LangChain loader selected: UnstructuredExcelLoader")
+        return documents
+
+
 class UnstructuredImageLoaderAdapter:
     def __init__(self, file_path: str) -> None:
         self.file_path = file_path
@@ -219,6 +278,14 @@ def resolve_loader_class(mime_type: str) -> type | None:
         return UnstructuredEmailLoaderAdapter
     if mime in DOCX_MIMES:
         return UnstructuredWordLoaderAdapter
+    if mime in EXCEL_MIMES:
+        return ExcelLoaderAdapter
+    if mime == "text/tab-separated-values":
+        return TsvLoaderAdapter
+    if mime == "text/csv":
+        return CsvLoaderAdapter
+    if mime in TEXT_EXTRA_MIMES:
+        return TextLoaderAdapter
     if mime in IMAGE_MIMES:
         return UnstructuredImageLoaderAdapter
     if mime in VIDEO_MIMES or mime.startswith("video/"):
@@ -236,8 +303,9 @@ def is_supported_mime(mime_type: str) -> bool:
 
 def supported_types_message() -> str:
     return (
-        "Supported types: text/plain, application/pdf, text/html, message/rfc822, "
-        "DOCX, image (png/jpeg/tiff/gif/webp/bmp), video (mp4/webm/quicktime)"
+        "Supported types: text/plain, text/markdown, text/calendar (ICS), text/csv, TSV, "
+        "application/pdf, text/html, message/rfc822, DOCX, Excel (xls/xlsx), "
+        "image (png/jpeg/tiff/gif/webp/bmp), video (mp4/webm/quicktime)"
     )
 
 

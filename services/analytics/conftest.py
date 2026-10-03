@@ -11,6 +11,7 @@ import pytest
 os.environ.setdefault("ANALYTICS_STORE", "memory")
 os.environ.setdefault("RAG_SERVICE_URL", "http://rag-service:8002")
 os.environ.setdefault("LLM_SERVICE_URL", "http://llm-service:8003")
+os.environ.setdefault("ETL_SERVICE_URL", "http://etl-service:8001")
 os.environ.setdefault("LLM_TEMPERATURE", "0")
 
 SERVICE_ROOT = Path(__file__).resolve().parent
@@ -25,6 +26,7 @@ _TOP_LEVEL = (
     "loaders",
     "llm_client",
     "rag_client",
+    "etl_client",
     "pearson",
     "pipeline",
 )

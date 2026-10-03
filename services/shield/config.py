@@ -11,7 +11,22 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_DEFAULT_CORPUS = Path(__file__).resolve().parents[2] / "data" / "shield" / "corpus.jsonl"
+
+def _default_corpus() -> Path:
+    """Locate data/shield/corpus.jsonl walking up from this file.
+
+    Repo layout is <root>/services/shield/config.py; the container layout is
+    /app/config.py with the data volume mounted (CORPUS_PATH env overrides
+    this default). Walking up avoids IndexError on the shallow container path.
+    """
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "data" / "shield" / "corpus.jsonl"
+        if candidate.exists():
+            return candidate
+    return Path("data/shield/corpus.jsonl")
+
+
+_DEFAULT_CORPUS = _default_corpus()
 
 
 class Settings(BaseSettings):

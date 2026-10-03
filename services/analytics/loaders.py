@@ -1,14 +1,15 @@
-"""LangChain document loaders for diary and schedule files.
+"""Upload classification for analytics ingest.
 
-CSV, XLSX, DOCX, and ICS become text. Images are OCR'd by
-UnstructuredImageLoader. No Google OAuth.
+Which file types analytics accepts, and which carry image bytes to the LLM.
+Text extraction is the ETL service's job (POST /parse) — analytics never
+parses documents itself, the same way it never opens Chroma (see rag_client).
 """
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
+import etl_client
 from exceptions import EmptyFileError, UnsupportedFileError
 
 ALLOWED = {
@@ -22,17 +23,9 @@ ALLOWED = {
     ".webp": "image",
 }
 
-_LOADER_NAMES = {
-    "csv": "CSVLoader",
-    "xlsx": "UnstructuredExcelLoader",
-    "docx": "UnstructuredWordDocumentLoader",
-    "ics": "TextLoader",
-    "image": "UnstructuredImageLoader",
-}
-
 
 def kind_for(filename: str) -> str:
-    """Map a filename to a loader kind, or raise UnsupportedFileError."""
+    """Map a filename to an ingest kind, or raise UnsupportedFileError."""
     suffix = Path(filename or "").suffix.lower()
     kind = ALLOWED.get(suffix)
     if kind is None:
@@ -40,37 +33,20 @@ def kind_for(filename: str) -> str:
     return kind
 
 
-def _loader_cls(kind: str):
-    import langchain_community.document_loaders as loaders
+async def load_upload(filename: str, data: bytes, *, correlation_id: str) -> tuple[str, bytes]:
+    """Return (text, image_bytes) for one upload.
 
-    return getattr(loaders, _LOADER_NAMES[kind])
-
-
-def _load_path(kind: str, path: str) -> str:
-    docs = _loader_cls(kind)(path).load()
-    return "\n".join(getattr(doc, "page_content", "") or "" for doc in docs).strip()
-
-
-def load_upload(filename: str, data: bytes) -> tuple[str, bytes]:
-    """Return (text, image_bytes). image_bytes is empty unless the upload is a photo.
-
-    Empty bytes, an unsupported type, or a loader that yields no text (and is
-    not an image) raise before any LLM call.
+    Image uploads skip the ETL parse (OCR is out of scope in this iteration)
+    and keep their bytes for the LLM. Everything else gets its text from the
+    ETL service. Empty bytes, an unsupported type, or an ETL failure raise
+    before any LLM call.
     """
     if not data:
         raise EmptyFileError("empty file")
     kind = kind_for(filename)
-    suffix = Path(filename).suffix.lower() or ".bin"
-    image = data if kind == "image" else b""
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as handle:
-        handle.write(data)
-        handle.flush()
-        try:
-            text = _load_path(kind, handle.name)
-        except UnsupportedFileError:
-            raise
-        except Exception as exc:
-            raise EmptyFileError(f"unreadable file: {exc}") from exc
-    if not text and kind != "image":
-        raise EmptyFileError("loader returned no text")
-    return text, image
+    if kind == "image":
+        return "", data
+    text = await etl_client.parse_text(filename=filename, data=data, correlation_id=correlation_id)
+    if not text:
+        raise EmptyFileError("ETL parse returned no text")
+    return text, b""

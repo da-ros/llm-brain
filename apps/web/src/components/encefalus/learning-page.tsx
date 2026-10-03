@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { BrainCircuit, Check, Database, MessageSquare, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Metric, Notice, PageHeader, Panel, PanelTitle, PremiumNotice } from "@/components/encefalus/primitives";
+import {
+  Metric,
+  Notice,
+  PageHeader,
+  Panel,
+  PanelTitle,
+  PremiumNotice,
+} from "@/components/encefalus/primitives";
 import { useAccount } from "@/lib/account";
 
 type Batch = { id: string; status: string; items: number; needed: number };
@@ -220,10 +227,18 @@ export function LearningPage() {
   );
 }
 
-function Checklist({ title, steps }: { title: string; steps: { title: string; note: string; state: StepState }[] }) {
+function Checklist({
+  title,
+  steps,
+}: {
+  title: string;
+  steps: { title: string; note: string; state: StepState }[];
+}) {
   return (
     <div>
-      <h3 className="text-[10px] font-semibold uppercase tracking-[.12em] text-muted-foreground">{title}</h3>
+      <h3 className="text-[10px] font-semibold uppercase tracking-[.12em] text-muted-foreground">
+        {title}
+      </h3>
       <ol className="mt-3">
         {steps.map((step, index) => (
           <li key={step.title} className="grid grid-cols-[24px_minmax(0,1fr)] gap-3">
@@ -274,7 +289,12 @@ function trainingSteps(view: Learning) {
       },
       {
         title: "Batch ready",
-        note: status === "ready" ? "Ready to fine-tune" : items > 0 ? "Still collecting" : "No open batch",
+        note:
+          status === "ready"
+            ? "Ready to fine-tune"
+            : items > 0
+              ? "Still collecting"
+              : "No open batch",
         state: status === "ready" || started ? "done" : "wait",
       },
     ] satisfies { title: string; note: string; state: StepState }[],
@@ -286,17 +306,30 @@ function trainingSteps(view: Learning) {
       },
       {
         title: "Training set prepared",
-        note: phase === "preparing" ? "Reading the batch" : past("preparing") ? "Examples are ready" : "Waiting",
+        note:
+          phase === "preparing"
+            ? "Reading the batch"
+            : past("preparing")
+              ? "Examples are ready"
+              : "Waiting",
         state: phase === "preparing" ? "active" : past("preparing") ? "done" : "wait",
       },
       {
         title: "LoRA training",
-        note: phase === "training" ? "Usually a couple of hours" : past("training") ? "Training finished" : "Usually a couple of hours",
+        note:
+          phase === "training"
+            ? "Usually a couple of hours"
+            : past("training")
+              ? "Training finished"
+              : "Usually a couple of hours",
         state: phase === "training" ? "active" : past("training") ? "done" : "wait",
       },
       {
         title: "On-device tag saved",
-        note: phase === "completed" ? view.job?.model_version || "Tag written" : "Written when training finishes",
+        note:
+          phase === "completed"
+            ? view.job?.model_version || "Tag written"
+            : "Written when training finishes",
         state: phase === "completed" ? "done" : "wait",
       },
     ] satisfies { title: string; note: string; state: StepState }[],
