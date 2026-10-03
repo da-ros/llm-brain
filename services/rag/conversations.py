@@ -1,4 +1,8 @@
-"""Lean chat threads and calendar notes. Not document memory."""
+"""Chat threads and calendar notes. Not document memory.
+
+The API Router forwards /api/chats and /api/calendar here. Accounts stay
+on the router.
+"""
 
 from __future__ import annotations
 
@@ -6,11 +10,38 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-import db as api_db
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
 
 _chats: dict[str, dict[str, Any]] = {}
 _notes: dict[tuple[str, str], dict[str, Any]] = {}
 _turns: list[dict[str, Any]] = []
+_database: Any = None
+
+router = APIRouter(tags=["conversations"])
+
+
+class TurnBody(BaseModel):
+    role: str = "user"
+    text: str = ""
+    cards: list[dict[str, Any]] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    files: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class TurnsBody(BaseModel):
+    user_id: str
+    turns: list[TurnBody] = Field(default_factory=list)
+
+
+class TouchBody(BaseModel):
+    user_id: str
+    message: str = ""
+
+
+class NoteBody(BaseModel):
+    user_id: str
+    note: str = ""
 
 
 def reset_memory() -> None:
@@ -19,8 +50,14 @@ def reset_memory() -> None:
     _turns.clear()
 
 
-def _mongo():
-    return api_db.database()
+def bind(database: Any) -> None:
+    """Use this Mongo database. None keeps the in-memory store."""
+    global _database
+    _database = database
+
+
+def _mongo() -> Any:
+    return _database
 
 
 async def ensure_indexes() -> None:
@@ -191,10 +228,11 @@ async def put_note(user_id: str, day: str, note: str) -> None:
 
 
 def _public_chat(row: dict[str, Any]) -> dict[str, Any]:
+    updated = row["updated_at"]
     return {
         "id": row["_id"],
         "title": row["title"],
-        "updated_at": row["updated_at"].isoformat(),
+        "updated_at": updated.isoformat() if hasattr(updated, "isoformat") else str(updated),
     }
 
 
@@ -205,3 +243,58 @@ def _public_turn(row: dict[str, Any]) -> dict[str, Any]:
         "cards": row.get("cards") or [],
         "assumptions": row.get("assumptions") or [],
     }
+
+
+@router.get("/chats")
+async def get_chats(user_id: str = Query(...)) -> dict[str, Any]:
+    return {"chats": await list_chats(user_id)}
+
+
+@router.post("/chats", status_code=status.HTTP_201_CREATED)
+async def post_chat(user_id: str = Query(...)) -> dict[str, Any]:
+    return await create_chat(user_id)
+
+
+@router.get("/chats/{chat_id}/turns")
+async def get_turns(chat_id: str, user_id: str = Query(...)) -> dict[str, Any]:
+    turns = await list_turns(user_id, chat_id)
+    if turns is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    return {"turns": turns}
+
+
+@router.get("/chats/{chat_id}/history")
+async def get_history(chat_id: str, user_id: str = Query(...)) -> dict[str, Any]:
+    rows = await chat_history(user_id, chat_id)
+    return {"history": rows or []}
+
+
+@router.post(
+    "/chats/{chat_id}/touch", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
+)
+async def post_touch(chat_id: str, body: TouchBody) -> Response:
+    await touch_chat(body.user_id, chat_id, body.message)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/chats/{chat_id}/turns", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
+)
+async def post_turns(chat_id: str, body: TurnsBody) -> Response:
+    await append_turns(body.user_id, chat_id, [turn.model_dump() for turn in body.turns])
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/notes")
+async def get_notes(
+    user_id: str = Query(...),
+    start: str = Query(...),
+    end: str = Query(...),
+) -> dict[str, Any]:
+    return {"notes": await list_notes(user_id, start, end)}
+
+
+@router.put("/notes/{day}")
+async def save_note(day: str, body: NoteBody) -> dict[str, bool]:
+    await put_note(body.user_id, day, body.note)
+    return {"saved": bool(body.note.strip())}

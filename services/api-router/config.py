@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_SHIELD_SCAN: int = 30
     RATE_LIMIT_ANALYTICS_INGEST: int = 10
     RATE_LIMIT_ANALYTICS_QUERY: int = 30
+    RATE_LIMIT_MODEL_METADATA: int = 30
+    RATE_LIMIT_MODEL_FILE: int = 5
+
+    ONDEVICE_MODEL_DIR: str = "models/on-device"
 
     # --- Upload ---
     MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024

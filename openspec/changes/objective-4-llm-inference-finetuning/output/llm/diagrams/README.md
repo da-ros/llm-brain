@@ -16,8 +16,8 @@ There is **no** AWS Bedrock cloud, **no** Llama, and **no** arrow from Fine-Tune
 
 ## llm-dataflow.drawio
 
-1. **Premium inference**: Client → API Router → POST `/generate` → `get_provider(premium)` → `QwenLocalProvider.complete` → Qwen3.5-4B runtime. Dashed arrows return `{response, tokens_used}` to the API Router and then to the client.
+1. **Web inference**: Client → API Router → POST `/generate` → `get_provider(free or premium)` → `QwenLocalProvider.complete` → the same base Qwen3.5-4B runtime. Web free carries no RAG context. Dashed arrows return `{response, tokens_used}` to the API Router and then to the client. Phone free never takes this path.
 2. **ETL extraction**: ETL → POST `/extract` → base Qwen reasons → JSON triples back to ETL (dashed).
-3. **Errors**: missing prompt 400, free tier 400, container/model 500, timeout 504.
+3. **Errors**: missing prompt 400, unknown tier 400, container/model 500, timeout 504.
 
 Solid arrows = call direction (left → right). Dashed = response.

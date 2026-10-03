@@ -1,6 +1,6 @@
 """LLM Service — FastAPI application.
 
-Local Qwen3.5-4B base inference for premium users and ETL triple extraction.
+Local Qwen3.5-4B base inference for web free, premium, and ETL triple extraction.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(
         title="LLM Service",
-        description="Local Qwen3.5-4B base inference (container) — premium + ETL",
+        description="Local Qwen3.5-4B base inference (container) — web free, premium, and ETL",
         version=settings.SERVICE_VERSION,
     )
     application.middleware("http")(add_correlation_id)

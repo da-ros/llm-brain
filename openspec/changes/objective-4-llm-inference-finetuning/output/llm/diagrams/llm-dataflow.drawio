@@ -4,7 +4,7 @@
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="title" value="Frame 4 — LLM Service Data Flow&#10;Premium inference is sync HTTP. ETL uses the same base model. Free tier never enters this service." style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" parent="1" vertex="1">
+                <mxCell id="title" value="Frame 4 — LLM Service Data Flow&#10;Web free and premium share the base model. ETL uses that same model. Phone free never enters this service." style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" parent="1" vertex="1">
                     <mxGeometry x="280" y="12" width="1300" height="56" as="geometry"/>
                 </mxCell>
                 <mxCell id="f1" value="FLOW 1 — PREMIUM INFERENCE (sync, 30s timeout)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" parent="1" vertex="1">
@@ -19,7 +19,7 @@
                 <mxCell id="c3" value="3. LLM Service&#10;POST /generate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="480" y="120" width="160" height="70" as="geometry"/>
                 </mxCell>
-                <mxCell id="c4" value="4. get_provider&#10;tier=premium" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="c4" value="4. get_provider&#10;tier=free or premium" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="700" y="110" width="160" height="90" as="geometry"/>
                 </mxCell>
                 <mxCell id="c5" value="5. QwenLocalProvider&#10;complete(prompt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
@@ -135,7 +135,7 @@
                 <mxCell id="err1" value="Missing prompt / messages&#10;→ 400" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="60" y="580" width="220" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="err2" value="Free / unknown tier&#10;→ 400 (on-device, Frame 10)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="err2" value="Unknown tier&#10;→ 400" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="310" y="580" width="240" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="err3" value="Container / model error&#10;→ 500" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">

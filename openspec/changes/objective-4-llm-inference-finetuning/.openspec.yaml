@@ -13,7 +13,7 @@ services:
   - name: llm-service
     directory: services/llm
     port: 8003
-    description: "Local Qwen3.5-4B multimodal inference (container) — premium users + ETL triple extraction"
+    description: "Local Qwen3.5-4B multimodal inference (container) — web free, premium, and ETL triple extraction"
   - name: finetune-service
     directory: services/finetune
     port: 8004

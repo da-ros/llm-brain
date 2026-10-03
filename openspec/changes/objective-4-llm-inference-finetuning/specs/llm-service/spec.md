@@ -7,15 +7,17 @@
 The LLM Service SHALL serve inference on port 8003 using **Qwen3.5-4B** (dense,
 natively multimodal — text, image and video; 262K context; Apache 2.0; ~8 GB in
 BF16, ~2.5–3 GB in Q4) running in a **local Docker container** ("cloud" = local
-container). It SHALL serve the **base** full-precision model (**not** fine-tuned) for
-**premium** users (with RAG). It SHALL NOT call AWS Bedrock or any external
+container). It SHALL serve the **base** full-precision model (**not** fine-tuned)
+for **web free** and for **premium**. Web free is this same model with no RAG
+and no memory. Premium may include RAG context supplied by the API Router.
+It SHALL NOT call AWS Bedrock or any external
 managed inference API, and it SHALL NOT depend on Llama models.
 
-#### Scenario: Premium text completion via local container
+#### Scenario: Web free and premium text completion via local container
 
-- **GIVEN** an authenticated premium request
-- **WHEN** the client sends `POST /generate` with a `prompt` and `user_id`
-- **THEN** the service runs Qwen3.5-4B in the local container and responds HTTP 200 with `response` and `tokens_used`
+- **GIVEN** an authenticated web free or premium request
+- **WHEN** the client sends `POST /generate` with a `prompt`, `user_id`, and `tier` of `free` or `premium`
+- **THEN** the service runs the same base Qwen3.5-4B in the local container and responds HTTP 200 with `response` and `tokens_used`
 
 #### Scenario: Multimodal chat with RAG context
 
@@ -34,18 +36,30 @@ managed inference API, and it SHALL NOT depend on Llama models.
 - **WHEN** the local Qwen3.5-4B container is unavailable or the request times out
 - **THEN** the service responds HTTP 500 (container/model error) or HTTP 504 (timeout) and logs the error with the `X-Request-ID`
 
-### Requirement: Free tier is not served by the container
+### Requirement: The container serves web free on the base model
 
-The LLM Service SHALL only serve **premium** inference. The **free** tier SHALL
-be served by Qwen3.5-4B **base** quantized (Q4) on-device in React Native on
-iPhone via **Neural Engine / Metal** (Frame 10), not by this container. Free
-users SHALL NOT access this cloud service.
+The LLM Service SHALL serve `tier=free` and `tier=premium` with the same base
+Qwen3.5-4B weights. It SHALL NOT load a LoRA adapter for either tier. An
+unknown tier SHALL be HTTP 400. Phone free SHALL NOT call this service: that
+chat stays on the iPhone with the base Q4 pack (Frame 10).
 
-#### Scenario: Free tier routed on-device
+#### Scenario: Web free uses the base container
 
-- **GIVEN** a free-tier user
-- **WHEN** they issue a chat request
-- **THEN** the request is handled on-device by the **base** quantized Qwen3.5-4B in React Native (Neural Engine / Metal), and this service does not process it
+- **GIVEN** a web free request with `tier=free`
+- **WHEN** the API Router calls `POST /generate` or `POST /chat`
+- **THEN** the service returns HTTP 200 from the base container, with no RAG context and no memory
+
+#### Scenario: Phone free does not call this service
+
+- **GIVEN** a free user on the iPhone
+- **WHEN** they send a chat message
+- **THEN** the phone answers with the base Q4 pack, and this service receives no request
+
+#### Scenario: Unknown tier is rejected
+
+- **GIVEN** a request whose `tier` is neither `free` nor `premium`
+- **WHEN** the service resolves the provider
+- **THEN** it responds HTTP 400 and does not run inference
 
 ### Requirement: Base model serves ETL triple extraction
 
@@ -99,7 +113,7 @@ Realiza una completion de texto con Qwen3.5-4B (contenedor local).
 ```
 
 **Errors**:
-- 400: Invalid request (missing prompt)
+- 400: Invalid request (missing prompt, or `tier` other than `free` or `premium`)
 - 500: Inference error (local Qwen3.5-4B container unavailable / model error)
 - 504: Inference timeout
 

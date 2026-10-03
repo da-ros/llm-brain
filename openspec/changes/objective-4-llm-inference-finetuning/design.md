@@ -59,8 +59,8 @@ providers/
 2. **Local Qwen3.5-4B container** (not AWS Bedrock, not OpenAI):
    - Single model family: Qwen3.5-4B (dense, natively multimodal — text, image, video; 262K ctx; Apache 2.0; ~8 GB BF16, ~2.5–3 GB Q4)
    - "Cloud" = a local Docker container on the laptop; $0, fully offline-capable
-   - Serves **base** Qwen3.5-4B (full precision, **not** fine-tuned) for Premium + RAG
-   - On-device (Frame 10): Free = base quantized; Premium = fine-tuned quantized (React Native / Neural Engine / Metal)
+   - Serves **base** Qwen3.5-4B (full precision, **not** fine-tuned) for web free and for premium. Web free has no RAG and no memory. Premium may carry RAG context from the API Router.
+   - On-device (Frame 10): phone free = base quantized and does not call this container; Premium = fine-tuned quantized (React Native / Neural Engine / Metal)
    - Embeddings stay Qwen3-VL-Embedding-2B (same family)
 
 3. **Stateless requests**:

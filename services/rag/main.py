@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 from contextlib import asynccontextmanager
 
+import conversations
 from config import get_settings
 from document_store import document_store
 from fastapi import FastAPI, HTTPException, Query, Request, status
@@ -72,8 +73,11 @@ async def add_correlation_id(request: Request, call_next):
 async def lifespan(_app: FastAPI):
     try:
         await document_store.connect()
+        conversations.bind(document_store.db)
+        await conversations.ensure_indexes()
     except Exception:
         logger.exception("MongoDB connection failed at startup (health still 200)")
+        conversations.bind(None)
     yield
     await document_store.close()
 
@@ -88,6 +92,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     application.middleware("http")(add_correlation_id)
+    application.include_router(conversations.router)
 
     @application.get("/health")
     async def health_check():

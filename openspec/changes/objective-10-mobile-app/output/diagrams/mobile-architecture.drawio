@@ -1,0 +1,64 @@
+<mxfile host="65bd71144e">
+  <diagram id="mobile-architecture" name="Frame 10 — Mobile architecture">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1280" pageHeight="860" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="phone" value="iPhone app&#10;Auth · Local AI Chat · Status · Free vs Premium · Settings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="40" y="40" width="340" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="engine" value="OnDeviceEngine&#10;base Q4 · personal LoRA Q4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="40" y="250" width="340" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="router" value="API Router :8000&#10;the phone's only server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="500" y="110" width="260" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="llm" value="LLM :8003&#10;cloud base Qwen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="900" y="40" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="rag" value="RAG :8002&#10;stored memory" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="900" y="180" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="adapter" value="Fine-Tune adapter directory&#10;ADAPTER_OUTPUT_DIR/{user_id}/adapter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="40" y="430" width="340" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="export" value="export_on_device.py&#10;merge, then Q4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="460" y="430" width="240" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="packs" value="Q4 packs&#10;base/ and users/{user_id}/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="780" y="430" width="280" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="note" value="Free chat ends on the device. No edge from the phone to ports 8001–8008. The export does not write the LLM container. No Apple, Google, or microphone." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="1" vertex="1">
+          <mxGeometry x="40" y="560" width="700" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend" value="Solid = call, head on the callee. Dashed = response, head on the caller. Green = this frame. Blue = earlier frames. The red note has no edges." style="text;html=1;align=left;strokeColor=none;fillColor=none;fontSize=12;" parent="1" vertex="1">
+          <mxGeometry x="40" y="660" width="1100" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_phone_engine" value="Free and On device" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="phone" target="engine" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_phone_router" value="auth · plan · pack · Digital Brain" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" parent="1" source="phone" target="router" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_phone" value="JWT and pack bytes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;dashed=1;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;exitX=0;exitY=0.2;entryX=1;entryY=0.2;" parent="1" source="router" target="phone" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_llm" value="Digital Brain" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;" parent="1" source="router" target="llm" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_rag" value="Digital Brain RAG" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;" parent="1" source="router" target="rag" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_adapter_export" value="that user's adapter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;" parent="1" source="adapter" target="export" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_export_packs" value="Q4 manifest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#82b366;" parent="1" source="export" target="packs" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_packs" value="read the caller's ready pack" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=classic;startArrow=none;strokeColor=#6c8ebf;exitX=0.75;exitY=1;entryX=0.25;entryY=0;" parent="1" source="router" target="packs" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

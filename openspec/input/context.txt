@@ -12,12 +12,12 @@ Cada usuario se registra, inicia sesión y tiene su propia suscripción. Los dat
 
 > **Estado actual: SOLO DESARROLLO LOCAL.** No se despliega en la nube todavía.
 > El "modelo en la nube" es un **contenedor Docker en la laptop** que sirve
-> **Qwen3.5-4B base** (sin fine-tuning). El on-device corre en **React Native en
-> iPhone** (Neural Engine / Metal): **Free** = Qwen3.5-4B base cuantizado (out of
-> the box, sin fine-tuning, sin acceso al cloud); **Premium** = Qwen3.5-4B
-> **fine-tuneado** + cuantizado on-device, **y además** acceso al cloud (contenedor
-> base + RAG + archivos + web dashboard). Servicios AWS (Bedrock, ECS Fargate,
-> API Gateway) quedan como **trabajo futuro**, no MVP.
+> **Qwen3.5-4B base** (sin fine-tuning). **Free web** usa ese contenedor, sin RAG
+> y sin memoria. **Free móvil** no lo llama: corre el mismo modelo **base
+> cuantizado (Q4)** en **React Native / iPhone** (Neural Engine / Metal).
+> **Premium** usa el contenedor base **con** RAG y memoria, y en el teléfono puede
+> usar en su lugar el **Qwen3.5-4B fine-tuneado** + cuantizado. Servicios AWS
+> (Bedrock, ECS Fargate, API Gateway) quedan como **trabajo futuro**, no MVP.
 
 > Nota: El anteproyecto menciona "un usuario" — esto se refiere al usuario que ingresa datos para fine-tuning.
 > La plataforma soporta múltiples usuarios reales desde el MVP.
@@ -26,8 +26,8 @@ Cada usuario se registra, inicia sesión y tiene su propia suscripción. Los dat
 
 | Cliente | Tecnología | Tier | Funcionalidad |
 |---------|------------|------|---------------|
-| **Web App** | React + Chart.js | Premium | Charts de gastos, enfermedades, visualización de datos |
-| **Mobile App** | React Native (iPhone) + Neural Engine / Metal | Free / Premium | Consultas LLM, carga de archivos, inferencia on-device offline |
+| **Web App** | React + Chart.js | Free / Premium | Free: chat al contenedor base, sin RAG ni memoria. Premium: dashboard y módulos |
+| **Mobile App** | React Native (iPhone) + Neural Engine / Metal | Free / Premium | Free: solo el modelo cuantizado on-device. Premium: LoRA on-device o cloud con RAG |
 
 La app móvil es **React Native** (no PWA). El modelo on-device se **descarga** y corre
 nativamente en el **iPhone** vía **Neural Engine / Metal** (puente nativo, p. ej.
@@ -37,11 +37,11 @@ ExecuTorch / Core ML / MLC — no WebGPU en navegador).
 
 | Tier | LLM | Contexto | Archivos |
 |------|-----|----------|----------|
-| **Free** | Qwen3.5-4B **base** cuantizado (Q4), on-device — out of the box, **sin** fine-tuning; **sin** acceso al cloud | No | No |
-| **Premium** | On-device: Qwen3.5-4B **fine-tuneado** + cuantizado (Q4). Cloud: Qwen3.5-4B **base** en contenedor local (**sin** fine-tuning) + RAG | Sí | Sí (texto, PDF, imágenes, video) |
+| **Free** | Qwen3.5-4B **base** cuantizado (Q4), on-device. Siempre. Sin LoRA y sin cloud | No | Hasta 5, solo en el teléfono (no se suben) |
+| **Premium** | Interruptor: LoRA Q4 on-device, **o** contenedor base + RAG y memoria | Sí, solo en cloud | Hasta 5. On-device se quedan en el teléfono; en cloud van con el chat |
 
-> Ambos tiers usan la misma familia **Qwen3.5-4B**. Free = solo on-device base.
-> Premium = on-device fine-tuneado **más** cloud base (contenedor) con RAG, archivos y web dashboard.
+> **Free web** ≠ **Free móvil**. Web: contenedor base, sin RAG ni memoria.
+> Móvil: solo el Q4 base en el iPhone. Premium móvil elige uno de los dos modos.
 
 ## Modelo de Usuario
 
@@ -80,7 +80,7 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 │                    Puerto 8000 · JWT + Correlation ID                   │
 │                                                                         │
 │  POST /api/upload  → Kafka (async) → 202 + polling                      │
-│  POST /api/chat    → HTTP sync    → Agents (premium) / on-device (free) │
+│  POST /api/chat    → premium Agents+RAG / free web: base LLM            │
 │  POST /api/sessions/end → 202 (premium, cierra sesión de agentes)       │
 │  POST /api/finetune → 202 (trigger manual de LoRA)                      │
 │  GET  /tasks/:id   → MongoDB       → 200 + status                       │
@@ -146,8 +146,9 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 | Operación | Tipo | Flujo | Timeout |
 |-----------|------|-------|---------|
 | **Upload de archivo** | Async (Kafka) | Router → Kafka → 202 → Polling | 300s max |
-| **Chat / Query (Premium)** | Sync (HTTP) | Router → Agents `reason_graph` → RAG + LLM → 200 | 30s max |
-| **Chat / Query (Free)** | Sync | On-device Qwen3.5-4B **base** en React Native (Neural Engine / Metal, Frame 10); sin cloud, Agents ni RAG | ≤2s on-device |
+| **Chat / Query (Premium)** | Sync (HTTP) | Router → Agents `reason_graph` → RAG + LLM base → 200 | 30s max |
+| **Chat / Query (Free web)** | Sync (HTTP) | Router → LLM base (8003), sin Agents, sin RAG, sin memoria | 30s max |
+| **Chat / Query (Free móvil)** | Sync | On-device Qwen3.5-4B **base** Q4 (Frame 10). No llama al contenedor | ≤2s on-device |
 | **Session turn (aprendizaje)** | Async (Kafka) | Router publica `session.turn.completed` → Agents `learn_graph` (Ingestor → Evaluador) | — |
 | **Task status** | Sync (HTTP) | Router → MongoDB → 200 | 1s max |
 | **Fine-tuning** | Async | Router → Agents trigger manual → Fine-Tune `POST /train` → 202 → Polling | Horas |
@@ -258,13 +259,13 @@ GET  /health:      1000 req/min (monitoreo)
 
 - **Único modelo** para todo: **Qwen3.5-4B** (dense, nativo multimodal — **texto, imagen y
   video**; 262K de contexto; Apache 2.0; ~8 GB en BF16, ~2.5–3 GB en Q4).
-- **"Cloud" = contenedor Docker local** (LLM Service, puerto 8003): sirve **Qwen3.5-4B base**
-  (sin fine-tuning, precisión completa) solo para usuarios **Premium**, con RAG.
+- **"Cloud" = contenedor Docker local** (LLM Service, puerto 8003): **Qwen3.5-4B base**,
+  sin fine-tuning. Acepta `tier` **free** y **premium** con los mismos pesos.
+  **Free web:** ese modelo, sin RAG y sin memoria. **Premium:** el mismo modelo con RAG.
 - **On-device (React Native / Neural Engine / Metal):**
-  - **Free:** Qwen3.5-4B **base** cuantizado (Q4) — out of the box, **sin** fine-tuning;
-    **sin** acceso al cloud.
-  - **Premium:** Qwen3.5-4B **fine-tuneado** + cuantizado (Q4) on-device, **y además**
-    acceso al cloud (contenedor base + RAG + archivos + web dashboard).
+  - **Free móvil:** Qwen3.5-4B **base** cuantizado (Q4). Siempre. Sin LoRA y sin cloud.
+  - **Premium:** interruptor. **On device** = LoRA Q4 de ese usuario (o el base Q4 si
+    aún no existe). **Digital Brain** = contenedor base + RAG y memoria.
 - **Inferencia multimodal**: el modelo procesa **texto, imagen y video** para responder.
 - Sustituye por completo a AWS Bedrock (Llama 3 8B) y a llama.rn (Llama 3.2 3B): **fuera de alcance**.
 
@@ -347,7 +348,7 @@ Dos grafos compilados:
 Tres agentes MCP (herramientas HTTP): **Ingestor**, **Razonador**, **Evaluador**.
 El Evaluador escribe feedback y arma el lote semanal; **no** lanza fine-tuning.
 El entrenamiento LoRA se dispara solo con `POST /api/finetune` (manual).
-Free tier no usa este bucle (sin archivos, sin contexto RAG).
+Free (web y móvil) no usa este bucle. Free web llama solo al LLM base, sin RAG.
 
 Los nodos llaman a RAG (8002), LLM (8003) y Fine-Tune (8004) por HTTP. No hay
 acceso directo al LLM (Qwen3.5-4B) ni a Chroma desde Agents Service.
@@ -383,7 +384,7 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 ### Decisiones de infraestructura
 
 - **Docker** para todos los servicios (incluido el contenedor Qwen3.5-4B)
-- **LLM "cloud" = contenedor local (base, sin fine-tuning)**; on-device Free = base cuantizado; on-device Premium = fine-tuneado cuantizado (React Native / Neural Engine / Metal)
+- **LLM "cloud" = contenedor local (base, sin fine-tuning)** para Free web (sin RAG) y Premium (con RAG). On-device Free = base cuantizado. On-device Premium = LoRA cuantizado
 - **Cada servicio** tiene su propio Dockerfile y se despliega independientemente
 - **Kafka**: Self-hosted en Docker (local) / AWS MSK (producción futura)
 - **ECS Fargate / AWS API Gateway**: producción futura; en el MVP se accede directo al API Router
@@ -401,7 +402,7 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 | RAG | LangChain, Chroma |
 | Agents / bucle simbiótico | LangGraph (orquestación) + MCP tool contracts; nodos HTTP hacia RAG/LLM/Fine-Tune |
 | Document Store | MongoDB (GridFS para binarios) — contenedor local |
-| LLM (inferencia) | Cloud: Qwen3.5-4B **base** (contenedor). On-device Free: base cuantizado. On-device Premium: fine-tuneado cuantizado |
+| LLM (inferencia) | Cloud base: Free web sin RAG; Premium con RAG. On-device Free: base Q4. On-device Premium: LoRA Q4 |
 | Web | React + Chart.js |
 | Móvil | React Native (iPhone) + Neural Engine / Metal |
 | Infra Local (MVP) | Docker Compose (todos los servicios + LLM) |
@@ -539,7 +540,7 @@ Cada paso indica qué se hará, cómo se ejecutará y para qué contribuye al lo
 
 3. **Almacén híbrido y RAG**: **MongoDB local** (GridFS) para binarios y registros, **Chroma** para embeddings 2048-dim + chunk_text. Embeddings **multimodales** con **Qwen3-VL-Embedding-2B**. LangChain para búsqueda Top-k y recuperación semántica (cross-modal).
 
-4. **LLM principal (contenedor local) + LLM on-device**: **Qwen3.5-4B base** servido en un **contenedor Docker local** para Premium (multimodal + RAG, **sin** fine-tuning). **Fine-tuning LoRA local** (PEFT/ms-swift) produce el build **Premium on-device**. Free: mismo Qwen3.5-4B **base** cuantizado en **React Native (iPhone)** vía **Neural Engine / Metal** (sin cloud). Latencia objetivo: ≤2s on-device (>18 tok/s).
+4. **LLM principal (contenedor local) + LLM on-device**: el contenedor sirve **Qwen3.5-4B base** (sin fine-tuning) a **Free web** (sin RAG ni memoria) y a **Premium** (con RAG). **Free móvil** usa ese mismo modelo **base cuantizado (Q4)** en **React Native (iPhone)**, sin cloud. El LoRA local alimenta solo el modo on-device de Premium. Latencia on-device: ≤2s (>18 tok/s).
 
 5. **Bucle de aprendizaje simbiótico**: Agents Service (puerto 8006) con LangGraph
    (`reason_graph` + `learn_graph`) y tres agentes MCP (Ingestor, Razonador, Evaluador).

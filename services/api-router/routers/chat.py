@@ -14,7 +14,7 @@ from typing import Annotated, Literal
 
 import httpx
 from auth import verify_token
-from brain_store import append_turns, chat_history, list_notes, touch_chat
+from brain_client import append_turns, chat_history, list_notes, touch_chat
 from config import get_settings
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from kafka_io import publish_session_turn_completed
@@ -223,7 +223,7 @@ async def chat(
                 "sources": sources,
             },
         )
-        await _name_chat(user_id, session_id, chat_request.message)
+        await _name_chat(user_id, session_id, chat_request.message, correlation_id)
         cards = _source_cards(sources, None, [])
         await _remember(
             user_id,
@@ -233,6 +233,7 @@ async def chat(
             cards,
             assumptions,
             [],
+            correlation_id,
         )
         log_with_correlation(correlation_id, "info", "Response: 200 OK (Razonador)")
         return ChatResponse(
@@ -321,7 +322,7 @@ async def chat(
                 "sources": sources,
             },
         )
-    await _name_chat(user_id, chat_request.session_id, chat_request.message)
+    await _name_chat(user_id, chat_request.session_id, chat_request.message, correlation_id)
     await _remember(
         user_id,
         chat_request.session_id,
@@ -330,6 +331,7 @@ async def chat(
         cards,
         [],
         attachments,
+        correlation_id,
     )
     log_with_correlation(correlation_id, "info", "LLM response received")
     log_with_correlation(correlation_id, "info", "Response: 200 OK")
@@ -423,10 +425,10 @@ async def _parse_via_etl(filename: str, data: bytes, *, correlation_id: str, etl
     return response.json().get("text") or ""
 
 
-async def _history(user_id: str, session_id: str | None) -> list[dict]:
+async def _history(user_id: str, session_id: str | None, correlation_id: str) -> list[dict]:
     if not session_id:
         return []
-    rows = await chat_history(user_id, session_id)
+    rows = await chat_history(user_id, session_id, correlation_id=correlation_id)
     return rows or []
 
 
@@ -451,11 +453,11 @@ def _with_history(history: list[dict], message: str) -> str:
     return f"{earlier}\n\nAnswer the user's question: {message}"
 
 
-async def _prompt_notes(user_id: str) -> list[dict[str, str]]:
+async def _prompt_notes(user_id: str, correlation_id: str) -> list[dict[str, str]]:
     today = date.today()
     start = (today - timedelta(days=7)).isoformat()
     end = (today + timedelta(days=14)).isoformat()
-    return await list_notes(user_id, start, end)
+    return await list_notes(user_id, start, end, correlation_id=correlation_id)
 
 
 def _prompt(
@@ -514,9 +516,11 @@ def _source_cards(
     ]
 
 
-async def _name_chat(user_id: str, session_id: str | None, message: str) -> None:
+async def _name_chat(
+    user_id: str, session_id: str | None, message: str, correlation_id: str
+) -> None:
     if session_id:
-        await touch_chat(user_id, session_id, message)
+        await touch_chat(user_id, session_id, message, correlation_id=correlation_id)
 
 
 async def _remember(
@@ -527,6 +531,7 @@ async def _remember(
     cards: list[SourceCard],
     assumptions: list[str],
     attachments: list[tuple[str, str]],
+    correlation_id: str,
 ) -> None:
     if not session_id:
         return
@@ -548,4 +553,5 @@ async def _remember(
                 "assumptions": assumptions,
             },
         ],
+        correlation_id=correlation_id,
     )

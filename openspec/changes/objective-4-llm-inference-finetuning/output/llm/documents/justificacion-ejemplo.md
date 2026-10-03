@@ -6,12 +6,13 @@ laptop. AWS Bedrock, Llama y APIs gestionadas quedan fuera de alcance.
 
 ## El problema que resuelve
 
-1. **Inferencia Premium** — `POST /generate` y `POST /chat` (texto, imagen, video)
-   para el API Router. Timeout 30s. Respuesta `{response, tokens_used}`.
+1. **Inferencia web** — `POST /generate` y `POST /chat` (texto, imagen, video)
+   para Free y Premium. Los dos usan el mismo modelo base. Free web no trae
+   RAG ni memoria. Timeout 30s. Respuesta `{response, tokens_used}`.
 2. **Extracción de triples** — `POST /extract` para el ETL (Frame 2). El modelo
    base razona sobre el documento; no hace falta LoRA para extraer triples.
-3. **Free no entra aquí** — el resolver rechaza `tier=free` (400). Free corre
-   on-device (Frame 10).
+3. **Free del iPhone no entra aquí** — ese chat se queda en el Q4 base del
+   teléfono (Frame 10). Un `tier` distinto de `free` o `premium` responde 400.
 4. **Trazabilidad** — propaga `X-Request-ID`; no genera un UUID nuevo.
 
 El servicio **no** entrena, **no** aplica adapters LoRA y **no** llama a la nube.
@@ -26,7 +27,7 @@ El servicio **no** entrena, **no** aplica adapters LoRA y **no** llama a la nube
 | `exceptions.py` | `ModelUnavailableError`, `ModelNotFoundError`, `InferenceTimeoutError` |
 | `providers/base.py` | Protocol `LLMProvider` + `LLMResult` |
 | `providers/qwen_local.py` | Inferencia local (mock en CI; transformers si `QWEN_MOCK=false`) |
-| `providers/resolver.py` | Solo `premium` → `QwenLocalProvider` |
+| `providers/resolver.py` | `free` y `premium` → el mismo `QwenLocalProvider` base |
 | `routers/health.py` | `GET /health` público, `provider: qwen-local-container` |
 | `routers/generate.py` | `POST /generate` |
 | `routers/chat.py` | `POST /chat` multimodal + RAG `context` |
@@ -53,7 +54,7 @@ Health:
 Errores:
 
 ```
-2026-08-31T10:00:00 [def-456] WARNING llm-service: Invalid tier: free
+2026-08-31T10:00:00 [def-456] WARNING llm-service: Invalid tier: unknown
 2026-08-31T10:00:01 [ghi-789] ERROR llm-service: Qwen3.5-4B container/model error: Qwen3.5-4B container unavailable
 2026-08-31T10:00:01 [jkl-012] ERROR llm-service: Qwen3.5-4B inference timeout
 ```
@@ -62,7 +63,7 @@ Errores:
 
 | Pattern | Where | Purpose |
 |---------|-------|---------|
-| Strategy | `get_provider(tier)` | Premium = contenedor local; Free se rechaza |
+| Strategy | `get_provider(tier)` | Web free y Premium = el mismo contenedor base |
 | Adapter | `QwenLocalProvider` | HuggingFace / mock → Protocol `chat` / `complete` |
 | DIP | routers dependen de `LLMProvider`, no de transformers |
 
@@ -81,6 +82,6 @@ Errores:
 | Caso | Código |
 |------|--------|
 | Prompt / messages / user_id faltante | 400 |
-| Tier free / unknown | 400 |
+| Tier distinto de free o premium | 400 |
 | Contenedor o pesos ausentes | 500 |
 | Timeout de inferencia | 504 |

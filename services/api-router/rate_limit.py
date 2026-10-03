@@ -80,3 +80,11 @@ def rate_limit_analytics_ingest(user: Annotated[dict, Depends(require_premium)])
 def rate_limit_analytics_query(user: Annotated[dict, Depends(require_premium)]) -> dict:
     """Premium gate first, then 30 correlation reads per minute. Free stays 403."""
     return _enforce(user, "analytics-query", get_settings().RATE_LIMIT_ANALYTICS_QUERY)
+
+
+def rate_limit_model_metadata(user: Annotated[dict, Depends(verify_token)]) -> dict:
+    return _enforce(user, "model-metadata", get_settings().RATE_LIMIT_MODEL_METADATA)
+
+
+def rate_limit_model_file(user: Annotated[dict, Depends(verify_token)]) -> dict:
+    return _enforce(user, "model-file", get_settings().RATE_LIMIT_MODEL_FILE)

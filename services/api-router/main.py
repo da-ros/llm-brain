@@ -10,7 +10,6 @@ import uuid
 from contextlib import asynccontextmanager
 
 import accounts
-import brain_store
 import db
 import kafka_io
 from config import get_settings
@@ -27,6 +26,7 @@ from routers import (
     finetune,
     health,
     learning,
+    models,
     sessions,
     shield,
     simulate,
@@ -42,7 +42,6 @@ async def lifespan(app: FastAPI):
     await db.connect()
     await db.ensure_indexes()
     await accounts.ensure_indexes()
-    await brain_store.ensure_indexes()
     if settings.KAFKA_ENABLED:
         kafka_io.start_consumer_thread()
     else:
@@ -92,6 +91,7 @@ def create_app() -> FastAPI:
     application.include_router(sessions.router)
     application.include_router(finetune.router)
     application.include_router(learning.router)
+    application.include_router(models.router)
     application.include_router(simulate.router)
     application.include_router(shield.router)
     application.include_router(analytics.router)

@@ -1,7 +1,7 @@
 """LLM Provider resolver.
 
-Backend serves premium only via the local Qwen3.5-4B container.
-Free tier is on-device (Frame 10), not this service.
+The container serves base Qwen3.5-4B for web free and for premium.
+Web free is this same model with no RAG. Phone free never calls here.
 """
 
 from __future__ import annotations
@@ -15,24 +15,26 @@ if TYPE_CHECKING:
     from providers.base import LLMProvider
 
 
+_CLOUD_TIERS = frozenset({"free", "premium"})
+
+
 def get_provider(tier: str = "premium") -> LLMProvider:
-    """Select the provider for this request.
+    """Select the base Qwen container for a web free or premium request.
 
     Args:
-        tier: Subscription tier. Only "premium" is served here.
+        tier: ``free`` or ``premium``. Both use the same base weights.
+            RAG and agents stay in the API Router, not in this model.
 
     Returns:
-        QwenLocalProvider for premium.
+        QwenLocalProvider for the base container.
 
     Raises:
-        ValueError: If the tier is not premium.
+        ValueError: If the tier is neither free nor premium.
     """
-    if tier != "premium":
+    if tier not in _CLOUD_TIERS:
         raise ValueError(
             f"Unsupported subscription tier: {tier}. "
-            "Backend only supports 'premium' tier. "
-            "Free tier uses on-device Qwen3.5-4B base quantized in React Native "
-            "(Neural Engine / Metal, Frame 10)."
+            "Backend supports 'free' and 'premium' on the base Qwen3.5-4B container."
         )
     settings = get_settings()
     return QwenLocalProvider(

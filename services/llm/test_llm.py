@@ -82,7 +82,7 @@ class TestProviderProtocol:
 
 
 class TestProviderResolver:
-    """G.2 — resolver selects local Qwen for premium; rejects free."""
+    """G.2 — resolver selects the same base Qwen for free and premium."""
 
     def test_premium_resolves_to_qwen_local(self):
         from providers.qwen_local import QwenLocalProvider
@@ -91,12 +91,16 @@ class TestProviderResolver:
         provider = get_provider("premium")
         assert isinstance(provider, QwenLocalProvider)
         assert provider.mock is True
+        assert provider.model_id == "qwen3.5-4b"
 
-    def test_free_tier_raises(self):
+    def test_free_resolves_to_same_base_model(self):
+        from providers.qwen_local import QwenLocalProvider
         from providers.resolver import get_provider
 
-        with pytest.raises(ValueError, match="Unsupported subscription tier"):
-            get_provider("free")
+        provider = get_provider("free")
+        assert isinstance(provider, QwenLocalProvider)
+        assert provider.model_id == "qwen3.5-4b"
+        assert provider.adapter_path is None
 
     def test_unknown_tier_raises(self):
         from providers.resolver import get_provider
@@ -158,7 +162,7 @@ class TestGenerateEndpoint:
         response = client.post("/generate", json={"prompt": "   ", "user_id": "u1"})
         assert response.status_code == 400
 
-    def test_generate_free_tier_returns_400(self):
+    def test_generate_free_tier_uses_base_model(self):
         from fastapi.testclient import TestClient
         from main import app
 
@@ -167,7 +171,11 @@ class TestGenerateEndpoint:
             "/generate",
             json={"prompt": "hello", "user_id": "u1", "tier": "free"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 200
+        data = response.json()
+        assert data["response"].startswith("[Qwen3.5-4B base]")
+        assert "hello" in data["response"]
+        assert data["tokens_used"] > 0
 
     def test_generate_timeout_returns_504(self):
         from fastapi.testclient import TestClient
@@ -234,7 +242,7 @@ class TestChatEndpoint:
         response = client.post("/chat", json={"user_id": "u1"})
         assert response.status_code == 400
 
-    def test_chat_free_tier_returns_400(self):
+    def test_chat_free_tier_uses_base_model(self):
         from fastapi.testclient import TestClient
         from main import app
 
@@ -247,7 +255,11 @@ class TestChatEndpoint:
                 "tier": "free",
             },
         )
-        assert response.status_code == 400
+        assert response.status_code == 200
+        data = response.json()
+        assert data["response"].startswith("[Qwen3.5-4B base]")
+        assert "hello" in data["response"]
+        assert data["tokens_used"] > 0
 
 
 class TestExtractEndpoint:
