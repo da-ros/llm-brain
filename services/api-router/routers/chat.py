@@ -177,8 +177,8 @@ async def chat(
     attachments = await _read_attachments(
         chat_request, correlation_id=correlation_id, etl_url=settings.ETL_SERVICE_URL
     )
-    history = await _history(user_id, chat_request.session_id)
-    notes = await _prompt_notes(user_id) if tier == "premium" else []
+    history = await _history(user_id, chat_request.session_id, correlation_id)
+    notes = await _prompt_notes(user_id, correlation_id) if tier == "premium" else []
     use_agents = tier == "premium" and settings.CHAT_VIA_AGENTS and not attachments and not notes
 
     if use_agents:
