@@ -10,7 +10,8 @@ Parsing is delegated to the ETL service (POST /parse); the router stays a gatewa
 import base64
 import contextlib
 from datetime import date, timedelta
-from typing import Annotated, Literal
+from pathlib import Path
+from typing import Annotated, Literal, NamedTuple
 
 import httpx
 from auth import verify_token
@@ -21,6 +22,18 @@ from kafka_io import publish_session_turn_completed
 from logging_setup import log_with_correlation
 from pydantic import BaseModel, Field
 from rate_limit import rate_limit_chat
+
+
+class ChatFile(NamedTuple):
+    """One attachment after ETL. visual is set when the model must see the bytes."""
+
+    name: str
+    text: str
+    visual: str | None
+    data: bytes
+
+
+_VIDEO_SUFFIXES = {".mp4", ".mov", ".webm", ".avi", ".mkv", ".mpeg", ".mpg"}
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -93,11 +106,15 @@ async def _llm_generate(
     tier: str,
     correlation_id: str,
     llm_url: str,
+    media: list[dict[str, str]] | None = None,
 ) -> str:
+    payload: dict = {"prompt": prompt, "user_id": user_id, "tier": tier}
+    if media:
+        payload["media"] = media
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             f"{llm_url}/generate",
-            json={"prompt": prompt, "user_id": user_id, "tier": tier},
+            json=payload,
             headers={"X-Request-ID": correlation_id},
         )
     if response.status_code != 200:
@@ -178,6 +195,9 @@ async def chat(
         chat_request, correlation_id=correlation_id, etl_url=settings.ETL_SERVICE_URL
     )
     history = await _history(user_id, chat_request.session_id, correlation_id)
+    # Premium sends a photo or clip only on the turn that includes it, so the
+    # next question can go back through the agents with the written conversation.
+    prior_media = [] if tier == "premium" else _history_media(history)
     notes = await _prompt_notes(user_id, correlation_id) if tier == "premium" else []
     use_agents = tier == "premium" and settings.CHAT_VIA_AGENTS and not attachments and not notes
 
@@ -281,6 +301,7 @@ async def chat(
         notes=notes,
         attachments=attachments,
         history=history,
+        replay_visual=bool(prior_media),
     )
 
     log_with_correlation(correlation_id, "info", "Calling LLM Service for response")
@@ -291,6 +312,7 @@ async def chat(
             tier=tier,
             correlation_id=correlation_id,
             llm_url=settings.LLM_SERVICE_URL,
+            media=_media(attachments, prior_media),
         )
     except httpx.TimeoutException as exc:
         log_with_correlation(correlation_id, "error", "LLM service timeout")
@@ -308,7 +330,7 @@ async def chat(
         ) from exc
 
     calendar_label = _calendar_label(notes)
-    cards = _source_cards(sources, calendar_label, [name for name, _text in attachments])
+    cards = _source_cards(sources, calendar_label, [item.name for item in attachments])
     if tier == "premium" and settings.CHAT_VIA_AGENTS:
         background_tasks.add_task(
             _publish_turn,
@@ -348,9 +370,50 @@ async def chat(
     )
 
 
+def _visual_kind(filename: str) -> str:
+    suffix = Path(filename or "").suffix.lower()
+    if suffix in _VIDEO_SUFFIXES:
+        return "video"
+    return "image"
+
+
+def _history_media(history: list[dict]) -> list[dict[str, str]]:
+    """Earlier photos and clips in this chat, so the next turn can show them again."""
+    parts: list[dict[str, str]] = []
+    for turn in history:
+        for item in turn.get("files") or []:
+            raw = item.get("content_base64") or ""
+            kind = item.get("kind")
+            if raw and kind in {"image", "video"}:
+                parts.append(
+                    {
+                        "kind": kind,
+                        "filename": item.get("name") or "",
+                        "content_base64": raw,
+                    }
+                )
+    return parts
+
+
+def _media(
+    attachments: list[ChatFile], prior: list[dict[str, str]] | None = None
+) -> list[dict[str, str]] | None:
+    parts = list(prior or [])
+    parts.extend(
+        {
+            "kind": item.visual or "",
+            "filename": item.name,
+            "content_base64": base64.b64encode(item.data).decode("ascii"),
+        }
+        for item in attachments
+        if item.visual and item.data
+    )
+    return parts or None
+
+
 async def _read_attachments(
     chat_request: ChatRequest, *, correlation_id: str, etl_url: str
-) -> list[tuple[str, str]]:
+) -> list[ChatFile]:
     items = list(chat_request.attachments)
     if chat_request.attachment_base64:
         items.append(
@@ -364,7 +427,7 @@ async def _read_attachments(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="You can attach up to five files for one question.",
         )
-    parsed: list[tuple[str, str]] = []
+    parsed: list[ChatFile] = []
     for item in items:
         parsed.append(
             await _decode_attachment(
@@ -379,7 +442,7 @@ async def _read_attachments(
 
 async def _decode_attachment(
     filename: str, content_base64: str, *, correlation_id: str, etl_url: str
-) -> tuple[str, str]:
+) -> ChatFile:
     name = (filename or "attachment").strip() or "attachment"
     try:
         data = base64.b64decode(content_base64, validate=True)
@@ -393,10 +456,18 @@ async def _decode_attachment(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Attachment is empty or larger than 8 MB",
         )
-    return name, await _parse_via_etl(name, data, correlation_id=correlation_id, etl_url=etl_url)
+    parsed = await _parse_via_etl(name, data, correlation_id=correlation_id, etl_url=etl_url)
+    if isinstance(parsed, str):
+        text, show_bytes = parsed, False
+    else:
+        text, show_bytes = parsed
+    visual = _visual_kind(name) if show_bytes else None
+    return ChatFile(name, text, visual, data if visual else b"")
 
 
-async def _parse_via_etl(filename: str, data: bytes, *, correlation_id: str, etl_url: str) -> str:
+async def _parse_via_etl(
+    filename: str, data: bytes, *, correlation_id: str, etl_url: str
+) -> tuple[str, bool]:
     """Parse one attachment through the ETL service (POST /parse).
 
     The router stays a gateway: text in, text out. Nothing is stored here.
@@ -407,7 +478,10 @@ async def _parse_via_etl(filename: str, data: bytes, *, correlation_id: str, etl
                 f"{etl_url}/parse",
                 content=data,
                 params={"filename": filename},
-                headers={"X-Request-ID": correlation_id},
+                headers={
+                    "X-Request-ID": correlation_id,
+                    "Content-Type": "application/octet-stream",
+                },
             )
     except httpx.HTTPError as exc:
         raise HTTPException(
@@ -422,7 +496,8 @@ async def _parse_via_etl(filename: str, data: bytes, *, correlation_id: str, etl
         with contextlib.suppress(ValueError):
             detail = response.json().get("detail") or detail
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
-    return response.json().get("text") or ""
+    body = response.json()
+    return body.get("text") or "", bool(body.get("show_bytes"))
 
 
 async def _history(user_id: str, session_id: str | None, correlation_id: str) -> list[dict]:
@@ -432,7 +507,7 @@ async def _history(user_id: str, session_id: str | None, correlation_id: str) ->
     return rows or []
 
 
-def _history_text(history: list[dict]) -> str:
+def _history_text(history: list[dict], *, replay_visual: bool = False) -> str:
     if not history:
         return ""
     parts: list[str] = []
@@ -441,6 +516,13 @@ def _history_text(history: list[dict]) -> str:
         parts.append(f"{speaker}: {turn.get('text') or ''}")
         for item in turn.get("files") or []:
             name = (item.get("name") or "attachment").strip() or "attachment"
+            kind = item.get("kind")
+            if replay_visual and item.get("content_base64") and kind in {"image", "video"}:
+                parts.append(
+                    f"Attached {kind} {name} is included for you to see. "
+                    "It is not saved to memory."
+                )
+                continue
             body = (item.get("text") or "").strip() or "No text could be extracted."
             parts.append(f"Attached file {name} (not saved to memory):\n{body}")
     return "Earlier in this chat:\n\n" + "\n\n".join(parts)
@@ -466,11 +548,12 @@ def _prompt(
     context: str,
     context_used: bool,
     notes: list[dict[str, str]],
-    attachments: list[tuple[str, str]],
+    attachments: list[ChatFile],
     history: list[dict],
+    replay_visual: bool = False,
 ) -> str:
     blocks: list[str] = []
-    earlier = _history_text(history)
+    earlier = _history_text(history, replay_visual=replay_visual)
     if earlier:
         blocks.append(earlier)
     if context_used:
@@ -478,9 +561,14 @@ def _prompt(
     if notes:
         lines = "\n".join(f"- {note['date']}: {note['note']}" for note in notes)
         blocks.append(f"Calendar notes (not documents):\n{lines}")
-    for attachment_name, attachment_text in attachments:
-        body = attachment_text.strip() or "No text could be extracted."
-        blocks.append(f"Attached file {attachment_name} (not saved to memory):\n{body}")
+    for item in attachments:
+        if item.visual and not item.text.strip():
+            blocks.append(
+                f"Attached {item.visual} {item.name} is included for you to see. It is not saved to memory."
+            )
+            continue
+        body = item.text.strip() or "No text could be extracted."
+        blocks.append(f"Attached file {item.name} (not saved to memory):\n{body}")
     if not blocks:
         return message
     return "\n\n".join(blocks) + f"\n\nAnswer the user's question: {message}"
@@ -523,6 +611,18 @@ async def _name_chat(
         await touch_chat(user_id, session_id, message, correlation_id=correlation_id)
 
 
+def _stored_file(item: ChatFile) -> dict:
+    """Keep the file on the turn so a later question can send the same bytes."""
+    row = {
+        "name": item.name,
+        "text": item.text or ("Shown to the model." if item.visual else ""),
+    }
+    if item.visual and item.data:
+        row["kind"] = item.visual
+        row["content_base64"] = base64.b64encode(item.data).decode("ascii")
+    return row
+
+
 async def _remember(
     user_id: str,
     session_id: str | None,
@@ -530,7 +630,7 @@ async def _remember(
     response_text: str,
     cards: list[SourceCard],
     assumptions: list[str],
-    attachments: list[tuple[str, str]],
+    attachments: list[ChatFile],
     correlation_id: str,
 ) -> None:
     if not session_id:
@@ -544,7 +644,7 @@ async def _remember(
                 "text": message,
                 "cards": [],
                 "assumptions": [],
-                "files": [{"name": name, "text": text} for name, text in attachments],
+                "files": [_stored_file(item) for item in attachments],
             },
             {
                 "role": "assistant",

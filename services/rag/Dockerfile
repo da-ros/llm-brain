@@ -2,8 +2,10 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
+# ffmpeg decodes a few frames. The embedding model only encodes images.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ffmpeg \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 

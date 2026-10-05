@@ -2,13 +2,16 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
+# ffmpeg lets the processor read a short clip. The vision encoder ships
+# inside the Qwen3.5-4B weights, which load when QWEN_MOCK=false.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ffmpeg \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-gpu.txt .
+RUN pip install --no-cache-dir -r requirements-gpu.txt
 
 COPY . .
 

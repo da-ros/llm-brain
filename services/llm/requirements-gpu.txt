@@ -1,6 +1,8 @@
-# Optional GPU / full-precision runtime. Not installed in CI.
-# Used when QWEN_MOCK=false inside the local Qwen3.5-4B container.
+# Real Qwen3.5-4B runtime. Not installed by CI (CI stays on the mock).
+# The vision encoder is inside this checkpoint. transformers 4.x cannot load it.
 -r requirements.txt
-transformers==4.46.0
-torch==2.4.0
-accelerate==0.34.0
+transformers==5.18.0
+torch==2.14.1
+torchvision==0.29.1
+Pillow==12.3.0
+accelerate==1.15.0

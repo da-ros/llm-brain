@@ -245,6 +245,33 @@ class TestLLMClient:
         assert kwargs["json"]["content"].startswith("Patient")
         assert kwargs["headers"]["X-Request-ID"] == "abc-123"
 
+    def test_describe_image_posts_the_raw_bytes(self):
+        import base64
+
+        from llm_client import LLMServiceClient
+
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {"response": "A red receipt on a table.", "tokens_used": 8}
+        client_cm = MagicMock()
+        client_cm.__enter__.return_value.post.return_value = response
+        with patch("llm_client.httpx.Client", return_value=client_cm):
+            text = LLMServiceClient(base_url="http://llm-service:8003").describe_media(
+                png,
+                kind="image",
+                filename="photo.jpg",
+                user_id="user1",
+                correlation_id="abc-123",
+            )
+        assert text == "A red receipt on a table."
+        args, kwargs = client_cm.__enter__.return_value.post.call_args
+        assert args[0] == "http://llm-service:8003/generate"
+        assert kwargs["json"]["media"][0]["kind"] == "image"
+        assert kwargs["json"]["media"][0]["filename"] == "photo.jpg"
+        assert base64.b64decode(kwargs["json"]["media"][0]["content_base64"]) == png
+        assert kwargs["headers"]["X-Request-ID"] == "abc-123"
+
     def test_extract_triples_timeout(self):
         import httpx
         from exceptions import LLMExtractionError
@@ -304,6 +331,146 @@ class TestPipeline:
         assert row["subject"] == "Patient"
         # user B path must not exist
         assert not (tmp_path / "triples" / "user-b").exists()
+
+    def test_image_with_ocr_text_is_extracted_without_a_description(self, tmp_path):
+        from pipeline import distill
+
+        source = tmp_path / "photo.png"
+        source.write_bytes(b"\x89PNG\r\n\x1a\nphoto")
+        extractor = FakeExtractor()
+
+        def describe_media(*_args, **_kwargs):
+            raise AssertionError("OCR text should not be sent for a description")
+
+        extractor.describe_media = describe_media
+        with patch("pipeline.load", return_value=[FakeDoc("Invoice 42")]):
+            distill(
+                str(source),
+                user_id="user-a",
+                document_id="doc-img",
+                mime_type="image/png",
+                llm_client=extractor,
+                output_dir=str(tmp_path / "triples"),
+            )
+        assert extractor.calls == ["Invoice 42"]
+
+    def test_image_without_ocr_is_described_then_extracted(self, tmp_path):
+        from exceptions import CorruptFileError
+        from pipeline import distill
+
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        source = tmp_path / "photo.png"
+        source.write_bytes(png)
+        extractor = FakeExtractor()
+        seen: dict = {}
+
+        def describe_media(payload, *, kind, filename="", user_id=None, correlation_id="no-id"):
+            seen["payload"] = payload
+            seen["kind"] = kind
+            seen["filename"] = filename
+            return "A red receipt on a wooden table."
+
+        extractor.describe_media = describe_media
+        with patch(
+            "pipeline.load",
+            side_effect=CorruptFileError("Loader returned no extractable content"),
+        ):
+            triples = distill(
+                str(source),
+                user_id="user-a",
+                document_id="doc-img",
+                mime_type="image/png",
+                llm_client=extractor,
+                output_dir=str(tmp_path / "triples"),
+            )
+        assert seen["payload"] == png
+        assert seen["kind"] == "image"
+        assert seen["filename"] == "photo.png"
+        assert extractor.calls == ["A red receipt on a wooden table."]
+        assert len(triples) == 2
+        out = tmp_path / "triples" / "user-a" / "doc-img.jsonl"
+        assert out.exists()
+
+    def test_video_without_text_is_described_then_extracted(self, tmp_path):
+        from exceptions import CorruptFileError
+        from pipeline import distill
+
+        clip = b"\x00\x00\x00\x18ftypmp42"
+        source = tmp_path / "clip.mov"
+        source.write_bytes(clip)
+        extractor = FakeExtractor()
+        seen: dict = {}
+
+        def describe_media(payload, *, kind, filename="", user_id=None, correlation_id="no-id"):
+            seen["payload"] = payload
+            seen["kind"] = kind
+            seen["filename"] = filename
+            return "A person sets a receipt on a table."
+
+        extractor.describe_media = describe_media
+        with patch(
+            "pipeline.load",
+            side_effect=CorruptFileError("Loader returned no extractable content"),
+        ):
+            triples = distill(
+                str(source),
+                user_id="user-a",
+                document_id="doc-clip",
+                mime_type="video/quicktime",
+                llm_client=extractor,
+                output_dir=str(tmp_path / "triples"),
+            )
+        assert seen == {
+            "payload": clip,
+            "kind": "video",
+            "filename": "clip.mov",
+        }
+        assert extractor.calls == ["A person sets a receipt on a table."]
+        assert len(triples) == 2
+
+    def test_video_with_transcript_is_extracted_without_a_description(self, tmp_path):
+        from pipeline import distill
+
+        source = tmp_path / "clip.mov"
+        source.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+        extractor = FakeExtractor()
+
+        def describe_media(*_args, **_kwargs):
+            raise AssertionError("A transcript should not be sent for a description")
+
+        extractor.describe_media = describe_media
+        with patch("pipeline.load", return_value=[FakeDoc("The speaker says invoice 42")]):
+            distill(
+                str(source),
+                user_id="user-a",
+                document_id="doc-clip",
+                mime_type="video/quicktime",
+                llm_client=extractor,
+                output_dir=str(tmp_path / "triples"),
+            )
+        assert extractor.calls == ["The speaker says invoice 42"]
+
+    def test_text_file_without_words_still_fails(self, tmp_path):
+        from exceptions import CorruptFileError
+        from pipeline import distill
+
+        source = tmp_path / "empty.txt"
+        source.write_text("   ", encoding="utf-8")
+        with (
+            patch(
+                "pipeline.load",
+                side_effect=CorruptFileError("Loader returned no extractable content"),
+            ),
+            pytest.raises(CorruptFileError),
+        ):
+            distill(
+                str(source),
+                user_id="user-a",
+                document_id="doc-empty",
+                mime_type="text/plain",
+                llm_client=FakeExtractor(),
+                write_output=False,
+            )
 
     def test_distill_missing_file(self, tmp_path):
         from pipeline import distill
@@ -542,6 +709,17 @@ class TestNewLoaderKinds:
         assert docs[0].page_content == "sheet"
 
 
+def _loader_of(text: str):
+    class _Loader:
+        def __init__(self, file_path: str) -> None:
+            self.file_path = file_path
+
+        def load(self):
+            return [FakeDoc(text)]
+
+    return _Loader
+
+
 class TestParseEndpoint:
     """POST /parse — ephemeral text extraction for chat attachments."""
 
@@ -567,24 +745,48 @@ class TestParseEndpoint:
         assert body["mime"] == "text/markdown"
         assert "hello markdown" in body["text"]
 
-    def test_image_is_out_of_scope(self):
+    def test_image_ocr_text_is_returned(self):
         from main import app
 
         png = b"\x89PNG\r\n\x1a\n" + b"0" * 16
-        with TestClient(app) as client:
+        with (
+            patch("main.select", return_value=_loader_of("Invoice 42")),
+            TestClient(app) as client,
+        ):
             response = client.post("/parse", params={"filename": "photo.png"}, content=png)
-        assert response.status_code == 422
-        assert "out of scope" in response.json()["detail"]
+        assert response.status_code == 200
+        body = response.json()
+        assert body["text"] == "Invoice 42"
+        assert body["show_bytes"] is False
 
-    def test_video_is_out_of_scope(self):
+    def test_image_without_text_asks_to_show_the_bytes(self):
         from main import app
 
-        with TestClient(app) as client:
-            response = client.post(
-                "/parse", params={"filename": "clip.mp4"}, content=b"\x00\x00\x00\x18ftypmp42"
-            )
-        assert response.status_code == 422
-        assert "out of scope" in response.json()["detail"]
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 16
+        with (
+            patch("main.select", return_value=_loader_of("")),
+            TestClient(app) as client,
+        ):
+            response = client.post("/parse", params={"filename": "photo.png"}, content=png)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["text"] == ""
+        assert body["mime"] == "image/png"
+        assert body["show_bytes"] is True
+
+    def test_short_video_without_text_asks_to_show_the_bytes(self):
+        from main import app
+
+        clip = b"\x00\x00\x00\x18ftypmp42"
+        with (
+            patch("main.select", return_value=_loader_of("")),
+            TestClient(app) as client,
+        ):
+            response = client.post("/parse", params={"filename": "clip.mp4"}, content=clip)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["mime"] == "video/mp4"
+        assert body["show_bytes"] is True
 
     def test_unsupported_type_is_422(self):
         from main import app

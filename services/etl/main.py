@@ -8,6 +8,7 @@ stored. Health stays 200 regardless of Kafka / distillation activity.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 from contextlib import asynccontextmanager
@@ -16,13 +17,13 @@ from pathlib import Path
 from base import documents_to_content, select, supported_types_message
 from config import get_settings
 from exceptions import CorruptFileError, LoaderError, UnsupportedFileTypeError
-from fastapi import Body, FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from logging_setup import correlation_id_var, log_with_correlation, logger
 
 # Whitelist suffix → MIME for everything /parse accepts. Detection here is
 # suffix-only on purpose: the endpoint is ephemeral (chat attachments always
 # arrive with the UI's extension list), and no request input may reach a Path.
-# Image/video suffixes are listed so the out-of-scope answer stays deterministic.
+# Image/video suffixes are listed so a photo or short clip is parsed, not rejected.
 _PARSE_SUFFIX_MIME = {
     ".pdf": "application/pdf",
     ".txt": "text/plain",
@@ -83,6 +84,37 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _load_attachment(file: bytes, suffix: str, mime: str, correlation_id: str) -> dict:
+    """Run the LangChain loader. Empty OCR on a photo or clip asks the caller to show the bytes."""
+    visual = mime.startswith(("image/", "video/"))
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / f"attachment{suffix or '.bin'}"
+        path.write_bytes(file)
+        try:
+            loader_cls = select(str(path), mime_type=mime)
+            documents = loader_cls(str(path)).load()
+            text = documents_to_content(documents)
+        except CorruptFileError as exc:
+            if not visual:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+                ) from exc
+            # OCR or the clip loader found no words. The caller still has
+            # the bytes and shows them to the LLM. This route does not.
+            return {"text": "", "mime": mime, "show_bytes": True}
+        except (UnsupportedFileTypeError, LoaderError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
+        except Exception as exc:  # surface any loader crash as a clean 422
+            log_with_correlation(correlation_id, "warning", f"POST /parse failed: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Could not read that file",
+            ) from exc
+        return {"text": text, "mime": mime, "show_bytes": False}
+
+
 def create_app() -> FastAPI:
     """Build the FastAPI application (used by tests and uvicorn)."""
     settings = get_settings()
@@ -103,12 +135,13 @@ def create_app() -> FastAPI:
         }
 
     @application.post("/parse")
-    def parse_attachment(request: Request, filename: str = "", file: bytes = Body(...)):
+    async def parse_attachment(request: Request, filename: str = ""):
         """Ephemeral parse for chat attachments: bytes in, text out. Nothing stored.
 
-        Declared as `def` on purpose — FastAPI runs sync endpoints in a
-        threadpool, so the LangChain loaders never block the event loop.
+        The body is the raw file, with or without a content type. Loaders run
+        in a worker thread so they do not block the event loop.
         """
+        file = await request.body()
         correlation_id = request.state.correlation_id
         if not file:
             raise HTTPException(
@@ -135,28 +168,7 @@ def create_app() -> FastAPI:
         log_with_correlation(
             correlation_id, "info", f"POST /parse filename={filename!r} mime={mime}"
         )
-        if mime.startswith(("image/", "video/")):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"{mime} attachments are out of scope in this iteration.",
-            )
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / f"attachment{suffix or '.bin'}"
-            path.write_bytes(file)
-            try:
-                loader_cls = select(str(path), mime_type=mime)
-                documents = loader_cls(str(path)).load()
-                return {"text": documents_to_content(documents), "mime": mime}
-            except (UnsupportedFileTypeError, CorruptFileError, LoaderError) as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-                ) from exc
-            except Exception as exc:  # surface any loader crash as a clean 422
-                log_with_correlation(correlation_id, "warning", f"POST /parse failed: {exc}")
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Could not read that file",
-                ) from exc
+        return await asyncio.to_thread(_load_attachment, file, suffix, mime, correlation_id)
 
     logger.info("ETL Service ready — port=%s llm=%s", settings.API_PORT, settings.LLM_SERVICE_URL)
     return application
