@@ -81,8 +81,8 @@ export function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: {paddingHorizontal: 22, paddingTop: 28, paddingBottom: 32, gap: 16},
-  brand: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 12},
+  content: {paddingHorizontal: 22, paddingTop: 12, paddingBottom: 32, gap: 16},
+  brand: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10},
   name: {fontSize: 28, fontWeight: '700'},
   tag: {fontSize: 13},
   pitch: {textAlign: 'center', fontSize: 16, lineHeight: 22},

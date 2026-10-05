@@ -6,6 +6,7 @@ require Pod::Executable.execute_command('node', ['-p',
   )', __dir__]).strip
 
 platform :ios, min_ios_version_supported
+project 'Encefalus.xcodeproj'
 prepare_react_native_project!
 
 linkage = ENV['USE_FRAMEWORKS']
@@ -31,5 +32,16 @@ target 'Encefalus' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+    # fmt 11 turns consteval on for this Apple Clang, then the compile fails.
+    # A compiler flag cannot override it: base.h defines the macro itself.
+    fmt_base = File.join(installer.sandbox.pod_dir('fmt'), 'include', 'fmt', 'base.h')
+    if File.exist?(fmt_base)
+      contents = File.read(fmt_base)
+      patched = contents.gsub(
+        /#elif defined\(__apple_build_version__\) && __apple_build_version__ < \d+L\n#  define FMT_USE_CONSTEVAL 0[^\n]*\n/,
+        "#elif defined(__apple_build_version__)\n#  define FMT_USE_CONSTEVAL 0  // consteval is broken in this Apple clang with fmt 11.\n"
+      )
+      File.write(fmt_base, patched) if patched != contents
+    end
   end
 end
