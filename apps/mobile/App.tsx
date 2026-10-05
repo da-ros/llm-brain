@@ -2,7 +2,7 @@ import {useEffect, useMemo} from 'react';
 import {useColorScheme, View} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 
 import {createBrain, type Brain} from './src/brain';
 import {AboutScreen, HelpScreen, SettingsScreen} from './src/screens/SettingsScreen';
@@ -30,20 +30,22 @@ function Gate() {
 
   return (
     <ThemeContext.Provider value={palette}>
-      {snapshot.token ? (
-        <Stack.Navigator initialRouteName="Chat" screenOptions={{headerShown: false, contentStyle: {backgroundColor: palette.bg}}}>
-          <Stack.Screen name="Chat" component={ChatScreen} />
-          <Stack.Screen name="Status" component={StatusScreen} />
-          <Stack.Screen name="Compare" component={CompareScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="Help" component={HelpScreen} />
-          <Stack.Screen name="About" component={AboutScreen} />
-        </Stack.Navigator>
-      ) : (
-        <Stack.Navigator screenOptions={{headerShown: false, contentStyle: {backgroundColor: palette.bg}}}>
-          <Stack.Screen name="Auth" component={AuthScreen} />
-        </Stack.Navigator>
-      )}
+      <SafeAreaView style={{flex: 1, backgroundColor: palette.bg}} edges={['top']}>
+        {snapshot.token ? (
+          <Stack.Navigator initialRouteName="Chat" screenOptions={{headerShown: false, contentStyle: {backgroundColor: palette.bg}}}>
+            <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen name="Status" component={StatusScreen} />
+            <Stack.Screen name="Compare" component={CompareScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Help" component={HelpScreen} />
+            <Stack.Screen name="About" component={AboutScreen} />
+          </Stack.Navigator>
+        ) : (
+          <Stack.Navigator screenOptions={{headerShown: false, contentStyle: {backgroundColor: palette.bg}}}>
+            <Stack.Screen name="Auth" component={AuthScreen} />
+          </Stack.Navigator>
+        )}
+      </SafeAreaView>
     </ThemeContext.Provider>
   );
 }
