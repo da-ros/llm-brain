@@ -334,6 +334,56 @@ class TestRAGService:
         results = await service.top_k_retrieval("diabetes", "user1", k=1)
         assert len(results) == 1
 
+    @pytest.mark.asyncio
+    async def test_undecodable_video_keeps_the_description_triples(self, tmp_path):
+        service, memory = _service()
+        service.documents.get_binary = AsyncMock(return_value=b"not-a-video")
+        path = tmp_path / "clip.jsonl"
+        path.write_text(
+            json.dumps({"subject": "Clip", "predicate": "shows", "object": "a receipt"}) + "\n",
+            encoding="utf-8",
+        )
+        with patch("embeddings.sample_video_frames", return_value=[]):
+            count = await service.ingest_triples(
+                "user1",
+                "doc1",
+                str(path),
+                gridfs_id="g1",
+                doc_type="video/mp4",
+            )
+        assert count == 1
+        assert [item["metadata"].get("modality") for item in memory.items] == ["text"]
+
+    @pytest.mark.asyncio
+    async def test_video_ingest_stores_the_averaged_frame_vector(self, tmp_path):
+        from embeddings import _average_vectors
+
+        service, memory = _service()
+        service.documents.get_binary = AsyncMock(return_value=b"mp4")
+        path = tmp_path / "clip.jsonl"
+        path.write_text(
+            json.dumps({"subject": "Clip", "predicate": "shows", "object": "a receipt"}) + "\n",
+            encoding="utf-8",
+        )
+        frames = [b"start", b"middle", b"end"]
+        with patch("embeddings.sample_video_frames", return_value=frames):
+            await service.ingest_triples(
+                "user1",
+                "doc1",
+                str(path),
+                gridfs_id="g1",
+                doc_type="video/mp4",
+            )
+        video_items = [item for item in memory.items if item["metadata"].get("modality") == "video"]
+        assert len(video_items) == 1
+        expected = _average_vectors([service.embedder.embed_image(frame) for frame in frames])
+        assert video_items[0]["vector"] == expected
+        results = await service.semantic_search("receipt", "user1", k=5)
+        shown = [
+            item["document"] for item in results if item["metadata"].get("modality") == "video"
+        ]
+        assert shown == ["Clip shows a receipt"]
+
 
 class TestRAGIntegration:
     @pytest.mark.asyncio
@@ -453,7 +503,8 @@ class TestEmbed:
                 json={"modality": "text", "text": "account suspended"},
             )
             image = client.post("/embed", json={"modality": "image", "content_base64": payload})
-            video = client.post("/embed", json={"modality": "video", "content_base64": payload})
+            with patch("embeddings.sample_video_frames", return_value=[b"frame-jpeg"]):
+                video = client.post("/embed", json={"modality": "video", "content_base64": payload})
             blank = client.post("/embed", json={"modality": "text", "text": "  "})
         assert text.status_code == 200
         assert image.status_code == 200
@@ -525,12 +576,54 @@ class TestEmbeddingsCoverage:
         vector = embedder.embed_image(b"fake image bytes")
         assert len(vector) == 2048
 
-    def test_mock_embedder_video(self):
+    def test_mock_embedder_video_averages_sampled_frames(self):
+        from embeddings import MockEmbedder, _average_vectors
+
+        embedder = MockEmbedder(dim=2048)
+        frames = [b"start", b"middle", b"end"]
+        with patch("embeddings.sample_video_frames", return_value=frames):
+            vector = embedder.embed_video(b"fake video bytes")
+        expected = _average_vectors([embedder.embed_image(frame) for frame in frames])
+        assert vector == expected
+
+    def test_mock_embedder_video_without_frames_is_none(self):
         from embeddings import MockEmbedder
 
         embedder = MockEmbedder(dim=2048)
-        vector = embedder.embed_video(b"fake video bytes")
-        assert len(vector) == 2048
+        with patch("embeddings.sample_video_frames", return_value=[]):
+            assert embedder.embed_video(b"fake video bytes") is None
+
+    def test_timestamps_are_start_middle_and_end(self):
+        from embeddings import _timestamps
+
+        assert _timestamps(None) == [0.0]
+        assert _timestamps(10.0) == [0.0, 5.0, 9.95]
+
+    def test_sample_reads_start_middle_and_end_frames(self):
+        from embeddings import sample_video_frames
+
+        def fake_run(args, **_kwargs):
+            result = MagicMock()
+            result.returncode = 0
+            if args[0] == "ffprobe":
+                result.stdout = "10\n"
+                return result
+            stamp = args[args.index("-ss") + 1]
+            result.stdout = f"jpeg-{stamp}".encode()
+            return result
+
+        with (
+            patch("embeddings.shutil.which", return_value="/usr/bin/ffmpeg"),
+            patch("embeddings.subprocess.run", side_effect=fake_run),
+        ):
+            frames = sample_video_frames(b"\x00\x00\x00\x18ftypmp42")
+        assert frames == [b"jpeg-0.000", b"jpeg-5.000", b"jpeg-9.950"]
+
+    def test_sample_without_a_decoder_is_empty(self):
+        from embeddings import sample_video_frames
+
+        with patch("embeddings.shutil.which", return_value=None):
+            assert sample_video_frames(b"\x00\x00\x00\x18ftypmp42") == []
 
     def test_create_embedder_mock(self):
         from embeddings import create_embedder

@@ -87,7 +87,10 @@ class RAGService:
         if modality == "image":
             return self.embedder.embed_image(payload)
         if modality == "video":
-            return self.embedder.embed_video(payload)
+            vector = self.embedder.embed_video(payload)
+            if not vector:
+                raise ValueError("video has no decodable frames")
+            return vector
         raise ValueError(f"unsupported modality: {modality}")
 
     def chunk_text(self, text: str) -> list[str]:
@@ -163,14 +166,21 @@ class RAGService:
                 )
                 ids.append(f"{user_id}_{doc_id}_{index}_chunk{chunk_index}")
 
+        binary_vector: list[float] | None = None
         if modality in {"image", "video"} and gridfs_id:
             payload = await self.documents.get_binary(gridfs_id, user_id)
-            if payload:
-                if modality == "image":
-                    vector = self.embedder.embed_image(payload)
-                else:
-                    vector = self.embedder.embed_video(payload)
-                chunks.append(f"{modality} binary gridfs_id={gridfs_id}")
+            if payload and modality == "image":
+                binary_vector = self.embedder.embed_image(payload)
+            elif payload and modality == "video":
+                binary_vector = self.embedder.embed_video(payload)
+                if binary_vector is None:
+                    log_with_correlation(
+                        correlation_id,
+                        "warning",
+                        "Video has no decodable frames; keeping the description triples only",
+                    )
+            if binary_vector is not None:
+                chunks.append("\n".join(texts))
                 metadatas.append(
                     {
                         "user_id": user_id,
@@ -183,12 +193,9 @@ class RAGService:
                     }
                 )
                 ids.append(f"{user_id}_{doc_id}_{modality}")
-                embeddings = [self.embed_text(chunk) for chunk in chunks[:-1]]
-                embeddings.append(vector)
-            else:
-                embeddings = [self.embed_text(chunk) for chunk in chunks]
-        else:
-            embeddings = [self.embed_text(chunk) for chunk in chunks]
+        embeddings = [self.embed_text(chunk) for chunk in chunks]
+        if binary_vector is not None:
+            embeddings[-1] = binary_vector
 
         log_with_correlation(
             correlation_id,

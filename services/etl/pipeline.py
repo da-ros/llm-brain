@@ -6,11 +6,67 @@ from pathlib import Path
 
 from base import documents_to_content, first_page, first_section, load, source_name
 from config import get_settings
-from exceptions import CorruptFileError, ETLError, FileTooLargeError, LoaderError
+from exceptions import (
+    CorruptFileError,
+    ETLError,
+    FileTooLargeError,
+    LLMExtractionError,
+    LoaderError,
+)
 from jsonl import write_triples
 from llm_client import LLMServiceClient, TripleExtractor
 from logging_setup import log_with_correlation
 from triples import Triple, triple_from_llm
+
+_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".bmp"}
+_VIDEO_SUFFIXES = {".mp4", ".mov", ".webm", ".avi", ".mkv", ".mpeg", ".mpg"}
+
+
+def _visual_kind(mime_type: str | None, file_path: str) -> str | None:
+    """image or video when the file is a photo or clip. None for documents."""
+    mime = (mime_type or "").split(";")[0].strip().lower()
+    suffix = Path(file_path).suffix.lower()
+    if mime.startswith("image/") or suffix in _IMAGE_SUFFIXES:
+        return "image"
+    if mime.startswith("video/") or suffix in _VIDEO_SUFFIXES:
+        return "video"
+    return None
+
+
+def _read_content(file_path: str, mime_type: str | None) -> tuple[list, str]:
+    """Return loader documents and their text. A photo or clip with no words yields empty text."""
+    try:
+        documents = load(file_path, mime_type=mime_type)
+        return documents, documents_to_content(documents)
+    except CorruptFileError:
+        if _visual_kind(mime_type, file_path):
+            return [], ""
+        raise
+
+
+def _description(
+    client: TripleExtractor,
+    payload: bytes,
+    *,
+    kind: str,
+    filename: str,
+    user_id: str,
+    correlation_id: str,
+) -> str:
+    """Ask the model what the photo or clip shows when no words were extracted."""
+    describe = getattr(client, "describe_media", None)
+    if describe is None:
+        describe = LLMServiceClient().describe_media
+    text = describe(
+        payload,
+        kind=kind,
+        filename=filename,
+        user_id=user_id,
+        correlation_id=correlation_id,
+    )
+    if not isinstance(text, str) or not text.strip():
+        raise LLMExtractionError("The model returned an empty description")
+    return text.strip()
 
 
 def distill(
@@ -27,8 +83,8 @@ def distill(
     """Load a document, ask the LLM Service to emit triples, optionally write JSONL.
 
     1. Select LangChain loader by MIME type
-    2. Load content (text / OCR / multimodal)
-    3. POST content to LLM Service (base Qwen3.5-4B)
+    2. Load content (text / OCR). A photo or clip with no words is described from its bytes.
+    3. POST that text to LLM Service (base Qwen3.5-4B) for triples
     4. Enrich metadata and write data/triples/{user_id}/{document_id}.jsonl
     """
     path = Path(file_path)
@@ -47,19 +103,33 @@ def distill(
     )
 
     try:
-        documents = load(str(path), mime_type=mime_type)
-        content = documents_to_content(documents)
+        documents, content = _read_content(str(path), mime_type)
     except ETLError:
         raise
     except FileNotFoundError:
         raise
     except Exception as exc:
         raise LoaderError(f"LangChain loader failed: {exc}") from exc
+    client = llm_client or LLMServiceClient()
+    visual = _visual_kind(mime_type, str(path))
+    if not content.strip() and visual:
+        log_with_correlation(
+            correlation_id,
+            "info",
+            f"No text extracted; asking the model to describe the {visual}",
+        )
+        content = _description(
+            client,
+            path.read_bytes(),
+            kind=visual,
+            filename=path.name,
+            user_id=user_id,
+            correlation_id=correlation_id,
+        )
     source_file = source_name(str(path), documents)
     page = first_page(documents)
     section = first_section(documents)
 
-    client = llm_client or LLMServiceClient()
     raw_triples = client.extract_triples(
         content,
         user_id=user_id,

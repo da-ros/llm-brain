@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import builtins
 import json
 import os
@@ -2406,6 +2407,154 @@ class TestBrain:
         ]
         assert cards[-1]["label"] == "plan.pdf"
         load.assert_called_once()
+
+    def test_image_without_ocr_is_sent_to_the_llm_as_bytes(self, client):
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        with (
+            patch(
+                "routers.chat._parse_via_etl",
+                new_callable=AsyncMock,
+                return_value=("", True),
+            ),
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            llm.return_value = "A photo of a receipt."
+            response = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={
+                    "message": "What is this?",
+                    "attachment_filename": "photo.png",
+                    "attachment_base64": base64.b64encode(png).decode("ascii"),
+                },
+            )
+        assert response.status_code == 200
+        media = llm.await_args.kwargs["media"]
+        assert media[0]["kind"] == "image"
+        assert media[0]["filename"] == "photo.png"
+        assert base64.b64decode(media[0]["content_base64"]) == png
+        assert "included for you to see" in llm.await_args.kwargs["prompt"]
+        assert "No text could be extracted" not in llm.await_args.kwargs["prompt"]
+
+    def test_short_video_without_text_is_sent_to_the_llm_as_bytes(self, client):
+        clip = b"\x00\x00\x00\x18ftypmp42"
+        with (
+            patch(
+                "routers.chat._parse_via_etl",
+                new_callable=AsyncMock,
+                return_value=("", True),
+            ),
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            llm.return_value = "A short clip."
+            response = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={
+                    "message": "What happens?",
+                    "attachment_filename": "clip.mp4",
+                    "attachment_base64": base64.b64encode(clip).decode("ascii"),
+                },
+            )
+        assert response.status_code == 200
+        media = llm.await_args.kwargs["media"]
+        assert media[0]["kind"] == "video"
+        assert media[0]["filename"] == "clip.mp4"
+        assert base64.b64decode(media[0]["content_base64"]) == clip
+
+    def test_follow_up_sends_the_earlier_image_again(self, client):
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        encoded = base64.b64encode(png).decode("ascii")
+        created = client.post("/api/chats", headers=auth_header(tier="free"))
+        chat_id = created.json()["id"]
+        with (
+            patch(
+                "routers.chat._parse_via_etl",
+                new_callable=AsyncMock,
+                return_value=("", True),
+            ),
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            llm.side_effect = ["A photo of a receipt.", "It is still the receipt."]
+            first = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={
+                    "message": "What is this?",
+                    "session_id": chat_id,
+                    "attachment_filename": "photo.jpg",
+                    "attachment_base64": encoded,
+                },
+            )
+            second = client.post(
+                "/api/chat",
+                headers=auth_header(tier="free"),
+                json={"message": "What color is it?", "session_id": chat_id},
+            )
+        assert first.status_code == 200
+        assert second.status_code == 200
+        second_media = llm.await_args_list[1].kwargs["media"]
+        assert second_media[0]["kind"] == "image"
+        assert second_media[0]["filename"] == "photo.jpg"
+        assert base64.b64decode(second_media[0]["content_base64"]) == png
+        prompt = llm.await_args_list[1].kwargs["prompt"]
+        assert "included for you to see" in prompt
+        assert "photo.jpg" in prompt
+        assert "What color is it?" in prompt
+        stored = client.get(f"/api/chats/{chat_id}/turns", headers=auth_header(tier="free"))
+        assert encoded not in stored.text
+        assert "content_base64" not in stored.text
+
+    def test_premium_follow_up_returns_to_agents_without_the_file(self, client):
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        encoded = base64.b64encode(png).decode("ascii")
+        created = client.post("/api/chats", headers=auth_header())
+        chat_id = created.json()["id"]
+        with (
+            patch(
+                "routers.chat._parse_via_etl",
+                new_callable=AsyncMock,
+                return_value=("", True),
+            ),
+            patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason,
+            patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
+        ):
+            llm.return_value = "A photo of a receipt."
+            reason.return_value = {
+                "response": "It is still the receipt.",
+                "assumptions": [],
+                "sources": [],
+                "tokens_used": 1,
+                "session_id": chat_id,
+            }
+            first = client.post(
+                "/api/chat",
+                headers=auth_header(),
+                json={
+                    "message": "What is this?",
+                    "session_id": chat_id,
+                    "attachment_filename": "clip.mov",
+                    "attachment_base64": encoded,
+                },
+            )
+            second = client.post(
+                "/api/chat",
+                headers=auth_header(),
+                json={"message": "What happens next?", "session_id": chat_id},
+            )
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert llm.await_count == 1
+        media = llm.await_args.kwargs["media"]
+        assert media[0]["kind"] == "video"
+        assert media[0]["filename"] == "clip.mov"
+        reason.assert_awaited()
+        message = reason.await_args.kwargs["message"]
+        assert "What happens next?" in message
+        assert "A photo of a receipt." in message
+        assert "clip.mov" in message
+        assert "included for you to see" not in message
+        assert encoded not in message
 
     def test_unsupported_attachment_is_422(self, client):
         from fastapi import HTTPException

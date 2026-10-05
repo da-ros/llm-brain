@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -33,6 +34,51 @@ class TestProviderProtocol:
 
         provider = QwenLocalProvider(mock=True)
         assert isinstance(provider, LLMProvider)
+
+    def test_real_visual_call_passes_the_file_bytes_to_the_model(self):
+        from providers.qwen_local import QwenLocalProvider
+
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        clip = b"\x00\x00\x00\x18ftypmp42"
+        seen: dict = {}
+
+        class _Inputs(dict):
+            def to(self, _device):
+                return self
+
+        class _Processor:
+            def apply_chat_template(self, messages, **_kwargs):
+                content = messages[0]["content"]
+                seen["image"] = Path(content[0]["image"]).read_bytes()
+                seen["video"] = Path(content[1]["video"]).read_bytes()
+                seen["image_suffix"] = Path(content[0]["image"]).suffix
+                seen["video_suffix"] = Path(content[1]["video"]).suffix
+                seen["prompt"] = content[2]["text"]
+                seen["thinking"] = _kwargs.get("enable_thinking")
+                return _Inputs(input_ids=[[1, 2, 3]])
+
+            def batch_decode(self, _ids, **_kwargs):
+                return ["A red receipt on a table."]
+
+        class _Model:
+            device = "cpu"
+
+            def generate(self, **_kwargs):
+                return [[1, 2, 3, 9]]
+
+        provider = QwenLocalProvider(mock=False)
+        with patch.object(provider, "_load_visual", return_value=(_Processor(), _Model())):
+            result = provider.complete(
+                "What is this?",
+                media=[("image", png, "photo.jpg"), ("video", clip, "clip.mov")],
+            )
+        assert result.text == "A red receipt on a table."
+        assert seen["image"] == png
+        assert seen["video"] == clip
+        assert seen["image_suffix"] == ".jpg"
+        assert seen["video_suffix"] == ".mov"
+        assert seen["prompt"] == "What is this?"
+        assert seen["thinking"] is False
 
     def test_complete_returns_tokens(self):
         from providers.qwen_local import QwenLocalProvider
@@ -161,6 +207,29 @@ class TestGenerateEndpoint:
         client = TestClient(app)
         response = client.post("/generate", json={"prompt": "   ", "user_id": "u1"})
         assert response.status_code == 400
+
+    def test_generate_image_bytes_are_shown_to_the_model(self):
+        import base64
+        import hashlib
+
+        from fastapi.testclient import TestClient
+        from main import app
+
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        client = TestClient(app)
+        response = client.post(
+            "/generate",
+            json={
+                "prompt": "What is this?",
+                "user_id": "u1",
+                "media": [
+                    {"kind": "image", "content_base64": base64.b64encode(png).decode("ascii")}
+                ],
+            },
+        )
+        assert response.status_code == 200
+        assert hashlib.sha256(png).hexdigest() in response.json()["response"]
+        assert "image sha256=" in response.json()["response"]
 
     def test_generate_free_tier_uses_base_model(self):
         from fastapi.testclient import TestClient
