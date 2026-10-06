@@ -28,7 +28,8 @@ La bienvenida muestra Encefalus, "AI-Augmented Brain", el lema, Sign in /
 Sign up, Continue, la tarjeta de privacidad y el pie Free / Premium. No hay
 Continue with Apple, Continue with Google, Forgot password, ni "or continue
 with". Esas piezas estaban en el dibujo y se quitaron. El compositor tiene
-adjuntar e imagen, y el campo "Ask anything...". No hay micrófono.
+un solo control de adjuntar y el campo "Ask anything...". No hay micrófono
+ni botón de imagen aparte: una imagen elegida con adjuntar se rechaza igual.
 
 Model & Device Status mide los bytes del paquete y de la caché contra 4.1 GB.
 No fija 2.8 GB ni 320 MB. Free vs Premium es la tabla de siete filas. Memory,

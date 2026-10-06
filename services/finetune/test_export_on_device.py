@@ -56,18 +56,21 @@ def test_missing_adapter_writes_nothing(tmp_path: Path):
     assert pack_ready(tmp_path / "base")
 
 
-def test_real_flag_does_not_touch_a_container_dir(tmp_path: Path):
-    from export_on_device import export_base
+def test_real_flag_does_not_touch_a_container_dir(tmp_path: Path, monkeypatch):
+    from export_on_device import export_base, pack_ready
 
     container = tmp_path / "llm-container"
     container.mkdir()
     marker = container / "weights.bin"
     marker.write_bytes(b"base-weights")
-    try:
-        export_base(tmp_path / "out", fixture=False)
-    except SystemExit as exc:
-        assert "LLM container" in str(exc)
-    else:
-        raise AssertionError("real export should stop")
+
+    def fake_fetch(dest):
+        assert "llm-container" not in dest.parts
+        dest.write_bytes(b"Q4-GGUF")
+
+    monkeypatch.setattr("export_on_device._fetch_base_gguf", fake_fetch)
+    manifest = export_base(tmp_path / "out", fixture=False)
+    assert manifest["filename"].endswith(".gguf")
+    assert pack_ready(tmp_path / "out" / "base")
     assert marker.read_bytes() == b"base-weights"
-    assert not (tmp_path / "out").exists()
+    assert not (container / "qwen3.5-4b-base-q4.gguf").exists()

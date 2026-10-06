@@ -65,6 +65,35 @@ async def list_chats(user_id: str, *, correlation_id: str = "no-id") -> list[dic
     return list(response.json().get("chats") or [])
 
 
+async def rename_chat(
+    user_id: str, chat_id: str, title: str, *, correlation_id: str = "no-id"
+) -> dict[str, Any] | None:
+    response = await _request(
+        "PATCH",
+        f"/chats/{chat_id}",
+        correlation_id=correlation_id,
+        params={"user_id": user_id},
+        json={"title": title},
+    )
+    if response.status_code == status.HTTP_404_NOT_FOUND:
+        return None
+    _raise_for_status(response)
+    return response.json()
+
+
+async def delete_chat(user_id: str, chat_id: str, *, correlation_id: str = "no-id") -> bool:
+    response = await _request(
+        "DELETE",
+        f"/chats/{chat_id}",
+        correlation_id=correlation_id,
+        params={"user_id": user_id},
+    )
+    if response.status_code == status.HTTP_404_NOT_FOUND:
+        return False
+    _raise_for_status(response)
+    return True
+
+
 async def create_chat(user_id: str, *, correlation_id: str = "no-id") -> dict[str, Any]:
     response = await _request(
         "POST", "/chats", correlation_id=correlation_id, params={"user_id": user_id}

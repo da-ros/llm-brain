@@ -1,8 +1,8 @@
-"""Build the Q4 packs the iPhone app downloads.
+"""Build the Q4 GGUF packs the iPhone app downloads.
 
-`--fixture` writes a small weight file and a true checksum. CI uses that.
-`--real` is the laptop step that quantizes Qwen3.5-4B. It does not copy
-anything into the LLM container.
+The phone runs them with llama.cpp on the GPU (Metal). `--fixture` writes a
+small weight file and a true checksum. CI uses that. `--real` downloads the
+published base Q4 GGUF. It does not copy anything into the LLM container.
 """
 
 from __future__ import annotations
@@ -11,7 +11,12 @@ import argparse
 import hashlib
 import json
 import sys
+import urllib.request
 from pathlib import Path
+
+BASE_GGUF_URL = (
+    "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"
+)
 
 BASE_ID = "qwen3.5-4b-base-q4"
 PREMIUM_ID = "qwen3.5-4b-finetuned-q4"
@@ -21,7 +26,9 @@ PARAMETERS = "4.0B"
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
-    digest.update(path.read_bytes())
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
     return digest.hexdigest()
 
 
@@ -47,7 +54,7 @@ def _write_pack(
     user_id: str | None = None,
 ) -> dict:
     directory.mkdir(parents=True, exist_ok=True)
-    filename = f"{pack_id}.pte"
+    filename = f"{pack_id}.gguf"
     weight = directory / filename
     weight.write_bytes(payload)
     manifest = {
@@ -66,9 +73,33 @@ def _write_pack(
     return manifest
 
 
+def _fetch_base_gguf(dest: Path) -> None:
+    """Stream the published Q4 GGUF. The caller chooses a path outside the LLM container."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    partial = dest.with_suffix(dest.suffix + ".partial")
+    urllib.request.urlretrieve(BASE_GGUF_URL, partial)
+    partial.replace(dest)
+
+
 def export_base(out_dir: Path, *, fixture: bool) -> dict:
-    payload = b"Q4-FIXTURE-BASE" if fixture else _real_base_bytes()
-    return _write_pack(out_dir / "base", pack_id=BASE_ID, tier="free", payload=payload)
+    if fixture:
+        return _write_pack(out_dir / "base", pack_id=BASE_ID, tier="free", payload=b"Q4-FIXTURE-BASE")
+    directory = out_dir / "base"
+    directory.mkdir(parents=True, exist_ok=True)
+    weight = directory / f"{BASE_ID}.gguf"
+    _fetch_base_gguf(weight)
+    manifest = {
+        "id": BASE_ID,
+        "family": FAMILY,
+        "tier": "free",
+        "quantization": "Q4",
+        "parameters": PARAMETERS,
+        "filename": weight.name,
+        "bytes": weight.stat().st_size,
+        "sha256": sha256_file(weight),
+    }
+    (directory / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return manifest
 
 
 def export_premium(out_dir: Path, user_id: str, adapter_dir: Path, *, fixture: bool) -> dict | None:
@@ -90,16 +121,9 @@ def _adapter_present(adapter_dir: Path) -> bool:
     return (adapter_dir / "adapter_config.json").is_file()
 
 
-def _real_base_bytes() -> bytes:
-    raise SystemExit(
-        "Real Q4 export of base Qwen3.5-4B runs on the laptop. "
-        "It must not write the LLM container weights. Use --fixture in CI."
-    )
-
-
 def _real_premium_bytes(adapter_dir: Path) -> bytes:
     raise SystemExit(
-        f"Real merge+Q4 reads the LoRA adapter at {adapter_dir} on the laptop. "
+        f"Real merge to GGUF reads the LoRA adapter at {adapter_dir} on the laptop. "
         "It must not write the LLM container weights. Use --fixture in CI."
     )
 

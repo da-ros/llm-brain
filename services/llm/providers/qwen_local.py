@@ -26,6 +26,53 @@ def _count_tokens(*parts: str) -> int:
     return max(1, total)
 
 
+_cpu_math_ready = False
+
+
+def _running_on_cpu() -> bool:
+    """True when this process has torch and no CUDA device."""
+    try:
+        import torch
+    except ImportError:
+        return False
+    return not torch.cuda.is_available()
+
+
+def _install_cpu_math() -> None:
+    """Run Qwen's matmul in float32.
+
+    The checkpoint stays bfloat16. Docker on Apple Silicon advertises a CPU
+    that raises SIGILL inside the bfloat16 and float16 GEMM kernels, which
+    kills the process before it can answer.
+    """
+    global _cpu_math_ready
+    if _cpu_math_ready or not _running_on_cpu():
+        return
+    import torch
+    from torch.nn import functional
+
+    matmul = torch.matmul
+
+    def _matmul(left, right, *args, **kwargs):
+        return matmul(left.float(), right.float(), *args, **kwargs)
+
+    torch.matmul = _matmul
+
+    def _linear(self, inputs):
+        bias = None if self.bias is None else self.bias.float()
+        return functional.linear(inputs.float(), self.weight.float(), bias)
+
+    torch.nn.Linear.forward = _linear
+    conv1d = functional.conv1d
+
+    def _conv1d(inputs, weight, bias=None, *args, **kwargs):
+        bias_fp = None if bias is None else bias.float()
+        return conv1d(inputs.float(), weight.float(), bias_fp, *args, **kwargs)
+
+    functional.conv1d = _conv1d
+    _cpu_math_ready = True
+
+
 def flatten_content(content: Any) -> str:
     """Flatten string or multimodal content parts into text."""
     if isinstance(content, str):
@@ -183,32 +230,36 @@ class QwenLocalProvider:
                 else:
                     content.append({"type": "image", "image": str(path)})
             content.append({"type": "text", "text": prompt})
-            messages = [{"role": "user", "content": content}]
-            try:
-                inputs = processor.apply_chat_template(
-                    messages,
-                    tokenize=True,
-                    add_generation_prompt=True,
-                    return_dict=True,
-                    return_tensors="pt",
-                    enable_thinking=False,
-                )
-                if hasattr(inputs, "to"):
-                    inputs = inputs.to(getattr(model, "device", "cpu"))
-                input_ids = inputs["input_ids"]
-                generated = model.generate(**inputs, max_new_tokens=256)
-                trimmed = [out[len(src) :] for src, out in zip(input_ids, generated, strict=True)]
-                text = processor.batch_decode(
-                    trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-                )[0]
-            except TimeoutError as exc:
-                raise InferenceTimeoutError("Qwen3.5-4B inference timed out") from exc
-            except FileNotFoundError as exc:
-                raise ModelNotFoundError(
-                    f"Qwen3.5-4B weights not found: {self.hf_model_id}"
-                ) from exc
-            except Exception as exc:
-                raise ModelUnavailableError(f"Qwen3.5-4B container unavailable: {exc}") from exc
+            return self._decode(processor, model, [{"role": "user", "content": content}], prompt)
+
+    def _decode(self, processor, model, messages: list[dict], prompt: str) -> LLMResult:
+        """Generate from chat messages already shaped for the processor."""
+        try:
+            inputs = processor.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_dict=True,
+                return_tensors="pt",
+                enable_thinking=False,
+            )
+            if hasattr(inputs, "to"):
+                inputs = inputs.to(getattr(model, "device", "cpu"))
+            input_ids = inputs["input_ids"]
+            # Each new token rewrites the 4B weights as float32. Keep the
+            # reply short enough to finish inside the inference timeout.
+            new_tokens = 64 if _running_on_cpu() else 256
+            generated = model.generate(**inputs, max_new_tokens=new_tokens)
+            trimmed = [out[len(src) :] for src, out in zip(input_ids, generated, strict=True)]
+            text = processor.batch_decode(
+                trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )[0]
+        except TimeoutError as exc:
+            raise InferenceTimeoutError("Qwen3.5-4B inference timed out") from exc
+        except FileNotFoundError as exc:
+            raise ModelNotFoundError(f"Qwen3.5-4B weights not found: {self.hf_model_id}") from exc
+        except Exception as exc:
+            raise ModelUnavailableError(f"Qwen3.5-4B container unavailable: {exc}") from exc
         return LLMResult(text=text.strip(), tokens_used=_count_tokens(prompt, text))
 
     def chat(self, messages: list[dict], context: str | None = None) -> LLMResult:
@@ -235,56 +286,34 @@ class QwenLocalProvider:
         return parse_triples_json(result.text), result.tokens_used
 
     def _generate(self, prompt: str) -> LLMResult:
-        """Run HuggingFace generate; raises domain errors on failure."""
-        tokenizer, model = self._load()
-        try:
-            inputs = tokenizer(prompt, return_tensors="pt")
-            outputs = model.generate(**inputs, max_new_tokens=256)
-            text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            tokens_used = (
-                int(outputs.shape[-1]) if hasattr(outputs, "shape") else _count_tokens(prompt, text)
-            )
-            return LLMResult(text=text, tokens_used=tokens_used)
-        except TimeoutError as exc:
-            raise InferenceTimeoutError("Qwen3.5-4B inference timed out") from exc
-        except FileNotFoundError as exc:
-            raise ModelNotFoundError(f"Qwen3.5-4B weights not found: {self.hf_model_id}") from exc
-        except Exception as exc:
-            raise ModelUnavailableError(f"Qwen3.5-4B container unavailable: {exc}") from exc
-
-    def _load(self):
-        if self._model is not None and self._tokenizer is not None:
-            return self._tokenizer, self._model
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-        except ImportError as exc:
-            raise ModelUnavailableError(
-                "transformers is required when QWEN_MOCK=false. "
-                "Install services/llm/requirements-gpu.txt"
-            ) from exc
-        try:
-            self._tokenizer = AutoTokenizer.from_pretrained(self.hf_model_id)
-            self._model = AutoModelForCausalLM.from_pretrained(self.hf_model_id)
-        except OSError as exc:
-            raise ModelNotFoundError(f"Qwen3.5-4B model not found: {self.hf_model_id}") from exc
-        except Exception as exc:
-            raise ModelUnavailableError(f"Qwen3.5-4B container unavailable: {exc}") from exc
-        return self._tokenizer, self._model
+        """Run text on the same bfloat16 checkpoint used for images and video."""
+        processor, model = self._load_visual()
+        messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
+        return self._decode(processor, model, messages, prompt)
 
     def _load_visual(self):
-        """Load the multimodal checkpoint. The text loader does not include the vision encoder."""
+        """Load Qwen3.5-4B once, in the checkpoint dtype, for text and media."""
         if self._visual_model is not None and self._processor is not None:
             return self._processor, self._visual_model
+        _install_cpu_math()
         try:
             from transformers import AutoProcessor, Qwen3_5ForConditionalGeneration
         except ImportError as exc:
             raise ModelUnavailableError(
-                "Vision inference needs transformers>=5.3, torch, torchvision, and Pillow. "
+                "Inference needs transformers>=5.3, torch, torchvision, and Pillow. "
                 "Install services/llm/requirements-gpu.txt"
             ) from exc
         try:
             self._processor = AutoProcessor.from_pretrained(self.hf_model_id)
-            self._visual_model = Qwen3_5ForConditionalGeneration.from_pretrained(self.hf_model_id)
+            # The files on disk are bfloat16 (~9GB). Loading them as float32
+            # needs about 18GB and gets the container killed.
+            load_kwargs: dict[str, Any] = {"dtype": "bfloat16", "low_cpu_mem_usage": True}
+            if _running_on_cpu():
+                load_kwargs["attn_implementation"] = "eager"
+            self._visual_model = Qwen3_5ForConditionalGeneration.from_pretrained(
+                self.hf_model_id,
+                **load_kwargs,
+            )
         except OSError as exc:
             raise ModelNotFoundError(f"Qwen3.5-4B model not found: {self.hf_model_id}") from exc
         except Exception as exc:

@@ -2044,6 +2044,21 @@ class TestBrain:
         assert listed.json()["chats"][0]["id"] == chat_id
         hidden = client.get("/api/chats", headers=auth_header("user2"))
         assert hidden.json()["chats"] == []
+        renamed = client.patch(
+            f"/api/chats/{chat_id}", headers=auth_header(), json={"title": "Morning"}
+        )
+        assert renamed.status_code == 200
+        assert renamed.json()["title"] == "Morning"
+        assert (
+            client.patch(
+                f"/api/chats/{chat_id}", headers=auth_header("user2"), json={"title": "Nope"}
+            ).status_code
+            == 404
+        )
+        assert client.delete(f"/api/chats/{chat_id}", headers=auth_header("user2")).status_code == 404
+        removed = client.delete(f"/api/chats/{chat_id}", headers=auth_header())
+        assert removed.status_code == 204
+        assert client.get("/api/chats", headers=auth_header()).json()["chats"] == []
 
     def test_turns_stay_on_the_chat(self, client):
         created = client.post("/api/chats", headers=auth_header())

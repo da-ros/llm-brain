@@ -56,9 +56,10 @@ Forgot password, or an "or continue with" divider.
 After sign-in the app SHALL open Local AI Chat. The title SHALL be
 "Local AI Chat". A control SHALL start a new empty thread. A menu SHALL
 open Model & Device Status, Free vs Premium, and Settings. Those three
-screens SHALL return to Local AI Chat. The composer SHALL show attach,
-image, and a field whose placeholder is "Ask anything...". It SHALL NOT
-show a microphone.
+screens SHALL return to Local AI Chat. The composer SHALL show one
+monochrome attach control and a field whose placeholder is
+"Ask anything...". It SHALL NOT show a microphone. The composer SHALL
+stay visible while the keyboard is open.
 
 #### Scenario: Menu reaches the wireframe screens
 

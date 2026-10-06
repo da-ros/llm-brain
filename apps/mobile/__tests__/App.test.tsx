@@ -31,6 +31,41 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+jest.mock('@react-native-community/blur', () => {
+  const ReactLib = require('react');
+  const {View} = require('react-native');
+  return {
+    BlurView: ({children, style}: {children?: React.ReactNode; style?: unknown}) =>
+      ReactLib.createElement(View, {style}, children),
+  };
+});
+
+// Lucide ships one component per icon. The test only needs them to render.
+jest.mock('lucide-react-native', () => {
+  const ReactLib = require('react');
+  const {View} = require('react-native');
+  const made = new Map<string, unknown>();
+  return new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === '__esModule') {
+          return true;
+        }
+        if (typeof prop !== 'string') {
+          return undefined;
+        }
+        if (!made.has(prop)) {
+          const Glyph = () => ReactLib.createElement(View, null);
+          Glyph.displayName = prop;
+          made.set(prop, Glyph);
+        }
+        return made.get(prop);
+      },
+    },
+  );
+});
+
 jest.mock('@react-navigation/native', () => {
   const nav = (global as typeof global & {__ENCEF_NAV?: NavState}).__ENCEF_NAV ?? {
     stack: [] as string[],
@@ -313,9 +348,11 @@ test('free chat uses the base pack, keeps five local files, and does not call cl
   });
   expect(collect(renderer)).toContain('On Device');
   expect(collect(renderer)).toContain('Runs completely on your iPhone. No cloud required.');
+  // The composer only offers the paperclip, so an image arrives through it.
   queue.push({filename: 'photo.png', mime: 'image/png', bytes: Uint8Array.from([1, 2, 3])});
+  expect(renderer.root.findAll(node => node.props?.accessibilityLabel === 'Add image')).toHaveLength(0);
   await act(async () => {
-    press(renderer, 'Add image');
+    press(renderer, 'Attach file');
   });
   expect(collect(renderer)).toContain('Images are not sent to the on-device model.');
   expect(paths(fetchImpl)).not.toContain('/api/upload');
@@ -584,7 +621,7 @@ test('reinstall swaps only when the checksum matches', async () => {
   expect(fileCall?.init?.headers).toEqual(
     expect.objectContaining({Authorization: 'Bearer tok', 'X-Request-ID': expect.any(String)}),
   );
-  expect(calls(harness.fetchImpl).every(call => call.url.startsWith('http://localhost:8000/api/'))).toBe(true);
+  expect(calls(harness.fetchImpl).every(call => call.url.startsWith(`${API_BASE_URL}/api/`))).toBe(true);
 });
 
 test('premium on device uses the LoRA pack and digital brain uses chat with RAG', async () => {

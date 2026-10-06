@@ -65,15 +65,18 @@ the specs quote is the copy on screen.
 | Screen | Who | What the person can do |
 | --- | --- | --- |
 | Auth | no token | Sign in (email, password). Sign up (name, email, password, plan free). No Apple, Google, or Forgot password. |
-| Local AI Chat | signed in | Transcript, new thread, menu, attach, image. Free pill is the label "On Device". Premium pill is the inference switch. |
+| Local AI Chat | signed in | Transcript, new thread, menu, attach. Free pill is the label "On Device". Premium pill is the inference switch. |
 | Model & Device Status | signed in | Measured model bytes, cache bytes, 4.1 GB budget, ready, offline, average short-reply time. Reinstall. Clear Cache. |
 | Free vs Premium | signed in | The seven-row table. Free can upgrade. Premium is told the other rows are the web app. |
 | Settings | signed in | Theme (System, Light, Dark). Keep data on device, which is the same Premium switch. Measured storage. Clear All Data. Help & FAQ. About v1.0.0. Sign out. |
 
 Help & FAQ and About are local screens. They do not call the router.
 
-The composer has attach, image, and the field "Ask anything...". There
-is no microphone. Attach and image add files, up to five on a question.
+The composer has one monochrome attach control and the field
+"Ask anything...". There is no microphone, and no separate image button:
+an image picked through attach is refused on device by the same rule.
+Attach adds files, up to five on a question. The composer stays above
+the keyboard while it is open.
 
 ### 3. One switch, two models for Premium
 

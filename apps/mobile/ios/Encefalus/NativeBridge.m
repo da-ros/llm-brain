@@ -1,17 +1,5 @@
 #import <React/RCTBridgeModule.h>
 
-@interface RCT_EXTERN_MODULE(OnDeviceLlm, NSObject)
-RCT_EXTERN_METHOD(load:(NSString *)path
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
-RCT_EXTERN_METHOD(generate:(NSString *)prompt
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
-RCT_EXTERN_METHOD(cancel)
-RCT_EXTERN_METHOD(stats:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
-@end
-
 @interface RCT_EXTERN_MODULE(EncefalusKeychain, NSObject)
 RCT_EXTERN_METHOD(get:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
@@ -33,6 +21,11 @@ RCT_EXTERN_METHOD(writePack:(NSString *)filename
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(remove:(NSString *)path
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(downloadPack:(NSString *)url
+                  filename:(NSString *)filename
+                  token:(NSString *)token
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 @end

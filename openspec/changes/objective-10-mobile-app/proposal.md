@@ -36,9 +36,9 @@ with Google, Forgot password, and the microphone on the composer.
 1. **Sign in / Sign up** — Encefalus, "AI-Augmented Brain", the line
    "Your memories. Sharper decisions. A more intentional you.", email and
    password, Continue, and the privacy card.
-2. **Local AI Chat** — mode pill, a local thread, composer with attach
-   and image, and, while on-device, the line "Runs completely on your
-   iPhone. No cloud required."
+2. **Local AI Chat** — mode pill, a local thread, composer with one
+   attach control, and, while on-device, the line "Runs completely on
+   your iPhone. No cloud required."
 3. **Model & Device Status** — "Qwen 3.5 4B", 4-bit files, cache, ready /
    offline / average response time, Reinstall Model, Clear Cache.
 4. **Free vs Premium** — the seven-row comparison and Upgrade to Premium.
