@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     KAFKA_CONSUMER_GROUP: str = "etl-service"
 
     LLM_SERVICE_URL: str = "http://localhost:8003"
-    LLM_TIMEOUT_SECONDS: float = 35.0
+    LLM_TIMEOUT_SECONDS: float = 600.0
 
     MAX_FILE_SIZE: int = 10 * 1024 * 1024
     TRIPLES_OUTPUT_DIR: str = "./data/triples"

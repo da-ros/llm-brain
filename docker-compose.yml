@@ -1,6 +1,8 @@
 services:
   api-router:
     build: ./services/api-router
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     environment:
@@ -12,7 +14,9 @@ services:
       - JWT_ALGORITHM=HS256
       - JWT_EXPIRATION_MINUTES=60
       - RAG_SERVICE_URL=http://rag-service:8002
-      - LLM_SERVICE_URL=http://llm-service:8003
+      - LLM_SERVICE_URL=http://host.docker.internal:8003
+      - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
+      - LLM_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
       - FINETUNE_SERVICE_URL=http://finetune-service:8004
       - ETL_SERVICE_URL=http://etl-service:8001
       - AGENTS_SERVICE_URL=http://agents-service:8006
@@ -47,21 +51,6 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  llm-service:
-    build: ./services/llm
-    ports:
-      - "8003:8003"
-    environment:
-      - QWEN_MODEL_ID=${QWEN_MODEL_ID:-qwen3.5-4b}
-      - QWEN_HF_MODEL_ID=${QWEN_HF_MODEL_ID:-Qwen/Qwen3.5-4B}
-      - QWEN_MOCK=${QWEN_MOCK:-true}
-      - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-30}
-      - HF_HOME=/app/data/huggingface
-      - HUGGINGFACE_HUB_CACHE=/app/data/huggingface/hub
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
-
   finetune-service:
     build: ./services/finetune
     ports:
@@ -81,6 +70,8 @@ services:
 
   etl-service:
     build: ./services/etl
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8001:8001"
     environment:
@@ -88,7 +79,9 @@ services:
       - MONGODB_DB=llm_brain
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_ENABLED=true
-      - LLM_SERVICE_URL=http://llm-service:8003
+      - LLM_SERVICE_URL=http://host.docker.internal:8003
+      - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
+      - LLM_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
       - TRIPLES_OUTPUT_DIR=/app/data/triples
       # cryptography's ARM assembly probes CPU features Docker advertises
       # but does not run on this Mac, and the process dies with SIGILL.
@@ -100,12 +93,12 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
-      llm-service:
-        condition: service_started
     restart: unless-stopped
 
   agents-service:
     build: ./services/agents
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8006:8006"
     environment:
@@ -114,7 +107,9 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_ENABLED=true
       - RAG_SERVICE_URL=http://rag-service:8002
-      - LLM_SERVICE_URL=http://llm-service:8003
+      - LLM_SERVICE_URL=http://host.docker.internal:8003
+      - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
+      - LLM_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
       - FINETUNE_SERVICE_URL=http://finetune-service:8004
       - SIMULATOR_SERVICE_URL=http://simulator-service:8007
       - SHIELD_SERVICE_URL=http://shield-service:8009
@@ -133,8 +128,6 @@ services:
         condition: service_healthy
       rag-service:
         condition: service_started
-      llm-service:
-        condition: service_started
       finetune-service:
         condition: service_started
       simulator-service:
@@ -147,13 +140,17 @@ services:
 
   simulator-service:
     build: ./services/simulator
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8007:8007"
     environment:
       - MONGODB_URI=mongodb://mongo:27017
       - MONGODB_DB=llm_brain
       - RAG_SERVICE_URL=http://rag-service:8002
-      - LLM_SERVICE_URL=http://llm-service:8003
+      - LLM_SERVICE_URL=http://host.docker.internal:8003
+      - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
+      - LLM_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
       - LLM_TEMPERATURE=0
       - DEFAULT_SLEEP_HOURS=7
       - DEFAULT_MEETING_HOURS=3
@@ -163,19 +160,21 @@ services:
         condition: service_healthy
       rag-service:
         condition: service_started
-      llm-service:
-        condition: service_started
     restart: unless-stopped
 
   shield-service:
     build: ./services/shield
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8009:8009"
     environment:
       - MONGODB_URI=mongodb://mongo:27017
       - MONGODB_DB=llm_brain
       - RAG_SERVICE_URL=http://rag-service:8002
-      - LLM_SERVICE_URL=http://llm-service:8003
+      - LLM_SERVICE_URL=http://host.docker.internal:8003
+      - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
+      - LLM_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
       - LLM_TEMPERATURE=0
       - SIMILARITY_THRESHOLD=0.80
       - MAX_UPLOAD_BYTES=20971520
@@ -187,19 +186,21 @@ services:
         condition: service_healthy
       rag-service:
         condition: service_started
-      llm-service:
-        condition: service_started
     restart: unless-stopped
 
   analytics-service:
     build: ./services/analytics
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8008:8008"
     environment:
       - MONGODB_URI=mongodb://mongo:27017
       - MONGODB_DB=llm_brain
       - RAG_SERVICE_URL=http://rag-service:8002
-      - LLM_SERVICE_URL=http://llm-service:8003
+      - LLM_SERVICE_URL=http://host.docker.internal:8003
+      - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
+      - LLM_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
       - ETL_SERVICE_URL=http://etl-service:8001
       - LLM_TEMPERATURE=0
     depends_on:
@@ -208,8 +209,6 @@ services:
       etl-service:
         condition: service_started
       rag-service:
-        condition: service_started
-      llm-service:
         condition: service_started
     restart: unless-stopped
 

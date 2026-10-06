@@ -27,13 +27,13 @@ class Settings(BaseSettings):
     ANALYTICS_PORT: int = 8008
 
     RAG_SERVICE_URL: str = "http://rag-service:8002"
-    LLM_SERVICE_URL: str = "http://llm-service:8003"
+    LLM_SERVICE_URL: str = "http://host.docker.internal:8003"
     ETL_SERVICE_URL: str = "http://etl-service:8001"
     LLM_TEMPERATURE: float = 0
     LLM_MODEL_ID: str = "Qwen3.5-4B"
 
     RAG_TIMEOUT_SECONDS: float = 10.0
-    LLM_TIMEOUT_SECONDS: float = 25.0
+    LLM_TIMEOUT_SECONDS: float = 600.0
     ETL_TIMEOUT_SECONDS: float = 30.0
 
     MONGODB_URI: str = "mongodb://localhost:27017"
