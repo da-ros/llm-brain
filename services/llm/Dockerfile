@@ -1,3 +1,4 @@
+# Linux GPU image. On this Mac the same app runs on the host so it can use Metal.
 FROM python:3.13-slim
 
 WORKDIR /app

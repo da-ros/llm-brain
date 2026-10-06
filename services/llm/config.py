@@ -1,21 +1,26 @@
 """LLM Service configuration.
 
-Local Qwen3.5-4B base container ("cloud" = this process). LoRA adapters are
-for the Premium on-device build (Frame 10), not loaded here.
+Qwen3.5-4B base runs in this process on the Mac (Metal), not in a container.
+LoRA adapters are for the Premium on-device build, not loaded here.
 """
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_HF_HOME = _REPO_ROOT / "data" / "huggingface"
 
 
 class Settings(BaseSettings):
     """Runtime settings for the LLM Service."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_REPO_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -30,7 +35,11 @@ class Settings(BaseSettings):
     QWEN_HF_MODEL_ID: str = "Qwen/Qwen3.5-4B"
     QWEN_ADAPTER_PATH: str | None = None
     QWEN_MOCK: bool = True
-    INFERENCE_TIMEOUT_SECONDS: float = 30.0
+    # auto uses Metal on this Mac, CUDA when present, and refuses CPU:
+    # the bfloat16 checkpoint crashes the Linux VM's CPU kernels.
+    QWEN_DEVICE: str = "auto"
+    HF_HOME: str = str(_HF_HOME)
+    INFERENCE_TIMEOUT_SECONDS: float = 600.0
 
 
 @lru_cache
@@ -44,4 +53,13 @@ def clear_settings_cache() -> None:
     get_settings.cache_clear()
 
 
+def export_hf_home() -> None:
+    """Point Hugging Face at the checkpoint already stored under data/."""
+    home = get_settings().HF_HOME
+    os.environ.setdefault("HF_HOME", home)
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(Path(home) / "hub"))
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
+
 settings = get_settings()
+export_hf_home()

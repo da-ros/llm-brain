@@ -166,7 +166,8 @@ class TestHealthEndpoint:
         data = response.json()
         assert data["status"] == "ok"
         assert data["service"] == "llm-service"
-        assert data["provider"] == "qwen-local-container"
+        assert data["provider"] == "qwen-local"
+        assert data["device"] == "auto"
         assert data["model"] == "qwen3.5-4b"
         assert "api_key" not in data
         assert "secret" not in data

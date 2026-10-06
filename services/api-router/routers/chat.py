@@ -111,7 +111,7 @@ async def _llm_generate(
     payload: dict = {"prompt": prompt, "user_id": user_id, "tier": tier}
     if media:
         payload["media"] = media
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=get_settings().INFERENCE_TIMEOUT_SECONDS) as client:
         response = await client.post(
             f"{llm_url}/generate",
             json=payload,
@@ -133,7 +133,7 @@ async def _agents_reason(
     correlation_id: str,
     agents_url: str,
 ) -> dict:
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=get_settings().INFERENCE_TIMEOUT_SECONDS) as client:
         response = await client.post(
             f"{agents_url}/reason",
             json={

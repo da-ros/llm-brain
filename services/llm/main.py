@@ -30,7 +30,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(
         title="LLM Service",
-        description="Local Qwen3.5-4B base inference (container) — web free, premium, and ETL",
+        description="Local Qwen3.5-4B base inference on Metal — web free, premium, and ETL",
         version=settings.SERVICE_VERSION,
     )
     application.middleware("http")(add_correlation_id)
@@ -39,7 +39,9 @@ def create_app() -> FastAPI:
     application.include_router(chat.router)
     application.include_router(extract.router)
     logger.info(
-        "LLM Service ready — provider=qwen-local-container model=%s", settings.QWEN_MODEL_ID
+        "LLM Service ready — provider=qwen-local model=%s device=%s",
+        settings.QWEN_MODEL_ID,
+        settings.QWEN_DEVICE,
     )
     return application
 
