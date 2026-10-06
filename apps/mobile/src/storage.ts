@@ -79,9 +79,13 @@ export class MemoryKeychain implements Keychain {
   }
 }
 
+export type DownloadedPack = {path: string; bytes: number; sha256: string};
+
 export interface PackFiles {
   write(filename: string, bytes: Uint8Array): Promise<string>;
   remove(path: string): Promise<void>;
+  /** Stream a pack to disk. The in-memory write path cannot hold a 2.7 GB GGUF. */
+  download?(url: string, filename: string, token: string | null): Promise<DownloadedPack>;
 }
 
 export class MemoryPackFiles implements PackFiles {

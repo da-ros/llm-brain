@@ -80,6 +80,44 @@ async def list_chats(user_id: str) -> list[dict[str, Any]]:
     return [_public_chat(row) for row in rows]
 
 
+async def rename_chat(user_id: str, chat_id: str, title: str) -> dict[str, Any] | None:
+    """Set an owned chat's title. None when the caller does not own it."""
+    cleaned = " ".join(title.split())[:80]
+    if not cleaned:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title is required")
+    if not await _owns_chat(user_id, chat_id):
+        return None
+    now = datetime.now(UTC)
+    database = _mongo()
+    if database is not None:
+        await database.chats.update_one(
+            {"_id": chat_id, "user_id": user_id},
+            {"$set": {"title": cleaned, "updated_at": now}},
+        )
+        row = await database.chats.find_one({"_id": chat_id, "user_id": user_id})
+        return _public_chat(row)
+    row = _chats[chat_id]
+    row["title"] = cleaned
+    row["updated_at"] = now
+    return _public_chat(row)
+
+
+async def delete_chat(user_id: str, chat_id: str) -> bool:
+    """Remove one owned chat and its turns. False when the caller does not own it."""
+    if not await _owns_chat(user_id, chat_id):
+        return False
+    database = _mongo()
+    if database is not None:
+        await database.chat_turns.delete_many({"user_id": user_id, "chat_id": chat_id})
+        await database.chats.delete_one({"_id": chat_id, "user_id": user_id})
+        return True
+    _chats.pop(chat_id, None)
+    _turns[:] = [
+        row for row in _turns if not (row["user_id"] == user_id and row["chat_id"] == chat_id)
+    ]
+    return True
+
+
 async def create_chat(user_id: str) -> dict[str, Any]:
     now = datetime.now(UTC)
     row = {
@@ -253,6 +291,25 @@ async def get_chats(user_id: str = Query(...)) -> dict[str, Any]:
 @router.post("/chats", status_code=status.HTTP_201_CREATED)
 async def post_chat(user_id: str = Query(...)) -> dict[str, Any]:
     return await create_chat(user_id)
+
+
+class RenameBody(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+
+
+@router.patch("/chats/{chat_id}")
+async def patch_chat(chat_id: str, body: RenameBody, user_id: str = Query(...)) -> dict[str, Any]:
+    renamed = await rename_chat(user_id, chat_id, body.title)
+    if renamed is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    return renamed
+
+
+@router.delete("/chats/{chat_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def remove_chat(chat_id: str, user_id: str = Query(...)) -> Response:
+    if not await delete_chat(user_id, chat_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/chats/{chat_id}/turns")

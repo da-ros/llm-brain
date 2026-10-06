@@ -1,5 +1,7 @@
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 
+import {Glass} from '../glass';
+import {typeScale as scale} from '../theme';
 import {PrimaryButton, ScreenHeader, useBrain, useSnapshot, useTheme} from '../ui';
 import {useNavigation} from '@react-navigation/native';
 
@@ -23,26 +25,26 @@ export function CompareScreen() {
   return (
     <ScrollView style={{backgroundColor: theme.bg}} contentContainerStyle={styles.content}>
       <ScreenHeader title="Free vs Premium" onBack={() => navigation.goBack()} />
-      <View style={[styles.hero, {backgroundColor: theme.card, borderColor: theme.border}]}>
+      <Glass radius={22} contentStyle={styles.hero}>
         <Text style={[styles.heroTitle, {color: theme.text}]}>Go further with Encefalus</Text>
         <Text style={[styles.heroBody, {color: theme.muted}]}>
           Keep using local AI, or upgrade to the full Digital Brain on the web.
         </Text>
-      </View>
-      <View style={[styles.table, {backgroundColor: theme.card, borderColor: theme.border}]}>
+      </Glass>
+      <Glass radius={22}>
         <View style={styles.headerRow}>
           <Text style={[styles.head, {color: theme.muted, flex: 1.4}]}>Feature</Text>
           <Text style={[styles.head, {color: theme.muted, flex: 1}]}>Free (Local AI)</Text>
           <Text style={[styles.head, {color: theme.muted, flex: 1}]}>Premium (Digital Brain)</Text>
         </View>
         {ROWS.map(row => (
-          <View key={row.feature} style={[styles.headerRow, {borderTopColor: theme.border, borderTopWidth: 1}]}>
+          <View key={row.feature} style={[styles.headerRow, {borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth}]}>
             <Text style={[styles.cell, {color: theme.text, flex: 1.4}]}>{row.feature}</Text>
             <Text style={[styles.cell, {color: row.free ? theme.green : theme.muted, flex: 1}]}>{row.free ? '✓' : '—'}</Text>
             <Text style={[styles.cell, {color: row.premium ? theme.green : theme.muted, flex: 1}]}>{row.premium ? '✓' : '—'}</Text>
           </View>
         ))}
-      </View>
+      </Glass>
       {premium ? (
         <Text style={[styles.note, {color: theme.text}]}>The Digital Brain is the web app.</Text>
       ) : snapshot.confirmUpgrade ? (
@@ -56,14 +58,13 @@ export function CompareScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: {padding: 16, gap: 14},
-  hero: {borderRadius: 16, borderWidth: 1, padding: 16, gap: 6},
-  heroTitle: {fontSize: 18, fontWeight: '700'},
-  heroBody: {fontSize: 14, lineHeight: 20},
-  table: {borderRadius: 16, borderWidth: 1, overflow: 'hidden'},
-  headerRow: {flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 10, gap: 6},
-  head: {fontSize: 11, fontWeight: '700'},
-  cell: {fontSize: 13},
-  note: {fontSize: 15, fontWeight: '600'},
-  footer: {textAlign: 'center', fontSize: 12},
+  content: {paddingHorizontal: 18, paddingTop: 4, paddingBottom: 28, gap: 14},
+  hero: {padding: 18, gap: 6},
+  heroTitle: {fontSize: scale.headline, fontWeight: '700'},
+  heroBody: {fontSize: scale.caption, lineHeight: 22},
+  headerRow: {flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 12, gap: 8},
+  head: {fontSize: 12, fontWeight: '700'},
+  cell: {fontSize: scale.caption},
+  note: {fontSize: scale.body, fontWeight: '600'},
+  footer: {textAlign: 'center', fontSize: scale.micro},
 });

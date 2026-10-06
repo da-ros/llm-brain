@@ -15,7 +15,7 @@
 
 ## 4. Local chat and the engine
 
-- [x] 4.1 Local AI Chat: title, menu to the three secondary screens, new empty thread, composer placeholder "Ask anything...", attach and image, no microphone. A question accepts at most five text or PDF files. Extracted text stays in the thread and is included in later on-device questions. A sixth file, an image, or a file with no text is refused on the phone. Persist threads in the sandbox keyed by user id. A second account does not see the first account's threads. (≤2h)
+- [x] 4.1 Local AI Chat: title, menu to the three secondary screens, new empty thread, composer placeholder "Ask anything...", one attach control, no microphone. A question accepts at most five text or PDF files. Extracted text stays in the thread and is included in later on-device questions. A sixth file, an image, or a file with no text is refused on the phone. Persist threads in the sandbox keyed by user id. A second account does not see the first account's threads. (≤2h)
 - [x] 4.2 Add `OnDeviceEngine` (`load`, `generate`, `cancel`, `stats`). Ship a fake engine for tests and a native iOS module (ExecuTorch with the Core ML / Metal delegate, or MLC on Metal behind the same interface). Free always loads the base Q4 pack, never a LoRA pack, shows "On Device" and "Runs completely on your iPhone. No cloud required.", and does not call `POST /api/chat`. The local prompt includes the thread's extracted file text. No installed base pack does not call `POST /api/chat`. Record elapsed time and output token count. (≤2h)
 
 ## 5. Model status and storage
@@ -31,7 +31,7 @@
 
 ## 7. Tests
 
-- [x] 7.1 App tests with the fake engine: no token shows auth; sign-up body is plan free; Apple, Google, and Forgot password are absent; the composer has no microphone; Free send uses the base pack and does not fetch `/api/chat` or `/api/upload`; five local files are included in the prompt and a sixth is refused; an image is refused on device; missing base pack does not fetch `/api/chat`; Free toggle stays on; Clear All Data does not call `DELETE /api/data`; Premium On device uses the LoRA pack; Premium Digital Brain send uses `use_rag: true` and chat attachments, not `/api/upload`; status shows the fake engine's average time. (≤2h)
+- [x] 7.1 App tests with the fake engine: no token shows auth; sign-up body is plan free; Apple, Google, and Forgot password are absent; the composer has no microphone; Free send uses the base pack and does not fetch `/api/chat` or `/api/upload`; five local files are included in the prompt and a sixth is refused; an image picked through attach is refused on device; missing base pack does not fetch `/api/chat`; Free toggle stays on; Clear All Data does not call `DELETE /api/data`; Premium On device uses the LoRA pack; Premium Digital Brain send uses `use_rag: true` and chat attachments, not `/api/upload`; status shows the fake engine's average time. (≤2h)
 - [x] 7.2 Device check, written into the export experiment note: on an iPhone with a real Q4 pack, a short reply finishes within 2 seconds and above 18 tokens per second. Jest does not claim that number. (≤2h)
 
 ## F. Documentation (output/)

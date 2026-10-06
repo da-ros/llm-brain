@@ -27,6 +27,7 @@ services:
       - KAFKA_TOPIC_SESSION_TURN=session.turn.completed
       - MAX_RETRIES=3
       - TASK_STATUS_TTL_DAYS=30
+      - ONDEVICE_MODEL_DIR=/app/data/on-device
     volumes:
       - ./data:/app/data
     depends_on:
@@ -55,6 +56,8 @@ services:
       - QWEN_HF_MODEL_ID=${QWEN_HF_MODEL_ID:-Qwen/Qwen3.5-4B}
       - QWEN_MOCK=${QWEN_MOCK:-true}
       - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-30}
+      - HF_HOME=/app/data/huggingface
+      - HUGGINGFACE_HUB_CACHE=/app/data/huggingface/hub
     volumes:
       - ./data:/app/data
     restart: unless-stopped
@@ -87,6 +90,9 @@ services:
       - KAFKA_ENABLED=true
       - LLM_SERVICE_URL=http://llm-service:8003
       - TRIPLES_OUTPUT_DIR=/app/data/triples
+      # cryptography's ARM assembly probes CPU features Docker advertises
+      # but does not run on this Mac, and the process dies with SIGILL.
+      - OPENSSL_armcap=0
     volumes:
       - ./data:/app/data
     depends_on:
@@ -224,6 +230,8 @@ services:
       - RAG_CHUNK_SIZE=1000
       - RAG_CHUNK_OVERLAP=200
       - FERNET_KEY=${FERNET_KEY:-JEWS9jt7GqTkkv1N8y-Kld5V8IeFZMw_UFFhn4h-xsU=}
+      # Same cryptography SIGILL workaround as etl-service.
+      - OPENSSL_armcap=0
     volumes:
       - ./data:/app/data
     depends_on:

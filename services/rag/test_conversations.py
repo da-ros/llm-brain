@@ -52,3 +52,24 @@ def test_chat_and_note_stay_with_the_owner():
     history = client.get(f"/chats/{chat_id}/history", params={"user_id": "user1"})
     assert history.json()["history"][0]["files"][0]["text"] == "clause 4"
     assert client.get(f"/chats/{chat_id}/turns", params={"user_id": "user2"}).status_code == 404
+
+    renamed = client.patch(
+        f"/chats/{chat_id}", params={"user_id": "user1"}, json={"title": "Morning"}
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "Morning"
+    assert client.get("/chats", params={"user_id": "user1"}).json()["chats"][0]["title"] == "Morning"
+    assert (
+        client.patch(
+            f"/chats/{chat_id}", params={"user_id": "user2"}, json={"title": "Nope"}
+        ).status_code
+        == 404
+    )
+    blank = client.patch(f"/chats/{chat_id}", params={"user_id": "user1"}, json={"title": " "})
+    assert blank.status_code == 400
+
+    assert client.delete(f"/chats/{chat_id}", params={"user_id": "user2"}).status_code == 404
+    removed = client.delete(f"/chats/{chat_id}", params={"user_id": "user1"})
+    assert removed.status_code == 204
+    assert client.get("/chats", params={"user_id": "user1"}).json()["chats"] == []
+    assert client.get(f"/chats/{chat_id}/turns", params={"user_id": "user1"}).status_code == 404

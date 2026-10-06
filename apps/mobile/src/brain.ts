@@ -306,16 +306,14 @@ export class Brain {
         this.commit();
         return;
       }
-      const bytes = await this.deps.api.file('/api/models/on-device/file');
-      if (checksum(bytes) !== meta.sha256.toLowerCase()) {
+      const pack = await this.fetchPack(meta);
+      if (!pack) {
         this.snapshot.basePack = previousBase;
         this.snapshot.loraPack = previousLora;
         this.snapshot.error = 'The download did not match its checksum. The installed pack was kept.';
         this.commit();
         return;
       }
-      const path = await this.deps.files.write(meta.filename, bytes);
-      const pack: Pack = {id: meta.id, path, bytes: bytes.byteLength, sha256: meta.sha256.toLowerCase()};
       if (this.snapshot.user?.plan === 'premium') {
         this.snapshot.loraPack = pack;
         if (this.snapshot.user) {
@@ -334,6 +332,28 @@ export class Brain {
       this.snapshot.loraPack = previousLora;
       this.fail(error, 'The download failed. The installed pack was kept.');
     }
+  }
+
+  private async fetchPack(meta: {id: string; filename: string; sha256: string}): Promise<Pack | null> {
+    const expected = meta.sha256.toLowerCase();
+    if (this.deps.files.download) {
+      const saved = await this.deps.files.download(
+        `${API_BASE_URL}/api/models/on-device/file`,
+        meta.filename,
+        this.snapshot.token,
+      );
+      if (saved.sha256.toLowerCase() !== expected) {
+        await this.deps.files.remove(saved.path);
+        return null;
+      }
+      return {id: meta.id, path: saved.path, bytes: saved.bytes, sha256: expected};
+    }
+    const bytes = await this.deps.api.file('/api/models/on-device/file');
+    if (checksum(bytes) !== expected) {
+      return null;
+    }
+    const path = await this.deps.files.write(meta.filename, bytes);
+    return {id: meta.id, path, bytes: bytes.byteLength, sha256: expected};
   }
 
   onDevice(): boolean {
@@ -572,7 +592,11 @@ function createStore(): Store {
 
 function createPackFiles(): PackFiles {
   const native = NativeModules.EncefalusSandbox as
-    | {writePack: (filename: string, base64: string) => Promise<string>; remove: (path: string) => Promise<boolean>}
+    | {
+        writePack: (filename: string, base64: string) => Promise<string>;
+        remove: (path: string) => Promise<boolean>;
+        downloadPack?: (url: string, filename: string, token: string) => Promise<{path: string; bytes: number; sha256: string}>;
+      }
     | undefined;
   if (!native?.writePack) {
     return new MemoryPackFiles();
@@ -584,6 +608,9 @@ function createPackFiles(): PackFiles {
     async remove(path: string) {
       await native.remove(path);
     },
+    download: native.downloadPack
+      ? (url, filename, token) => native.downloadPack!(url, filename, token ?? '')
+      : undefined,
   };
 }
 

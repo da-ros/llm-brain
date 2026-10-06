@@ -1,68 +1,9 @@
+import CryptoKit
 import Foundation
 import React
 import Security
 import UIKit
 import UniformTypeIdentifiers
-
-/// On-device Q4 runtime. ExecuTorch with the Core ML / Metal delegate is the
-/// shipping body of `generate`. MLC on Metal can fill the same method. This
-/// build validates the pack file and does not invent tokens or a latency.
-@objc(OnDeviceLlm)
-class OnDeviceLlm: NSObject {
-  private var loadedPath: String?
-  private var modelBytes: Int = 0
-
-  @objc static func requiresMainQueueSetup() -> Bool { false }
-
-  @objc func load(
-    _ path: String,
-    resolver resolve: @escaping RCTPromiseResolveBlock,
-    rejecter reject: @escaping RCTPromiseRejectBlock
-  ) {
-    guard FileManager.default.fileExists(atPath: path) else {
-      reject("not_ready", "On-device pack file is missing", nil)
-      return
-    }
-    let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
-    guard size > 0 else {
-      reject("not_ready", "On-device pack file is empty", nil)
-      return
-    }
-    loadedPath = path
-    modelBytes = size
-    resolve(["ready": true, "bytes": size])
-  }
-
-  @objc func generate(
-    _ prompt: String,
-    resolver resolve: @escaping RCTPromiseResolveBlock,
-    rejecter reject: @escaping RCTPromiseRejectBlock
-  ) {
-    guard loadedPath != nil else {
-      reject("not_ready", "Load a pack before generate", nil)
-      return
-    }
-    _ = prompt
-    reject(
-      "runtime_not_linked",
-      "ExecuTorch Core ML delegate is not linked in this build",
-      nil
-    )
-  }
-
-  @objc func cancel() {}
-
-  @objc func stats(
-    _ resolve: @escaping RCTPromiseResolveBlock,
-    rejecter reject: @escaping RCTPromiseRejectBlock
-  ) {
-    resolve([
-      "modelBytes": modelBytes,
-      "cacheBytes": 0,
-      "ready": loadedPath != nil,
-    ])
-  }
-}
 
 @objc(EncefalusKeychain)
 class EncefalusKeychain: NSObject {
@@ -185,6 +126,74 @@ class EncefalusSandbox: NSObject {
       try? FileManager.default.removeItem(atPath: path)
     }
     resolve(true)
+  }
+
+  /// Stream a GGUF to Documents/packs. A JS buffer cannot hold the Q4 file.
+  @objc func downloadPack(
+    _ urlString: String,
+    filename: String,
+    token: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard let url = URL(string: urlString), url.host?.isEmpty == false else {
+      reject("pack", "Pack URL was not valid", nil)
+      return
+    }
+    let safeName = (filename as NSString).lastPathComponent
+    guard !safeName.isEmpty, safeName != ".", safeName != ".." else {
+      reject("pack", "Pack filename was not valid", nil)
+      return
+    }
+    var request = URLRequest(url: url)
+    if !token.isEmpty {
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+    let config = URLSessionConfiguration.ephemeral
+    config.timeoutIntervalForRequest = 120
+    config.timeoutIntervalForResource = 6 * 60 * 60
+    let session = URLSession(configuration: config)
+    let task = session.downloadTask(with: request) { temp, response, error in
+      session.finishTasksAndInvalidate()
+      if let error {
+        reject("pack", "The download failed. The installed pack was kept.", error)
+        return
+      }
+      guard let http = response as? HTTPURLResponse, (200 ... 299).contains(http.statusCode), let temp else {
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        reject("pack", "The download failed (\(code)). The installed pack was kept.", nil)
+        return
+      }
+      do {
+        let digest = try Self.sha256File(temp)
+        let dir = self.documents().appendingPathComponent("packs", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dest = dir.appendingPathComponent(safeName)
+        if FileManager.default.fileExists(atPath: dest.path) {
+          try FileManager.default.removeItem(at: dest)
+        }
+        try FileManager.default.moveItem(at: temp, to: dest)
+        let size = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? NSNumber)?.intValue ?? 0
+        resolve(["path": dest.path, "bytes": size, "sha256": digest])
+      } catch {
+        reject("pack", "Unable to store the pack", error)
+      }
+    }
+    task.resume()
+  }
+
+  private static func sha256File(_ url: URL) throws -> String {
+    let handle = try FileHandle(forReadingFrom: url)
+    defer { try? handle.close() }
+    var hasher = SHA256()
+    while true {
+      let chunk = try handle.read(upToCount: 1024 * 1024) ?? Data()
+      if chunk.isEmpty {
+        break
+      }
+      hasher.update(data: chunk)
+    }
+    return hasher.finalize().map { String(format: "%02x", $0) }.joined()
   }
 }
 

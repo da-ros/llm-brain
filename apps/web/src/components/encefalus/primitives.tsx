@@ -7,14 +7,21 @@ export function PageHeader({
   title,
   description,
   action,
+  className,
 }: {
   eyebrow?: string;
   title: string;
   description: string;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-border px-5 py-5 sm:px-7">
+    <header
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-border px-5 py-5 sm:px-7",
+        className,
+      )}
+    >
       <div className="min-w-0">
         {eyebrow && (
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, CalendarDays, FileText, Paperclip, Plus, Sparkles } from "lucide-react";
+import { ArrowUp, CalendarDays, FileText, Menu, Paperclip, Plus, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Notice,
@@ -45,7 +45,6 @@ const ACCEPT = [
   ".html",
   ".htm",
   ".eml",
-  ".msg",
   ".png",
   ".jpg",
   ".jpeg",
@@ -86,6 +85,10 @@ export function BrainPage() {
   const premium = account?.plan === "premium";
   const skipLoad = useRef(new Set<string>());
   const [chats, setChats] = useState<ChatThread[]>([]);
+  const [openIds, setOpenIds] = useState<string[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [threads, setThreads] = useState<Record<string, Turn[]>>({});
   const [message, setMessage] = useState("");
@@ -95,8 +98,13 @@ export function BrainPage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState("");
+  const [noteSaved, setNoteSaved] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
 
+  const openChats = openIds
+    .map((id) => chats.find((chat) => chat.id === id))
+    .filter((chat): chat is ChatThread => Boolean(chat));
   const turns = activeId ? (threads[activeId] ?? []) : [];
   const latest = [...turns].reverse().find((turn) => turn.role === "assistant");
   const cards = latest?.cards ?? [];
@@ -115,13 +123,41 @@ export function BrainPage() {
     void loadTurns(activeId);
   }, [activeId]);
 
+  useEffect(() => {
+    const pane = threadRef.current;
+    if (!pane) return;
+    pane.scrollTop = pane.scrollHeight;
+  }, [turns.length, activeId]);
+
   async function loadChats() {
     const response = await fetch("/api/chats", { headers: authHeaders() });
     if (!response.ok) return;
     const body = await response.json();
     const rows = (body.chats ?? []) as ChatThread[];
     setChats(rows);
-    setActiveId((current) => current ?? rows[0]?.id ?? null);
+    setOpenIds((current) => {
+      const live = current.filter((id) => rows.some((row) => row.id === id));
+      if (live.length > 0) return live;
+      return rows[0] ? [rows[0].id] : [];
+    });
+    setActiveId((current) => {
+      if (current && rows.some((row) => row.id === current)) return current;
+      return rows[0]?.id ?? null;
+    });
+  }
+
+  function showChat(chatId: string) {
+    setOpenIds((current) => (current.includes(chatId) ? current : [...current, chatId]));
+    setActiveId(chatId);
+    setMenuOpen(false);
+  }
+
+  function closeTab(chatId: string) {
+    setOpenIds((current) => {
+      const rest = current.filter((id) => id !== chatId);
+      setActiveId((active) => (active === chatId ? (rest.at(-1) ?? null) : active));
+      return rest;
+    });
   }
 
   async function loadTurns(chatId: string) {
@@ -168,19 +204,71 @@ export function BrainPage() {
     }
     const chat = (await response.json()) as ChatThread;
     setChats((rows) => [chat, ...rows]);
-    setActiveId(chat.id);
     setThreads((current) => ({ ...current, [chat.id]: [] }));
+    showChat(chat.id);
+  }
+
+  async function deleteChat(chatId: string) {
+    setError("");
+    try {
+      const response = await fetch(`/api/chats/${chatId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!response.ok) {
+        setError(await readError(response));
+        return;
+      }
+    } catch {
+      setError("Brain is not reachable. Start the API router and sign in.");
+      return;
+    }
+    setChats((rows) => rows.filter((chat) => chat.id !== chatId));
+    setThreads((current) => {
+      const next = { ...current };
+      delete next[chatId];
+      return next;
+    });
+    closeTab(chatId);
+    setMenuOpen(false);
+  }
+
+  async function renameChat(chatId: string) {
+    const title = renameDraft.trim();
+    if (!title) return;
+    setError("");
+    try {
+      const response = await fetch(`/api/chats/${chatId}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({ title }),
+      });
+      if (!response.ok) {
+        setError(await readError(response));
+        return;
+      }
+      const chat = (await response.json()) as ChatThread;
+      setChats((rows) => rows.map((row) => (row.id === chatId ? { ...row, title: chat.title } : row)));
+      setRenamingId(null);
+    } catch {
+      setError("Brain is not reachable. Start the API router and sign in.");
+    }
   }
 
   async function saveNote(day: string, note: string) {
     setNotes((current) => ({ ...current, [day]: note }));
+    setNoteSaved(false);
     try {
       const response = await fetch(`/api/calendar/${day}`, {
         method: "PUT",
         headers: authHeaders(),
         body: JSON.stringify({ note }),
       });
-      if (!response.ok) setError(await readError(response));
+      if (!response.ok) {
+        setError(await readError(response));
+        return;
+      }
+      setNoteSaved(true);
     } catch {
       setError("Brain is not reachable. Start the API router and sign in.");
     }
@@ -204,7 +292,7 @@ export function BrainPage() {
         chatId = chat.id;
         skipLoad.current.add(chat.id);
         setChats((rows) => [chat, ...rows]);
-        setActiveId(chat.id);
+        showChat(chat.id);
       } catch {
         setError("Brain is not reachable. Start the API router and sign in.");
         setBusy(false);
@@ -276,32 +364,115 @@ export function BrainPage() {
   const cells = useMemo(() => monthCells(cursor), [cursor]);
 
   return (
-    <main className="min-h-svh">
+    <main className="flex h-[calc(100svh-3.5rem)] flex-col overflow-hidden lg:h-svh">
       <PageHeader
+        className="shrink-0"
         eyebrow="Personal cognitive workspace"
         title="Brain"
         description="Ask in a chat. Answers use your memory and calendar notes, and say where they came from."
         action={<StatusDot label="Personal Brain online" />}
       />
-      <div className="grid min-h-[calc(100svh-109px)] xl:grid-cols-[minmax(0,1fr)_310px]">
-        <section className="flex min-w-0 flex-col border-r border-border">
-          <div className="flex h-12 items-center gap-2 overflow-x-auto border-b border-border px-4">
-            {chats.map((chat) => (
-              <button
-                key={chat.id}
-                type="button"
-                onClick={() => setActiveId(chat.id)}
-                className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold ${chat.id === activeId ? "bg-card shadow-sm" : "text-muted-foreground"}`}
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_310px]">
+        <section className="flex min-h-0 min-w-0 flex-col border-r border-border">
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="List chats"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((open) => !open)}
               >
-                {chat.title}
-              </button>
-            ))}
-            <Button variant="outline" size="sm" onClick={() => void newChat()}>
+                <Menu />
+              </Button>
+              {menuOpen && (
+                <div className="absolute left-0 top-11 z-20 w-72 rounded-lg border border-border bg-card p-1 shadow-panel">
+                  {chats.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">No chats yet.</p>
+                  )}
+                  {chats.map((chat) => (
+                    <div key={chat.id} className="flex items-center gap-1">
+                      {renamingId === chat.id ? (
+                        <input
+                          value={renameDraft}
+                          autoFocus
+                          aria-label={`Rename ${chat.title}`}
+                          onChange={(event) => setRenameDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") void renameChat(chat.id);
+                            if (event.key === "Escape") setRenamingId(null);
+                          }}
+                          className="min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs outline-none"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => showChat(chat.id)}
+                          className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted"
+                        >
+                          {chat.title}
+                        </button>
+                      )}
+                      {renamingId !== chat.id && (
+                        <button
+                          type="button"
+                          aria-label={`Rename ${chat.title}`}
+                          className="shrink-0 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                          onClick={() => {
+                            setRenamingId(chat.id);
+                            setRenameDraft(chat.title);
+                          }}
+                        >
+                          Rename
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        aria-label={`Delete ${chat.title}`}
+                        className="shrink-0 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => void deleteChat(chat.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+              {openChats.map((chat) => (
+                <span
+                  key={chat.id}
+                  className={`flex shrink-0 items-center rounded-md ${chat.id === activeId ? "bg-card shadow-sm" : "text-muted-foreground"}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setActiveId(chat.id)}
+                    className="max-w-40 truncate px-3 py-1.5 text-xs font-semibold"
+                  >
+                    {chat.title}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Close ${chat.title}`}
+                    className="pr-2 text-xs text-muted-foreground"
+                    onClick={() => closeTab(chat.id)}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" className="shrink-0" onClick={() => void newChat()}>
               <Plus />
               New chat
             </Button>
           </div>
-          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:px-7">
+          <div
+            ref={threadRef}
+            className="min-h-0 flex-1 overflow-y-auto"
+          >
+          <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-8 sm:px-7">
             {turns.length === 0 && (
               <p className="text-sm leading-6 text-muted-foreground">
                 Start a chat. Attached files stay in this chat for later questions and are not saved
@@ -337,7 +508,10 @@ export function BrainPage() {
                 ),
               )}
             </div>
-            <div className="mt-auto pt-8">
+            </div>
+          </div>
+          <div className="shrink-0 border-t border-border bg-background px-4 py-3 sm:px-7">
+            <div className="mx-auto w-full max-w-3xl">
               {error && (
                 <div className="mb-3">
                   <Notice>{error}</Notice>
@@ -347,6 +521,12 @@ export function BrainPage() {
                 <textarea
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void send();
+                    }
+                  }}
                   placeholder="Ask your Brain…"
                   className="min-h-14 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-muted-foreground"
                 />
@@ -425,7 +605,7 @@ export function BrainPage() {
             </div>
           </div>
         </section>
-        <aside className="bg-card/45 p-5">
+        <aside className="min-h-0 overflow-y-auto bg-card/45 p-5">
           <h2 className="text-sm font-semibold">Context used</h2>
           <div className="mt-4 space-y-3">
             <Panel>
@@ -487,7 +667,10 @@ export function BrainPage() {
                     <button
                       key={day}
                       type="button"
-                      onClick={() => setSelected(day)}
+                      onClick={() => {
+                        setSelected(day);
+                        setNoteSaved(false);
+                      }}
                       className={`rounded py-1 text-xs ${day === selected ? "bg-primary text-primary-foreground" : notes[day] ? "bg-muted font-semibold" : ""}`}
                     >
                       {Number(day.slice(8))}
@@ -498,15 +681,27 @@ export function BrainPage() {
                 )}
               </div>
               {selected && (
-                <textarea
-                  value={notes[selected] ?? ""}
-                  onChange={(event) =>
-                    setNotes((current) => ({ ...current, [selected]: event.target.value }))
-                  }
-                  onBlur={(event) => void saveNote(selected, event.target.value)}
-                  placeholder="Note for this day"
-                  className="mt-3 min-h-16 w-full resize-none rounded-md border border-border bg-transparent p-2 text-xs outline-none"
-                />
+                <>
+                  <textarea
+                    value={notes[selected] ?? ""}
+                    onChange={(event) => {
+                      setNoteSaved(false);
+                      setNotes((current) => ({ ...current, [selected]: event.target.value }));
+                    }}
+                    placeholder="Note for this day"
+                    className="mt-3 min-h-16 w-full resize-none rounded-md border border-border bg-transparent p-2 text-xs outline-none"
+                  />
+                  <Button
+                    size="sm"
+                    className="mt-2 w-full"
+                    onClick={() => void saveNote(selected, notes[selected] ?? "")}
+                  >
+                    Save note
+                  </Button>
+                  {noteSaved && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">Saved for this day.</p>
+                  )}
+                </>
               )}
             </div>
           )}
