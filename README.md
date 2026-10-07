@@ -13,7 +13,7 @@
 Integrates PKM with fine-tuned LLMs, RAG, agentic AI coordinated via **MCP**, and explainable
 prompt engineering to help a user **remember, reason, and decide** over their personal data.
 
-Local MVP only: the "cloud" LLM is a **Docker container** serving **Qwen3.5-4B base**.
+Local MVP only: the "cloud" LLM is a **process on the Mac** (port 8003) serving **Qwen3.5-4B base**. It is not a Docker image.
 AWS (Bedrock, ECS, API Gateway) is future work.
 
 ## Modules (mapped to the thesis objectives)
@@ -23,7 +23,7 @@ AWS (Bedrock, ECS, API Gateway) is future work.
 | 1 | Architecture & repo (C4, MCP, CI, JWT, LLM protocol) | `services/api-router/`, `docs/architecture/` |
 | 2 | One-Tap Memory Distillation (ETL → JSON triples) | `services/etl/` |
 | 3 | Hybrid store + RAG (Mongo + Chroma + LangChain) | `services/rag/` |
-| 4 | LLM container (Qwen3.5-4B base) + local LoRA | `services/llm/`, `services/finetune/` |
+| 4 | LLM on the Mac (Qwen3.5-4B base) + local LoRA | `services/llm/`, `services/finetune/` |
 | 5 | Symbiotic Learning Loop (MCP: Ingestor/Razonador/Evaluador) | `services/agents/` |
 | 6 | Decision-Support Simulator (what-if) | `services/simulator/` |
 | 7 | Life Analytics (React + Chart.js) | `apps/web/` |
@@ -39,7 +39,7 @@ llm-brain/
 │  ├─ api-router/  # Gateway (JWT, Kafka, routing) — Frame 1.1
 │  ├─ etl/         # One-Tap Memory Distillation
 │  ├─ rag/         # LangChain + Chroma
-│  ├─ llm/         # Qwen3.5-4B base container (port 8003)
+│  ├─ llm/         # Qwen3.5-4B base, host process (port 8003)
 │  ├─ finetune/    # Local LoRA → Premium on-device
 │  ├─ agents/      # MCP Ingestor / Razonador / Evaluador
 │  ├─ simulator/   # Decision-Support Simulator
@@ -108,7 +108,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/). 
 ## Tech stack
 
 Python 3.13 · FastAPI · LangChain / LangGraph · React + Chart.js · React Native (iPhone) ·
-MongoDB (local) · Chroma (local, 2048-dim) · Qwen3.5-4B (local container + on-device Q4) ·
+MongoDB (local) · Chroma (local, 2048-dim) · Qwen3.5-4B (Mac process + on-device Q4) ·
 Docker Compose · GitHub Actions.
 
 **Auth:** JWT + bcrypt (register, login, `get_current_user`) with per-user data isolation.

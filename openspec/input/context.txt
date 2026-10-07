@@ -11,13 +11,16 @@ Modelo de negocio: plataforma **multi-usuario** con dos niveles de suscripción 
 Cada usuario se registra, inicia sesión y tiene su propia suscripción. Los datos están aislados por usuario.
 
 > **Estado actual: SOLO DESARROLLO LOCAL.** No se despliega en la nube todavía.
-> El "modelo en la nube" es un **contenedor Docker en la laptop** que sirve
-> **Qwen3.5-4B base** (sin fine-tuning). **Free web** usa ese contenedor, sin RAG
-> y sin memoria. **Free móvil** no lo llama: corre el mismo modelo **base
-> cuantizado (Q4)** en **React Native / iPhone** (Neural Engine / Metal).
-> **Premium** usa el contenedor base **con** RAG y memoria, y en el teléfono puede
-> usar en su lugar el **Qwen3.5-4B fine-tuneado** + cuantizado. Servicios AWS
-> (Bedrock, ECS Fargate, API Gateway) quedan como **trabajo futuro**, no MVP.
+> El "modelo en la nube" es un **proceso en la Mac** (puerto 8003), no un contenedor:
+> **PyTorch** carga **Qwen3.5-4B base** (sin fine-tuning) en **Metal (MPS)**.
+> Docker no ve la GPU de Apple, y el checkpoint BF16 no corre en la CPU de esa VM.
+> Los demás servicios lo llaman por `host.docker.internal:8003`. **Free web** usa
+> ese proceso, sin RAG y sin memoria. **Free móvil** no lo llama: corre el mismo
+> modelo **base cuantizado (Q4, GGUF)** con **llama.cpp** en la **GPU (Metal)** del
+> iPhone. **Premium** usa el proceso base **con** RAG y memoria, y en el teléfono
+> puede usar en su lugar el **Qwen3.5-4B fine-tuneado** en el mismo formato GGUF.
+> El Neural Engine no ejecuta este modelo. Servicios AWS (Bedrock, ECS Fargate,
+> API Gateway) quedan como **trabajo futuro**, no MVP.
 
 > Nota: El anteproyecto menciona "un usuario" — esto se refiere al usuario que ingresa datos para fine-tuning.
 > La plataforma soporta múltiples usuarios reales desde el MVP.
@@ -26,22 +29,24 @@ Cada usuario se registra, inicia sesión y tiene su propia suscripción. Los dat
 
 | Cliente | Tecnología | Tier | Funcionalidad |
 |---------|------------|------|---------------|
-| **Web App** | React + Chart.js | Free / Premium | Free: chat al contenedor base, sin RAG ni memoria. Premium: dashboard y módulos |
-| **Mobile App** | React Native (iPhone) + Neural Engine / Metal | Free / Premium | Free: solo el modelo cuantizado on-device. Premium: LoRA on-device o cloud con RAG |
+| **Web App** | TanStack Start (React) + Recharts | Free / Premium | Free: chat al proceso base, sin RAG ni memoria. Premium: dashboard y módulos. El navegador usa `localhost:3080`; dentro del contenedor el servidor escucha el puerto 3000 |
+| **Mobile App** | React Native (iPhone) + llama.cpp (Metal) | Free / Premium | Free: solo el Q4 GGUF on-device. Premium: LoRA GGUF on-device o el proceso base con RAG |
 
-La app móvil es **React Native** (no PWA). El modelo on-device se **descarga** y corre
-nativamente en el **iPhone** vía **Neural Engine / Metal** (puente nativo, p. ej.
-ExecuTorch / Core ML / MLC — no WebGPU en navegador).
+La app móvil es **React Native** (no PWA). El modelo on-device se **descarga**
+(`GET /api/models/on-device/file`) y corre en el **iPhone** con **llama.cpp**
+(`llama.rn`) sobre la **GPU vía Metal**. El archivo es un **GGUF Q4_K_M** (~2,7 GB).
+ExecuTorch, Core ML y el Neural Engine no cargan ese archivo: Qwen3.5-4B usa capas
+Gated DeltaNet que esos runtimes aún no bajan a Q4. No hay WebGPU en el navegador.
 
 ### Móvil (React Native) — Free vs Premium
 
 | Tier | LLM | Contexto | Archivos |
 |------|-----|----------|----------|
-| **Free** | Qwen3.5-4B **base** cuantizado (Q4), on-device. Siempre. Sin LoRA y sin cloud | No | Hasta 5, solo en el teléfono (no se suben) |
-| **Premium** | Interruptor: LoRA Q4 on-device, **o** contenedor base + RAG y memoria | Sí, solo en cloud | Hasta 5. On-device se quedan en el teléfono; en cloud van con el chat |
+| **Free** | Qwen3.5-4B **base** Q4 GGUF, llama.cpp en la GPU. Siempre. Sin LoRA y sin el proceso 8003 | No | Hasta 5, solo en el teléfono (no se suben) |
+| **Premium** | Interruptor: LoRA Q4 GGUF on-device, **o** proceso base (8003) + RAG y memoria | Sí, solo en ese modo cloud | Hasta 5. On-device se quedan en el teléfono; en cloud van con el chat |
 
-> **Free web** ≠ **Free móvil**. Web: contenedor base, sin RAG ni memoria.
-> Móvil: solo el Q4 base en el iPhone. Premium móvil elige uno de los dos modos.
+> **Free web** ≠ **Free móvil**. Web: proceso base en la Mac, sin RAG ni memoria.
+> Móvil: solo el Q4 GGUF en el iPhone. Premium móvil elige uno de los dos modos.
 
 ## Modelo de Usuario
 
@@ -49,10 +54,9 @@ Cada usuario tiene una cuenta con suscripción. Los datos están aislados por `u
 
 | Entidad | Campos | Notas |
 |---------|--------|-------|
-| **Users** | id, email, password_hash, subscription_tier (free/premium), created_at | bcrypt para password_hash |
+| **Users** | user_id, name, email, password_hash, plan (free/premium) | `POST /api/auth/signup` y `/api/auth/signin`. El hash es PBKDF2-SHA256 (`salt$hash`). El documento guarda `plan`; el JWT (HS256) lleva el claim `subscription_tier`. No hay colección Subscriptions |
 | **Documents** | id, user_id (FK → Users), type (text/pdf/image/video), gridfs_id, triples_path, created_at | Cualquier archivo; binario en GridFS |
-| **Subscriptions** | id, user_id (FK → Users), tier, status, started_at | Control de tier por usuario |
-| **Embeddings** | id, document_id (FK → Documents), vector (2048-dim), modality, chunk_text, metadata | Vector en Chroma; Fernet a nivel de aplicación |
+| **Embeddings** | id, document_id (FK → Documents), vector (2048-dim), modality, chunk_text, metadata | Vector en Chroma; Fernet a nivel de aplicación. Con `EMBEDDING_MOCK=true` (default local) el vector es un hash de la misma dimensión, sin bajar el modelo 2B |
 
 ## Arquitectura General
 
@@ -80,7 +84,7 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 │                    Puerto 8000 · JWT + Correlation ID                   │
 │                                                                         │
 │  POST /api/upload  → Kafka (async) → 202 + polling                      │
-│  POST /api/chat    → premium Agents+RAG / free web: base LLM            │
+│  POST /api/chat    → premium Agents+RAG / free web: LLM base (8003)  │
 │  POST /api/sessions/end → 202 (premium, cierra sesión de agentes)       │
 │  POST /api/finetune → 202 (trigger manual de LoRA)                      │
 │  GET  /tasks/:id   → MongoDB       → 200 + status                       │
@@ -104,7 +108,8 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 │                     │              │ │  LLM Service    │ │
 │                     │              │ │  Puerto 8003    │ │
 │                     │              │ │ Qwen3.5-4B      │ │
-│                     │              │ │ (contenedor)    │ │
+│                     │              │ │ (proceso Mac,   │ │
+│                     │              │ │  PyTorch/Metal) │ │
 │                     │              │ └─────────────────┘ │
 │                     │              │ ┌─────────────────┐ │
 │                     │              │ │ Fine-Tune Svc   │ │
@@ -122,7 +127,7 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
                                      │   Data Stores       │
                                      │ • MongoDB (GridFS)  │
                                      │ • Chroma (2048-dim) │
-                                     │ • Qwen3.5-4B (cont.)│
+                                     │ • Qwen3.5-4B (host) │
                                      └─────────────────────┘
 ```
 
@@ -133,11 +138,15 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 | **AWS API Gateway** | — | Rate limiting, routing, HTTPS (FUTURO — no MVP) |
 | **API Router** | 8000 | JWT validation, correlation ID, routing interno a servicios |
 | **ETL Service** | 8001 | Loaders LangChain (cualquier archivo), extracción de triples por LLM, distillation |
-| **RAG Service** | 8002 | MongoDB, Chroma, embeddings Qwen3-VL-Embedding-2B, semantic search, context injection |
-| **LLM Service** | 8003 | Inferencia multimodal Qwen3.5-4B (contenedor local), model management |
-| **Fine-Tune Service** | 8004 | LoRA local (PEFT/ms-swift) sobre Qwen3.5-4B; produce adapter + build cuantizado **solo para Premium on-device** (React Native / Neural Engine) |
-| **Chroma** | 8005 | Vector store: embeddings 2048-dim + chunk_text + metadata (local dev) |
-| **Agents Service** | 8006 | Bucle simbiótico: LangGraph (`reason_graph` + `learn_graph`) + MCP (Ingestor, Razonador, Evaluador). Premium only. |
+| **RAG Service** | 8002 | MongoDB, Chroma, embeddings Qwen3-VL-Embedding-2B (o el hash mock si `EMBEDDING_MOCK=true`), semantic search, context injection |
+| **LLM Service** | 8003 | Inferencia multimodal Qwen3.5-4B. **Proceso en la Mac** (PyTorch, Metal/MPS). No está en `docker-compose`. Pesos `Qwen/Qwen3.5-4B` en `data/huggingface`. Timeout 600s. `QWEN_MOCK=true` salta los pesos |
+| **Fine-Tune Service** | 8004 | LoRA local (PEFT) sobre Qwen3.5-4B. El adapter es por usuario y solo alimenta el GGUF **Premium on-device**. `LORA_MOCK=true` es el default local. No entrena el proceso de 8003 |
+| **Chroma** | 8005 | Vector store: embeddings 2048-dim + chunk_text + metadata (local dev). El contenedor escucha 8000; el host publica 8005 |
+| **Agents Service** | 8006 | Bucle simbiótico: LangGraph (`reason_graph` + `learn_graph`) + MCP (Ingestor, Razonador, Evaluador). Premium only |
+| **Simulator Service** | 8007 | Simulador de vida (What-If). Premium. Llama al LLM de 8003 con temperatura 0 |
+| **Analytics Service** | 8008 | Life Analytics. Premium. Lee Mongo y Chroma y resume con el LLM de 8003 |
+| **Shield Service** | 8009 | Prompt Shield. Premium. Umbral de similitud 0,80 contra la memoria del usuario |
+| **Web** | 3080 | TanStack Start. El proceso dentro del contenedor usa `NITRO_PORT=3000` |
 | **Kafka** | 9092 | Message queue async para operaciones pesadas |
 | **MongoDB** | 27017 | task_status, uploaded_files (GridFS), triples, agent_interactions, agent_feedback, finetune_batches |
 
@@ -146,9 +155,9 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 | Operación | Tipo | Flujo | Timeout |
 |-----------|------|-------|---------|
 | **Upload de archivo** | Async (Kafka) | Router → Kafka → 202 → Polling | 300s max |
-| **Chat / Query (Premium)** | Sync (HTTP) | Router → Agents `reason_graph` → RAG + LLM base → 200 | 30s max |
-| **Chat / Query (Free web)** | Sync (HTTP) | Router → LLM base (8003), sin Agents, sin RAG, sin memoria | 30s max |
-| **Chat / Query (Free móvil)** | Sync | On-device Qwen3.5-4B **base** Q4 (Frame 10). No llama al contenedor | ≤2s on-device |
+| **Chat / Query (Premium)** | Sync (HTTP) | Router → Agents `reason_graph` → RAG + LLM base (8003) → 200 | 600s |
+| **Chat / Query (Free web)** | Sync (HTTP) | Router → LLM base (8003), sin Agents, sin RAG, sin memoria | 600s |
+| **Chat / Query (Free móvil)** | Sync | On-device Qwen3.5-4B **base** Q4 GGUF (llama.cpp / Metal). No llama al proceso 8003 | Objetivo ≤2s en el teléfono |
 | **Session turn (aprendizaje)** | Async (Kafka) | Router publica `session.turn.completed` → Agents `learn_graph` (Ingestor → Evaluador) | — |
 | **Task status** | Sync (HTTP) | Router → MongoDB → 200 | 1s max |
 | **Fine-tuning** | Async | Router → Agents trigger manual → Fine-Tune `POST /train` → 202 → Polling | Horas |
@@ -227,7 +236,7 @@ los **triples JSONL** en el filesystem (para fine-tuning). Chroma **no** guarda 
 | Embeddings (vectores 2048-dim, todas las modalidades) | **Chroma** | Texto, imagen y video en el **mismo espacio** (cross-modal) |
 | Triples (JSONL) | filesystem | Fuente para RAG y fine-tuning LoRA |
 | task_status | MongoDB | Polling |
-| Users / Documents / Subscriptions | MongoDB | Registros e índice de documentos |
+| Users / Documents | MongoDB | El plan (free/premium) es un campo del usuario. No hay colección Subscriptions |
 | Agent interactions / feedback / batches | MongoDB | Bucle simbiótico (Frame 5) |
 | Producción (futuro) | DynamoDB / Pinecone / S3 | Fuera de MVP |
 
@@ -257,17 +266,21 @@ GET  /health:      1000 req/min (monitoreo)
 
 ### Modelo de inferencia — Qwen3.5-4B (multimodal)
 
-- **Único modelo** para todo: **Qwen3.5-4B** (dense, nativo multimodal — **texto, imagen y
-  video**; 262K de contexto; Apache 2.0; ~8 GB en BF16, ~2.5–3 GB en Q4).
-- **"Cloud" = contenedor Docker local** (LLM Service, puerto 8003): **Qwen3.5-4B base**,
-  sin fine-tuning. Acepta `tier` **free** y **premium** con los mismos pesos.
+- **Único modelo** para todo: **Qwen3.5-4B** (nativo multimodal — **texto, imagen y
+  video**; 262K de contexto; Apache 2.0). En la Mac el checkpoint es BF16 (~9 GB,
+  `Qwen/Qwen3.5-4B`). En el teléfono el archivo es GGUF **Q4_K_M** (~2,7 GB).
+- **"Cloud" = proceso en la Mac** (LLM Service, puerto 8003, PyTorch + Metal): **Qwen3.5-4B
+  base**, sin fine-tuning. Acepta plan **free** y **premium** con los mismos pesos.
   **Free web:** ese modelo, sin RAG y sin memoria. **Premium:** el mismo modelo con RAG.
-- **On-device (React Native / Neural Engine / Metal):**
-  - **Free móvil:** Qwen3.5-4B **base** cuantizado (Q4). Siempre. Sin LoRA y sin cloud.
-  - **Premium:** interruptor. **On device** = LoRA Q4 de ese usuario (o el base Q4 si
-    aún no existe). **Digital Brain** = contenedor base + RAG y memoria.
+  Docker no lo contiene: lo llama por `host.docker.internal:8003`. `QWEN_MOCK=true` no
+  carga los pesos.
+- **On-device (React Native + llama.cpp / Metal):**
+  - **Free móvil:** Qwen3.5-4B **base** Q4 GGUF. Siempre. Sin LoRA y sin el puerto 8003.
+  - **Premium:** interruptor. **On device** = GGUF Q4 de ese usuario (o el base si
+    aún no existe). **Digital Brain** = proceso base + RAG y memoria.
 - **Inferencia multimodal**: el modelo procesa **texto, imagen y video** para responder.
-- Sustituye por completo a AWS Bedrock (Llama 3 8B) y a llama.rn (Llama 3.2 3B): **fuera de alcance**.
+- AWS Bedrock (Llama 3 8B) y Llama 3.2 3B quedan **fuera de alcance**. **llama.cpp
+  (`llama.rn`) es el runtime del iPhone** para este GGUF. El Neural Engine no se usa.
 
 ### Modelo de embeddings — Qwen3-VL-Embedding-2B (2048-dim)
 
@@ -288,10 +301,13 @@ GET  /health:      1000 req/min (monitoreo)
 
 ### Fine-tuning (local)
 
-- **LoRA local** (PEFT / ms-swift / Unsloth) sobre Qwen3.5-4B, ejecutado en la laptop
-  (o Colab free). Produce un **adapter** que se **fusiona + cuantiza** para el build
-  **Premium on-device** (React Native / iPhone). El contenedor cloud **no** usa el adapter
-  (permanece base). Disparo **manual** vía `POST /api/finetune`.
+- **LoRA local** (PEFT por defecto; también ms-swift o Unsloth) sobre Qwen3.5-4B, en la
+  laptop. `LORA_MOCK=true` es el default local y no entrena. Con pesos reales produce un
+  **adapter** que se fusiona a un **GGUF Q4** solo para el **Premium on-device**
+  (llama.cpp). El paquete base ya descargable es `Qwen3.5-4B-Q4_K_M` en
+  `data/on-device/base/`. El GGUF personal se escribe cuando el adapter de ese usuario
+  existe. El proceso de 8003 **no** carga el adapter (permanece base). Disparo **manual**
+  vía `POST /api/finetune`.
 
 ## Extracción de triples y parsers (ETL)
 
@@ -359,11 +375,12 @@ Toma variables clave del contexto del usuario y produce escenarios deterministas
 un árbol de decisión sencillo.
 
 ### Life Analytics
-Dashboard web (React) con visualización de correlaciones interactivas:
+Dashboard web (TanStack Start + Recharts) con visualización de correlaciones:
 - Sueño vs productividad
 - Reuniones vs tiempo de foco
 
-Conecta con Google Calendar o ingiere un diario personal.
+El servicio es el puerto 8008. El calendario es un diario local (`/api/calendar`,
+notas por día). Esas notas no entran a la memoria de documentos. No hay Google Calendar.
 Cada módulo escribe resultados en la DB para trazabilidad posterior.
 
 ### Privacy & Scam Shield
@@ -372,20 +389,21 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 
 ## Despliegue
 
-> **MVP = solo local.** No hay despliegue en la nube por ahora. Todo corre en Docker
-> Compose en la laptop, incluido el LLM (contenedor Qwen3.5-4B). La columna Producción es
-> **trabajo futuro** y no forma parte del alcance actual.
+> **MVP = solo local.** No hay despliegue en la nube por ahora. API, RAG, ETL, Agents,
+> Fine-Tune, Simulator, Shield, Analytics, Web, Kafka, Mongo y Chroma corren en Docker
+> Compose. El LLM (Qwen3.5-4B) corre **fuera** de Compose, en la Mac, para usar Metal.
+> La columna Producción es **trabajo futuro** y no forma parte del alcance actual.
 
 | Entorno | Infraestructura | Propósito |
 |---------|-----------------|-----------|
-| **Local (MVP)** | Docker Compose | Desarrollo y pruebas. Clientes → API Router directo (sin AWS API GW). LLM en contenedor local. |
+| **Local (MVP)** | Docker Compose + proceso LLM en la Mac | Desarrollo y pruebas. Clientes → API Router directo (sin AWS API GW). LLM en el puerto 8003 del host. |
 | **Producción (futuro)** | AWS ECS Fargate | Escalado, disponibilidad, load. AWS API Gateway para routing externo |
 
 ### Decisiones de infraestructura
 
-- **Docker** para todos los servicios (incluido el contenedor Qwen3.5-4B)
-- **LLM "cloud" = contenedor local (base, sin fine-tuning)** para Free web (sin RAG) y Premium (con RAG). On-device Free = base cuantizado. On-device Premium = LoRA cuantizado
-- **Cada servicio** tiene su propio Dockerfile y se despliega independientemente
+- **Docker** para todos los servicios excepto el LLM, que corre en la Mac (PyTorch / Metal)
+- **LLM "cloud" = proceso local (base, sin fine-tuning)** para Free web (sin RAG) y Premium (con RAG). On-device Free = Q4 GGUF base. On-device Premium = Q4 GGUF de su LoRA
+- **Cada servicio en Compose** tiene su propio Dockerfile. El LLM no tiene imagen: es un proceso Python en la Mac
 - **Kafka**: Self-hosted en Docker (local) / AWS MSK (producción futura)
 - **ECS Fargate / AWS API Gateway**: producción futura; en el MVP se accede directo al API Router
 
@@ -397,15 +415,15 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 | Microservicios | Python 3.13, FastAPI (cada servicio) |
 | Message Queue | Apache Kafka (async communication) |
 | Parsers / Loaders | LangChain document loaders out-of-the-box (cualquier formato) |
-| Fine-Tuning | LoRA local (PEFT / ms-swift / Unsloth) → **Premium on-device** only (cloud stays base) |
+| Fine-Tuning | LoRA local (PEFT por defecto; ms-swift / Unsloth opcionales) → GGUF **Premium on-device**. El proceso 8003 se queda en el base |
 | Embeddings | Qwen3-VL-Embedding-2B (2048-dim, multimodal: texto/imagen/video) |
 | RAG | LangChain, Chroma |
 | Agents / bucle simbiótico | LangGraph (orquestación) + MCP tool contracts; nodos HTTP hacia RAG/LLM/Fine-Tune |
 | Document Store | MongoDB (GridFS para binarios) — contenedor local |
-| LLM (inferencia) | Cloud base: Free web sin RAG; Premium con RAG. On-device Free: base Q4. On-device Premium: LoRA Q4 |
-| Web | React + Chart.js |
-| Móvil | React Native (iPhone) + Neural Engine / Metal |
-| Infra Local (MVP) | Docker Compose (todos los servicios + LLM) |
+| LLM (inferencia) | Proceso PyTorch/Metal en la Mac: Free web sin RAG; Premium con RAG. On-device: llama.cpp, Q4 GGUF base (Free) o de su LoRA (Premium) |
+| Web | TanStack Start (React) + Recharts, host `localhost:3080` |
+| Móvil | React Native (iPhone) + llama.cpp (`llama.rn`) en la GPU (Metal) |
+| Infra Local (MVP) | Docker Compose para los servicios; LLM fuera del Compose, puerto 8003 |
 | Infra Prod (futuro) | AWS ECS Fargate (servicios) + AWS API Gateway |
 | CI/CD | GitHub Actions (2 workflows: push a rama + push a main) |
 | Seguridad | Snyk (dependency scan + SAST en CI + image scan en main) |
@@ -455,6 +473,9 @@ Push a main (merge)
 └──────────────┘     └──────────────┘
 ```
 
+Las 9 imágenes son api-router, etl, rag, finetune, agents, simulator, shield,
+analytics y web. El LLM no entra en ese build.
+
 **Justificación:** Si lint+test+Snyk code pasaron en la feature branch, en main solo validamos que las imágenes Docker compile y sean seguras. No se duplica el análisis de código porque:
 - El código es el mismo commit (no cambia entre feature branch y main)
 - Si Snyk code falló en feature branch, el PR nunca se mergea a main
@@ -491,7 +512,7 @@ Fuentes:
 - **Fuera de alcance**: UI Multilingüe
 
 ### Plataformas
-- **Incluido**: Web app (React) + **React Native (iPhone)** con Qwen3.5-4B on-device vía Neural Engine / Metal; todo local
+- **Incluido**: Web app (TanStack Start) + **React Native (iPhone)** con Qwen3.5-4B on-device vía llama.cpp / Metal; el LLM de la Mac también es local
 - **Fuera de alcance**: PWA / WebGPU en navegador, asistentes de voz, despliegue en la nube
 
 ### Tipos de datos
@@ -500,7 +521,7 @@ Fuentes:
 - **Fuera de alcance**: Audio streaming en vivo
 
 ### Seguridad
-- **Incluido**: Autenticación JWT + bcrypt (register, login, verify_token, get_current_user)
+- **Incluido**: Autenticación JWT HS256 (claim `subscription_tier`) + PBKDF2-SHA256 (`POST /api/auth/signup`, `POST /api/auth/signin`)
 - **Fuera de alcance**: Cifrado AES at-rest, cumplimiento GDPR, OAuth federado
 
 ### Privacidad
@@ -540,7 +561,7 @@ Cada paso indica qué se hará, cómo se ejecutará y para qué contribuye al lo
 
 3. **Almacén híbrido y RAG**: **MongoDB local** (GridFS) para binarios y registros, **Chroma** para embeddings 2048-dim + chunk_text. Embeddings **multimodales** con **Qwen3-VL-Embedding-2B**. LangChain para búsqueda Top-k y recuperación semántica (cross-modal).
 
-4. **LLM principal (contenedor local) + LLM on-device**: el contenedor sirve **Qwen3.5-4B base** (sin fine-tuning) a **Free web** (sin RAG ni memoria) y a **Premium** (con RAG). **Free móvil** usa ese mismo modelo **base cuantizado (Q4)** en **React Native (iPhone)**, sin cloud. El LoRA local alimenta solo el modo on-device de Premium. Latencia on-device: ≤2s (>18 tok/s).
+4. **LLM principal (proceso en la Mac) + LLM on-device**: PyTorch/Metal sirve **Qwen3.5-4B base** (sin fine-tuning) a **Free web** (sin RAG ni memoria) y a **Premium** (con RAG). **Free móvil** usa ese mismo modelo **base Q4 GGUF** con **llama.cpp** en el iPhone, sin llamar al puerto 8003. El LoRA local alimenta solo el GGUF on-device de Premium. Objetivo on-device: ≤2s (>18 tok/s).
 
 5. **Bucle de aprendizaje simbiótico**: Agents Service (puerto 8006) con LangGraph
    (`reason_graph` + `learn_graph`) y tres agentes MCP (Ingestor, Razonador, Evaluador).
@@ -548,7 +569,7 @@ Cada paso indica qué se hará, cómo se ejecutará y para qué contribuye al lo
    aprendizaje. El Evaluador escribe feedback y genera lote semanal; fine-tuning
    incremental solo con trigger manual. LangChain permanece en RAG (Frame 3).
 
-6. **Módulos de valor**: Decision-Support Simulator (what-if, 3-5 escenarios), Life Analytics (dashboard React + Chart.js, 2 correlaciones), Privacy & Scam Shield (heurísticas + similitud de embeddings).
+6. **Módulos de valor**: Decision-Support Simulator (what-if, 3-5 escenarios, puerto 8007), Life Analytics (dashboard TanStack Start + Recharts, 2 correlaciones, puerto 8008), Privacy & Scam Shield (heurísticas + similitud de embeddings, puerto 8009).
 
 7. **Validación**: Pruebas alfa internas, medición KPIs (tiempo de respuesta, precisión Top-3), video-demo.
 

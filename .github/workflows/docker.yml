@@ -19,8 +19,6 @@ jobs:
             path: ./services/etl
           - service: rag
             path: ./services/rag
-          - service: llm
-            path: ./services/llm
           - service: finetune
             path: ./services/finetune
           - service: agents
