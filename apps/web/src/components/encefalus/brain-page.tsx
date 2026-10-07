@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, CalendarDays, FileText, Menu, Paperclip, Plus, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ArrowUp, CalendarDays, FileText, Menu, Paperclip, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Notice,
@@ -63,6 +63,117 @@ const ACCEPT = [
   "image/*",
   "video/*",
 ].join(",");
+
+const LIST_ITEM = /^(\*|-|\d+\.)\s+(.*)$/;
+
+function renderInline(text: string, key: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`/g;
+  let cursor = 0;
+  let index = 0;
+  for (const match of text.matchAll(pattern)) {
+    const start = match.index ?? 0;
+    if (start > cursor) nodes.push(text.slice(cursor, start));
+    if (match[1] != null) {
+      nodes.push(
+        <strong key={`${key}-b${index}`} className="font-semibold">
+          {match[1]}
+        </strong>,
+      );
+    } else {
+      nodes.push(
+        <code key={`${key}-c${index}`} className="rounded bg-muted px-1 font-mono text-[0.85em]">
+          {match[2]}
+        </code>,
+      );
+    }
+    cursor = start + match[0].length;
+    index += 1;
+  }
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return nodes;
+}
+
+function renderAssistantText(text: string): ReactNode {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const blocks: ReactNode[] = [];
+  let i = 0;
+  let block = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim() === "") {
+      i += 1;
+      continue;
+    }
+    if (line.startsWith("```")) {
+      const code: string[] = [];
+      i += 1;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        code.push(lines[i]);
+        i += 1;
+      }
+      if (i < lines.length) i += 1;
+      blocks.push(
+        <pre
+          key={`p${block}`}
+          className="overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs leading-5"
+        >
+          <code>{code.join("\n")}</code>
+        </pre>,
+      );
+      block += 1;
+      continue;
+    }
+    const item = line.match(LIST_ITEM);
+    if (item) {
+      const ordered = /^\d+\./.test(item[1]);
+      const items: string[] = [];
+      while (i < lines.length) {
+        const next = lines[i].match(LIST_ITEM);
+        if (!next || /^\d+\./.test(next[1]) !== ordered) break;
+        items.push(next[2]);
+        i += 1;
+      }
+      const ListTag = ordered ? "ol" : "ul";
+      blocks.push(
+        <ListTag
+          key={`p${block}`}
+          className={ordered ? "list-decimal space-y-2 pl-5" : "list-disc space-y-2 pl-5"}
+        >
+          {items.map((entry, index) => (
+            <li key={index}>{renderInline(entry, `p${block}-${index}`)}</li>
+          ))}
+        </ListTag>,
+      );
+      block += 1;
+      continue;
+    }
+    const paragraph: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !lines[i].startsWith("```") &&
+      !LIST_ITEM.test(lines[i])
+    ) {
+      paragraph.push(lines[i]);
+      i += 1;
+    }
+    blocks.push(
+      <p key={`p${block}`}>
+        {paragraph.map((entry, index) => (
+          <span key={index}>
+            {index > 0 && <br />}
+            {renderInline(entry, `p${block}-l${index}`)}
+          </span>
+        ))}
+      </p>,
+    );
+    block += 1;
+  }
+
+  return <div className="space-y-3 text-sm leading-6">{blocks}</div>;
+}
 
 function authHeaders(): HeadersInit {
   const token = sessionStorage.getItem("access_token") ?? "";
@@ -490,12 +601,14 @@ export function BrainPage() {
                   </div>
                 ) : (
                   <div key={index} className="flex gap-3">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
-                      <Sparkles className="size-4" />
-                    </span>
+                    <img
+                      src="/encefalus-mark.png"
+                      alt=""
+                      className="size-8 shrink-0 rounded-lg"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="mb-2 text-sm font-semibold">Encefalus</p>
-                      <p className="whitespace-pre-wrap text-sm leading-6">{turn.text}</p>
+                      {renderAssistantText(turn.text)}
                       {!!turn.cards?.length && (
                         <div className="mt-5 flex flex-wrap gap-2">
                           {turn.cards.map((card) => (
