@@ -1,5 +1,5 @@
 import { useEffect, useState, type ClipboardEvent } from "react";
-import { AlertTriangle, CheckCircle2, FileUp, Search, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileUp, Search, ShieldAlert, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Notice,
@@ -170,6 +170,24 @@ export function ShieldPage() {
     setBusy(false);
   }
 
+  async function remove(id: string) {
+    setError("");
+    try {
+      const response = await fetch(`/api/shield/incidents/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!response.ok) {
+        setError(await readError(response, "That scan could not be deleted."));
+        return;
+      }
+      setScans((current) => current.filter((item) => item.id !== id));
+      setSelectedId((current) => (current === id ? "" : current));
+    } catch {
+      setError("Shield is not reachable. Start the API router and sign in.");
+    }
+  }
+
   if (account?.plan === "free") return <PremiumNotice title="Shield" />;
 
   return (
@@ -243,15 +261,27 @@ export function ShieldPage() {
               <p className="px-4 py-3 text-xs text-muted-foreground">No scans yet.</p>
             ) : (
               scans.map((scan) => (
-                <button
+                <div
                   key={scan.id}
-                  type="button"
-                  onClick={() => setSelectedId(scan.id)}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 py-3 text-left last:border-0 hover:bg-muted/40"
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-border px-4 py-3 last:border-0 hover:bg-muted/40"
                 >
-                  <span className="truncate text-xs">{scan.summary || "Scan"}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(scan.id)}
+                    className="truncate text-left text-xs"
+                  >
+                    {scan.summary || "Scan"}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete scan"
+                    onClick={() => void remove(scan.id)}
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
                   <StatusDot label={severityLabel(scan.severity)} tone={tone(scan.severity)} />
-                </button>
+                </div>
               ))
             )}
           </Panel>
@@ -291,13 +321,15 @@ function Outcome({ scan }: { scan: Scan }) {
           No separate evidence was recorded.
         </p>
       ) : (
-        <ul className="mt-3 space-y-3 text-xs leading-5">
-          {evidence.map((line) => (
-            <li key={line.text} className="flex gap-2">
+        <ul className="mt-3 max-h-64 space-y-3 overflow-y-auto pr-1 text-xs leading-5">
+          {evidence.map((line, index) => (
+            <li key={`${line.kind}-${index}`} className="flex gap-2">
               <AlertTriangle
-                className={`size-4 shrink-0 ${line.sharp ? "text-destructive" : "text-warning"}`}
+                className={`mt-0.5 size-4 shrink-0 ${line.sharp ? "text-destructive" : "text-warning"}`}
               />
-              {line.text}
+              <span className={line.kind === "ocr" ? "whitespace-pre-wrap break-words" : ""}>
+                {line.text}
+              </span>
             </li>
           ))}
         </ul>
@@ -358,33 +390,34 @@ function riskStyle(severity: string) {
 }
 
 function evidenceLines(reasons: Reason[]) {
-  const lines: { text: string; sharp: boolean }[] = [];
+  const lines: { text: string; sharp: boolean; kind: string }[] = [];
   for (const reason of reasons) {
     if (reason.type === "llm") continue;
     if (reason.type === "heuristic" && reason.id && EVIDENCE[reason.id]) {
       lines.push({
         text: EVIDENCE[reason.id],
         sharp: reason.id === "credential" || reason.id === "lookalike_host",
+        kind: "heuristic",
       });
     } else if (reason.id === "embedding_unavailable") {
-      lines.push({ text: EVIDENCE.embedding_unavailable, sharp: false });
+      lines.push({ text: EVIDENCE.embedding_unavailable, sharp: false, kind: "embedding" });
     } else if (reason.type === "embedding" && reason.label) {
       lines.push({
         text: `Similar to a known ${reason.label} example.`,
         sharp: reason.label !== "ham",
+        kind: "embedding",
       });
     } else if (reason.id === "ocr_text" && reason.detail) {
-      lines.push({ text: `Text read from the image: ${clip(reason.detail)}`, sharp: false });
+      lines.push({
+        text: `Text read from the image:\n${reason.detail.trim()}`,
+        sharp: false,
+        kind: "ocr",
+      });
     } else if (reason.id === "ocr_empty") {
-      lines.push({ text: EVIDENCE.ocr_empty, sharp: false });
+      lines.push({ text: EVIDENCE.ocr_empty, sharp: false, kind: "ocr" });
     }
   }
   return lines;
-}
-
-function clip(value: string) {
-  const text = value.replace(/\s+/g, " ").trim();
-  return text.length > 160 ? `${text.slice(0, 157)}...` : text;
 }
 
 function readBase64(file: File): Promise<string> {

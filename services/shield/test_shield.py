@@ -319,59 +319,64 @@ class TestScan:
         assert "multimodal LLM reasoning" in text
         assert "assistive" in text.lower()
 
+    def test_owner_can_delete_a_scan(self, client):
+        created = _scan(client, cid="cid-delete")
+        incident_id = created.json()["incident_id"]
+        removed = client.delete(
+            f"/incidents/{incident_id}",
+            params={"user_id": "user1", "subscription_tier": "premium"},
+        )
+        assert removed.status_code == 200
+        assert removed.json()["deleted"] is True
+        listed = client.get(
+            "/incidents",
+            params={"user_id": "user1", "subscription_tier": "premium"},
+        )
+        assert listed.json()["incidents"] == []
+
+    def test_other_user_cannot_delete_a_scan(self, client):
+        created = _scan(client, cid="cid-keep")
+        incident_id = created.json()["incident_id"]
+        hidden = client.delete(
+            f"/incidents/{incident_id}",
+            params={"user_id": "user2", "subscription_tier": "premium"},
+        )
+        assert hidden.status_code == 404
+        own = client.get("/incidents", params={"user_id": "user1", "subscription_tier": "premium"})
+        assert own.json()["incidents"][0]["id"] == incident_id
+
 
 # ── OCR coverage (ocr.py) ─────────────────────────────────────────
 
 
 class TestOcr:
     def test_ocr_image_empty(self):
-        from unittest.mock import MagicMock, patch
+        from ocr import ocr_image
 
-        mock_loader_instance = MagicMock()
-        mock_loader_instance.load.return_value = []
-        with patch("ocr._image_loader", return_value=mock_loader_instance):
-            from ocr import ocr_image
-
-            result = ocr_image(b"", suffix=".png")
-        assert isinstance(result, str)
+        assert ocr_image(b"", suffix=".png") == ""
 
     def test_ocr_image_with_content(self):
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
-        mock_doc = MagicMock()
-        mock_doc.page_content = "extracted text"
-        mock_loader_instance = MagicMock()
-        mock_loader_instance.load.return_value = [mock_doc]
-        with patch("ocr._image_loader", return_value=mock_loader_instance):
+        with patch("ocr._extract", return_value="  extracted text\n"):
             from ocr import ocr_image
 
             result = ocr_image(b"fake image bytes", suffix=".png")
         assert result == "extracted text"
 
-    def test_ocr_image_multiple_docs(self):
-        from unittest.mock import MagicMock, patch
+    def test_ocr_image_unreadable(self):
+        from unittest.mock import patch
 
-        doc1 = MagicMock()
-        doc1.page_content = "first"
-        doc2 = MagicMock()
-        doc2.page_content = "second"
-        mock_loader_instance = MagicMock()
-        mock_loader_instance.load.return_value = [doc1, doc2]
-        with patch("ocr._image_loader", return_value=mock_loader_instance):
+        with patch("ocr._extract", side_effect=OSError("not an image")):
             from ocr import ocr_image
 
             result = ocr_image(b"data", suffix=".jpg")
-        assert "first" in result
-        assert "second" in result
+        assert result == ""
 
     def test_ocr_image_empty_docs(self):
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
-        mock_doc = MagicMock()
-        mock_doc.page_content = ""
-        mock_loader_instance = MagicMock()
-        mock_loader_instance.load.return_value = [mock_doc]
-        with patch("ocr._image_loader", return_value=mock_loader_instance):
+        with patch("ocr._extract", return_value=""):
             from ocr import ocr_image
 
             result = ocr_image(b"data")

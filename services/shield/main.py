@@ -215,6 +215,26 @@ def create_app() -> FastAPI:
         document = owned_or_404(await db.find_by_id(incident_id), user_id)
         return list_item(document)
 
+    @application.delete("/incidents/{incident_id}")
+    async def delete_incident(
+        incident_id: str,
+        request: Request,
+        user_id: str,
+        subscription_tier: str | None = None,
+    ):
+        correlation_id = request.state.correlation_id
+        tier = subscription_tier or request.headers.get("X-Subscription-Tier") or "free"
+        log_with_correlation(
+            correlation_id,
+            "info",
+            f"DELETE /incidents/{incident_id} user_id={user_id}",
+        )
+        ensure_premium(tier)
+        deleted = await db.delete_for_user(incident_id, user_id)
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        return {"deleted": True, "id": incident_id}
+
     @application.get("/guidelines")
     async def guidelines(
         request: Request,

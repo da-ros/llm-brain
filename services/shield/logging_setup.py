@@ -29,6 +29,11 @@ def configure_logging() -> logging.Logger:
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATEFMT)
     correlation_filter = CorrelationFilter()
     root = logging.getLogger()
+    # Handler filters run for every library that propagates here. Logger
+    # filters do not, so httpx records were missing correlation_id.
+    for handler in root.handlers:
+        if not any(isinstance(item, CorrelationFilter) for item in handler.filters):
+            handler.addFilter(correlation_filter)
     if not any(isinstance(item, CorrelationFilter) for item in root.filters):
         root.addFilter(correlation_filter)
     logger = logging.getLogger("shield-service")

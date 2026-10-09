@@ -46,6 +46,8 @@ _isolate_service_imports()
 
 import db
 from engine import detect_families, walk_tree
+from exceptions import InvalidScenarioJSONError
+from llm_client import SCENARIO_MAX_NEW_TOKENS, parse_scenarios
 from main import app
 
 UUID_LEN = 36
@@ -236,6 +238,7 @@ class TestSimulate:
         assert 3 <= body["scenario_count"] <= 5
         assert len(RecordingClient.posts) == 1
         assert RecordingClient.posts[0]["json"]["temperature"] == 0
+        assert RecordingClient.posts[0]["json"]["max_new_tokens"] == SCENARIO_MAX_NEW_TOKENS
         assert RecordingClient.posts[0]["headers"]["X-Request-ID"] == "cid-1"
         assert RecordingClient.gets == []
         for scenario in body["scenarios"]:
@@ -293,6 +296,30 @@ class TestSimulate:
         assert response.status_code == 502
         assert len(RecordingClient.posts) == 2
         assert db.memory().by_id == {}
+
+    def test_partial_batch_fetches_the_missing_leaves(self, client):
+        def row(leaf_id: str) -> dict:
+            return {
+                "id": leaf_id,
+                "title": f"Title {leaf_id}",
+                "outcome": f"Outcome {leaf_id}",
+                "assumptions": [f"Assumption for {leaf_id}"],
+            }
+
+        RecordingClient.llm_payloads = [
+            {"response": json.dumps({"scenarios": [row("optimistic")]}), "tokens_used": 1},
+            {"response": json.dumps(row("baseline")), "tokens_used": 1},
+            {"response": json.dumps(row("pessimistic")), "tokens_used": 1},
+        ]
+        response = client.post(
+            "/simulate",
+            headers={"X-Request-ID": "cid-partial"},
+            json=_premium("what if I sleep less", {"sleep_hours": 5}),
+        )
+        assert response.status_code == 200
+        assert len(RecordingClient.posts) == 3
+        titles = [scenario["title"] for scenario in response.json()["scenarios"]]
+        assert titles == ["Title optimistic", "Title baseline", "Title pessimistic"]
 
 
 class TestHydration:
@@ -423,3 +450,59 @@ class TestIsolation:
         assert rows[0]["correlation_id"] == "cid-u1"
         assert rows[0]["question"] == "what if I sleep less"
         assert rows[0]["created_at"]
+
+
+_LEAVES = [
+    {"id": "optimistic", "leaf_id": "leaf:rested", "trace": ["sleep_gte_7", "leaf:rested"]},
+    {
+        "id": "baseline",
+        "leaf_id": "leaf:sleep_baseline",
+        "trace": ["sleep_eq_current", "leaf:sleep_baseline"],
+    },
+    {
+        "id": "pessimistic",
+        "leaf_id": "leaf:fatigue_risk",
+        "trace": ["sleep_drop", "leaf:fatigue_risk"],
+    },
+]
+
+
+def _authored(ids: list[str], *, assumptions: object = None) -> str:
+    rows = []
+    for leaf_id in ids:
+        rows.append(
+            {
+                "id": leaf_id,
+                "title": f"Title {leaf_id}",
+                "outcome": f"Outcome {leaf_id}",
+                "assumptions": assumptions
+                if assumptions is not None
+                else [f"Assumption for {leaf_id}"],
+            }
+        )
+    return json.dumps({"scenarios": rows})
+
+
+class TestParseScenarios:
+    def test_leaf_name_is_accepted_as_the_scenario_id(self):
+        text = _authored(["leaf:rested", "leaf:sleep_baseline", "leaf:fatigue_risk"])
+        parsed = parse_scenarios(text, _LEAVES)
+        assert [row["id"] for row in parsed] == ["optimistic", "baseline", "pessimistic"]
+
+    def test_assumption_string_becomes_a_list(self):
+        text = _authored(
+            ["optimistic", "baseline", "pessimistic"],
+            assumptions="Sleep stays at the default.",
+        )
+        parsed = parse_scenarios(text, _LEAVES)
+        assert parsed[0]["assumptions"] == ["Sleep stays at the default."]
+
+    def test_thinking_fence_and_trailing_comma_still_parse(self):
+        body = _authored(["optimistic", "baseline", "pessimistic"]).rstrip("}") + ",}"
+        text = f"<think>draft</think>\n```json\n{body}\n```"
+        parsed = parse_scenarios(text, _LEAVES)
+        assert parsed[1]["title"] == "Title baseline"
+
+    def test_prose_without_json_is_rejected(self):
+        with pytest.raises(InvalidScenarioJSONError):
+            parse_scenarios("I would work half time and go to the gym.", _LEAVES)

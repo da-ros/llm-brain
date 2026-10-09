@@ -275,11 +275,19 @@ def _public_chat(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _public_turn(row: dict[str, Any]) -> dict[str, Any]:
+    files = []
+    for item in row.get("files") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if name:
+            files.append({"name": name})
     return {
         "role": row["role"],
         "text": row["text"],
         "cards": row.get("cards") or [],
         "assumptions": row.get("assumptions") or [],
+        "files": files,
     }
 
 

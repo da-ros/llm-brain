@@ -250,7 +250,7 @@ export function DecisionsPage() {
                   </a>
                 ))
               ) : (
-                <p className="text-xs text-muted-foreground">
+                <p className="col-span-full whitespace-nowrap text-xs text-muted-foreground">
                   Memory references appear here after a simulation.
                 </p>
               )}

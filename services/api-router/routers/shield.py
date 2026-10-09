@@ -131,6 +131,23 @@ async def list_incidents(
     )
 
 
+@router.delete("/incidents/{incident_id}")
+async def delete_incident(
+    incident_id: str,
+    request: Request,
+    user: Annotated[dict, Depends(require_premium)],
+):
+    """Premium delete of one stored scan. The image itself is not kept."""
+    correlation_id = request.state.correlation_id
+    log_with_correlation(correlation_id, "info", f"DELETE /api/shield/incidents/{incident_id}")
+    return await _shield(
+        "DELETE",
+        f"/incidents/{incident_id}",
+        correlation_id=correlation_id,
+        params={"user_id": user["user_id"], "subscription_tier": "premium"},
+    )
+
+
 @router.get("/guidelines")
 async def guidelines(
     request: Request,

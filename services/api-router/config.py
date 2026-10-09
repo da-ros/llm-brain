@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     SHIELD_SERVICE_URL: str = "http://shield-service:8009"
     ANALYTICS_SERVICE_URL: str = "http://analytics-service:8008"
     CHAT_VIA_AGENTS: bool = True
+    APP_TIMEZONE: str = "America/New_York"
 
     # --- Retry / TTL ---
     MAX_RETRIES: int = 3

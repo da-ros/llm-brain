@@ -121,6 +121,21 @@ async def list_for_user(user_id: str) -> list[dict[str, Any]]:
     return [row for row in (_serialize(item) for item in await cursor.to_list(length=200)) if row]
 
 
+async def delete_for_user(incident_id: str, user_id: str) -> bool:
+    """Remove one incident when it belongs to user_id. Missing or foreign rows stay."""
+    document = await find_by_id(incident_id)
+    if document is None or document.get("user_id") != user_id:
+        return False
+    correlation_id = document.get("correlation_id")
+    if use_memory():
+        memory().by_id.pop(incident_id, None)
+        if correlation_id:
+            memory().by_correlation.pop(str(correlation_id), None)
+        return True
+    await _db().shield_incidents.delete_one({"_id": incident_id, "user_id": user_id})
+    return True
+
+
 async def insert_incident(document: dict[str, Any]) -> dict[str, Any]:
     """Insert one alert. A duplicate correlation_id returns the stored row."""
     correlation_id = document["correlation_id"]

@@ -108,6 +108,36 @@ class TestProviderProtocol:
         assert "[image:" in result.text
         assert result.tokens_used > 0
 
+    def test_chat_data_url_image_is_the_file_not_the_base64_text(self):
+        import base64
+        import hashlib
+
+        from providers.qwen_local import QwenLocalProvider
+
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        encoded = base64.b64encode(png).decode("ascii")
+        provider = QwenLocalProvider(mock=True)
+        result = provider.chat(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Is this a scam?"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:application/octet-stream;base64,{encoded}"
+                            },
+                        },
+                    ],
+                }
+            ]
+        )
+        assert "Is this a scam?" in result.text
+        assert hashlib.sha256(png).hexdigest() in result.text
+        assert encoded not in result.text
+        assert "image sha256=" in result.text
+
     def test_extract_triples_mock(self):
         from providers.qwen_local import QwenLocalProvider
 
