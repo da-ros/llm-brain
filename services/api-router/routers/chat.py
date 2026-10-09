@@ -9,9 +9,11 @@ Parsing is delegated to the ETL service (POST /parse); the router stays a gatewa
 
 import base64
 import contextlib
-from datetime import date, timedelta
+import re
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Literal, NamedTuple
+from zoneinfo import ZoneInfo
 
 import httpx
 from auth import verify_token
@@ -198,14 +200,16 @@ async def chat(
     # Premium sends a photo or clip only on the turn that includes it, so the
     # next question can go back through the agents with the written conversation.
     prior_media = [] if tier == "premium" else _history_media(history)
-    notes = await _prompt_notes(user_id, correlation_id) if tier == "premium" else []
+    notes = []
+    if tier == "premium" and _question_uses_calendar(chat_request.message, history):
+        notes = await _prompt_notes(user_id, correlation_id)
     use_agents = tier == "premium" and settings.CHAT_VIA_AGENTS and not attachments and not notes
 
     if use_agents:
         log_with_correlation(correlation_id, "info", "Calling Agents Service POST /reason")
         try:
             data = await _agents_reason(
-                message=_with_history(history, chat_request.message),
+                message=_agents_message(history, chat_request.message),
                 user_id=user_id,
                 session_id=chat_request.session_id,
                 correlation_id=correlation_id,
@@ -535,6 +539,70 @@ def _with_history(history: list[dict], message: str) -> str:
     return f"{earlier}\n\nAnswer the user's question: {message}"
 
 
+def _agents_message(history: list[dict], message: str) -> str:
+    parts = [_clock_line()]
+    aside = _off_calendar_line(history)
+    if aside:
+        parts.append(aside)
+    parts.append(_with_history(history, message))
+    return "\n\n".join(parts)
+
+
+def _clock_line(now: datetime | None = None) -> str:
+    """Wall clock for this request. Note dates are not a substitute for it."""
+    zone = ZoneInfo(get_settings().APP_TIMEZONE)
+    current = now.astimezone(zone) if now is not None else datetime.now(zone)
+    written = f"{current.strftime('%A, %B')} {current.day}, {current.year}"
+    return (
+        f"Current time: {written} "
+        f"({current.isoformat(timespec='minutes')}, unix {int(current.timestamp())}). "
+        "Answer questions about today's date from this clock."
+    )
+
+
+_SCHEDULE_RE = re.compile(
+    r"\b(?:today|tomorrow|yesterday|tonight|calendar|schedule|meeting|meetings|"
+    r"event|events|appointment|appointments|agenda)\b"
+    r"|\b(?:this|next|last)\s+(?:week|month|weekend)\b"
+    r"|\b(?:january|february|march|april|may|june|july|august|september|"
+    r"october|november|december)\b"
+    r"|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b",
+    re.I,
+)
+_CALENDAR_FOLLOWUP_RE = re.compile(
+    r"\b(?:before that|after that|and before|the previous|the one before|what about that)\b",
+    re.I,
+)
+
+
+def _last_turn_used_calendar(history: list[dict]) -> bool:
+    for turn in reversed(history):
+        if turn.get("role") != "assistant":
+            continue
+        return any(
+            isinstance(card, dict) and card.get("origin") == "calendar"
+            for card in (turn.get("cards") or [])
+        )
+    return False
+
+
+def _question_uses_calendar(message: str, history: list[dict]) -> bool:
+    """Notes are for a schedule question, or a short follow-up to one."""
+    text = message or ""
+    if _SCHEDULE_RE.search(text):
+        return True
+    return bool(_last_turn_used_calendar(history) and _CALENDAR_FOLLOWUP_RE.search(text))
+
+
+def _off_calendar_line(history: list[dict]) -> str:
+    if not _last_turn_used_calendar(history):
+        return ""
+    return (
+        "This question is not about the calendar. "
+        "Answer it directly and do not use calendar notes."
+    )
+
+
 async def _prompt_notes(user_id: str, correlation_id: str) -> list[dict[str, str]]:
     today = date.today()
     start = (today - timedelta(days=7)).isoformat()
@@ -552,7 +620,11 @@ def _prompt(
     history: list[dict],
     replay_visual: bool = False,
 ) -> str:
-    blocks: list[str] = []
+    blocks: list[str] = [_clock_line()]
+    if not notes:
+        aside = _off_calendar_line(history)
+        if aside:
+            blocks.append(aside)
     earlier = _history_text(history, replay_visual=replay_visual)
     if earlier:
         blocks.append(earlier)
@@ -560,7 +632,7 @@ def _prompt(
         blocks.append(f"Context from the user's documents:\n\n{context}")
     if notes:
         lines = "\n".join(f"- {note['date']}: {note['note']}" for note in notes)
-        blocks.append(f"Calendar notes (not documents):\n{lines}")
+        blocks.append(f"Calendar notes (not documents). Each date below is that note's day:\n{lines}")
     for item in attachments:
         if item.visual and not item.text.strip():
             blocks.append(

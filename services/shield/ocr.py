@@ -1,23 +1,36 @@
-"""OCR an image with the LangChain image loader. Video is never passed here."""
+"""OCR an image with Tesseract. Video is never passed here.
+
+UnstructuredImageLoader imports the PDF layout stack (pdfminer, then
+unstructured-inference and torch) before it reads the file. That import
+is what turned POST /scan into a 500. Tesseract is the OCR engine that
+loader uses for plain text, which is all a screenshot scan needs.
+"""
 
 from __future__ import annotations
 
-import os
-import tempfile
-from typing import Any
+import io
 
 
-def _image_loader(path: str) -> Any:
-    from langchain_community.document_loaders import UnstructuredImageLoader
+def _extract(payload: bytes) -> str:
+    import pytesseract
+    from PIL import Image
 
-    return UnstructuredImageLoader(path)
+    image = Image.open(io.BytesIO(payload))
+    image.load()
+    return pytesseract.image_to_string(image, lang="eng+spa")
 
 
 def ocr_image(payload: bytes, suffix: str = ".png") -> str:
-    """Return OCR text. Empty string means the image had no readable text."""
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
-        handle.write(payload)
-    documents = _image_loader(handle.name).load()
-    os.unlink(handle.name)
-    parts = [str(getattr(doc, "page_content", "") or "").strip() for doc in documents]
-    return "\n".join(part for part in parts if part).strip()
+    """Return OCR text. Empty string means the image had no readable text.
+
+    ``suffix`` is the extension the scan already chose. Pillow reads the
+    bytes directly, so the extension is not used to pick a decoder.
+    """
+    del suffix
+    if not payload:
+        return ""
+    try:
+        text = _extract(payload)
+    except OSError:
+        return ""
+    return str(text or "").strip()

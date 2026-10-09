@@ -12,11 +12,13 @@ import { useAccount } from "@/lib/account";
 
 type ChatThread = { id: string; title: string };
 type SourceCard = { n: number; label: string; origin: "memory" | "calendar" | "attachment" };
+type TurnFile = { name: string };
 type Turn = {
   role: "user" | "assistant";
   text: string;
   cards?: SourceCard[];
   assumptions?: string[];
+  files?: TurnFile[];
 };
 type Note = { date: string; note: string };
 
@@ -65,26 +67,56 @@ const ACCEPT = [
 ].join(",");
 
 const LIST_ITEM = /^(\*|-|\d+\.)\s+(.*)$/;
+const HEADING = /^(#{1,6})\s+(.*)$/;
+const QUOTE = /^>\s?(.*)$/;
+const INLINE =
+  /\*\*([^*]+)\*\*|\*([^*\n]+)\*|_([^_\n]+)_|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+
+function lineAt(lines: string[], index: number): string {
+  return lines[index] ?? "";
+}
 
 function renderInline(text: string, key: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`/g;
   let cursor = 0;
   let index = 0;
-  for (const match of text.matchAll(pattern)) {
+  for (const match of text.matchAll(INLINE)) {
     const start = match.index ?? 0;
     if (start > cursor) nodes.push(text.slice(cursor, start));
-    if (match[1] != null) {
+    const bold = match[1];
+    const italic = match[2] ?? match[3];
+    const code = match[4];
+    const label = match[5];
+    const href = match[6];
+    if (bold != null) {
       nodes.push(
         <strong key={`${key}-b${index}`} className="font-semibold">
-          {match[1]}
+          {bold}
         </strong>,
       );
-    } else {
+    } else if (italic != null) {
+      nodes.push(
+        <em key={`${key}-i${index}`} className="italic">
+          {italic}
+        </em>,
+      );
+    } else if (code != null) {
       nodes.push(
         <code key={`${key}-c${index}`} className="rounded bg-muted px-1 font-mono text-[0.85em]">
-          {match[2]}
+          {code}
         </code>,
+      );
+    } else if (label != null && href != null) {
+      nodes.push(
+        <a
+          key={`${key}-a${index}`}
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2"
+        >
+          {label}
+        </a>,
       );
     }
     cursor = start + match[0].length;
@@ -101,7 +133,7 @@ function renderAssistantText(text: string): ReactNode {
   let block = 0;
 
   while (i < lines.length) {
-    const line = lines[i];
+    const line = lineAt(lines, i);
     if (line.trim() === "") {
       i += 1;
       continue;
@@ -109,8 +141,8 @@ function renderAssistantText(text: string): ReactNode {
     if (line.startsWith("```")) {
       const code: string[] = [];
       i += 1;
-      while (i < lines.length && !lines[i].startsWith("```")) {
-        code.push(lines[i]);
+      while (i < lines.length && !lineAt(lines, i).startsWith("```")) {
+        code.push(lineAt(lines, i));
         i += 1;
       }
       if (i < lines.length) i += 1;
@@ -125,14 +157,51 @@ function renderAssistantText(text: string): ReactNode {
       block += 1;
       continue;
     }
+    const heading = line.match(HEADING);
+    if (heading) {
+      const level = heading[1]?.length ?? 1;
+      const Tag = level <= 2 ? "h3" : "h4";
+      blocks.push(
+        <Tag
+          key={`p${block}`}
+          className={level === 1 ? "text-base font-semibold" : "text-sm font-semibold"}
+        >
+          {renderInline(heading[2] ?? "", `p${block}`)}
+        </Tag>,
+      );
+      i += 1;
+      block += 1;
+      continue;
+    }
+    if (QUOTE.test(line)) {
+      const quoted: string[] = [];
+      while (i < lines.length && QUOTE.test(lineAt(lines, i))) {
+        quoted.push(lineAt(lines, i).match(QUOTE)?.[1] ?? "");
+        i += 1;
+      }
+      blocks.push(
+        <blockquote key={`p${block}`} className="border-l-2 border-border pl-3">
+          {quoted.map((entry, index) => (
+            <span key={index}>
+              {index > 0 && <br />}
+              {renderInline(entry, `p${block}-q${index}`)}
+            </span>
+          ))}
+        </blockquote>,
+      );
+      block += 1;
+      continue;
+    }
     const item = line.match(LIST_ITEM);
     if (item) {
-      const ordered = /^\d+\./.test(item[1]);
+      const marker = item[1] ?? "";
+      const ordered = /^\d+\./.test(marker);
       const items: string[] = [];
       while (i < lines.length) {
-        const next = lines[i].match(LIST_ITEM);
-        if (!next || /^\d+\./.test(next[1]) !== ordered) break;
-        items.push(next[2]);
+        const next = lineAt(lines, i).match(LIST_ITEM);
+        const nextMarker = next?.[1] ?? "";
+        if (!next || /^\d+\./.test(nextMarker) !== ordered) break;
+        items.push(next[2] ?? "");
         i += 1;
       }
       const ListTag = ordered ? "ol" : "ul";
@@ -150,13 +219,18 @@ function renderAssistantText(text: string): ReactNode {
       continue;
     }
     const paragraph: string[] = [];
-    while (
-      i < lines.length &&
-      lines[i].trim() !== "" &&
-      !lines[i].startsWith("```") &&
-      !LIST_ITEM.test(lines[i])
-    ) {
-      paragraph.push(lines[i]);
+    while (i < lines.length) {
+      const current = lineAt(lines, i);
+      if (
+        current.trim() === "" ||
+        current.startsWith("```") ||
+        LIST_ITEM.test(current) ||
+        HEADING.test(current) ||
+        QUOTE.test(current)
+      ) {
+        break;
+      }
+      paragraph.push(current);
       i += 1;
     }
     blocks.push(
@@ -211,6 +285,7 @@ export function BrainPage() {
   const [selected, setSelected] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
   const openChats = openIds
@@ -239,6 +314,13 @@ export function BrainPage() {
     if (!pane) return;
     pane.scrollTop = pane.scrollHeight;
   }, [turns.length, activeId]);
+
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) return;
+    composer.style.height = "0px";
+    composer.style.height = `${Math.min(composer.scrollHeight, 160)}px`;
+  }, [message]);
 
   async function loadChats() {
     const response = await fetch("/api/chats", { headers: authHeaders() });
@@ -413,7 +495,10 @@ export function BrainPage() {
     const attached = files;
     setThreads((current) => ({
       ...current,
-      [chatId]: [...(current[chatId] ?? []), { role: "user", text }],
+      [chatId]: [
+        ...(current[chatId] ?? []),
+        { role: "user", text, files: attached.map((item) => ({ name: item.name })) },
+      ],
     }));
     setMessage("");
     setFiles([]);
@@ -597,6 +682,21 @@ export function BrainPage() {
                     key={index}
                     className="ml-auto max-w-lg rounded-lg border border-border bg-muted px-4 py-3 text-sm"
                   >
+                    {!!turn.files?.length && (
+                      <div className="mb-2 flex flex-wrap justify-end gap-2">
+                        {turn.files.map((file, fileIndex) => (
+                          <span
+                            key={`${file.name}-${fileIndex}`}
+                            className="inline-flex max-w-36 flex-col items-center gap-0.5"
+                          >
+                            <FileText className="size-4 text-primary" />
+                            <span className="w-full truncate text-center text-[10px] leading-3">
+                              {file.name}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {turn.text}
                   </div>
                 ) : (
@@ -632,6 +732,8 @@ export function BrainPage() {
               )}
               <div className="rounded-lg border border-input bg-card p-2 shadow-panel">
                 <textarea
+                  ref={composerRef}
+                  rows={1}
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
                   onKeyDown={(event) => {
@@ -641,7 +743,7 @@ export function BrainPage() {
                     }
                   }}
                   placeholder="Ask your Brain…"
-                  className="min-h-14 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-muted-foreground"
+                  className="max-h-40 min-h-7 w-full resize-none overflow-y-auto bg-transparent px-2 py-1 text-sm leading-5 outline-none placeholder:text-muted-foreground"
                 />
                 {files.length > 0 && (
                   <ul className="mb-1 flex flex-wrap gap-1.5 px-1">
@@ -708,7 +810,7 @@ export function BrainPage() {
                 {FILE_KINDS.map((kind) => (
                   <li
                     key={kind.label}
-                    className="rounded-md border border-border bg-card px-2.5 py-1.5 text-[11px] leading-4"
+                    className="rounded-md border border-border bg-card px-2 py-1 text-[11px] leading-4"
                   >
                     <span className="font-semibold">{kind.label}</span>
                     <span className="text-muted-foreground"> · {kind.detail}</span>
@@ -868,15 +970,15 @@ function SourceCardView({ card }: { card: SourceCard }) {
   const Icon =
     card.origin === "calendar" ? CalendarDays : card.origin === "attachment" ? Paperclip : FileText;
   return (
-    <div className="flex min-w-0 max-w-full items-center gap-2 rounded-md border border-border bg-card p-3 text-left sm:max-w-[16rem]">
+    <div className="flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-left sm:max-w-[16rem]">
       <span className="text-primary">
-        <Icon className="size-4" />
+        <Icon className="size-3.5" />
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-xs font-semibold">
+        <span className="block truncate text-[11px] font-semibold leading-4">
           {card.n}. {card.label}
         </span>
-        <span className="block truncate text-[10px] text-muted-foreground">
+        <span className="block truncate text-[10px] leading-3 text-muted-foreground">
           {sourceNote(card.origin)}
         </span>
       </span>

@@ -28,6 +28,8 @@ services:
       - RATE_LIMIT_ANALYTICS_INGEST=10
       - RATE_LIMIT_ANALYTICS_QUERY=30
       - CHAT_VIA_AGENTS=true
+      - TZ=America/New_York
+      - APP_TIMEZONE=America/New_York
       - KAFKA_TOPIC_SESSION_TURN=session.turn.completed
       - MAX_RETRIES=3
       - TASK_STATUS_TTL_DAYS=30

@@ -556,6 +556,29 @@ class TestUploadFlow:
 # --- Chat routing ---
 
 
+def test_clock_line_names_the_given_day():
+    from zoneinfo import ZoneInfo
+
+    from routers.chat import _clock_line, _question_uses_calendar
+
+    instant = datetime(2026, 10, 9, 15, 4, tzinfo=ZoneInfo("America/New_York"))
+    line = _clock_line(instant)
+    assert "Friday, October 9, 2026" in line
+    assert f"unix {int(instant.timestamp())}" in line
+    assert "2026-10-01" not in line
+
+    calendar_turn = [
+        {
+            "role": "assistant",
+            "text": "Meeting with Andrew.",
+            "cards": [{"n": 1, "label": "Oct 9", "origin": "calendar"}],
+        }
+    ]
+    assert _question_uses_calendar("What do we have today?", [])
+    assert _question_uses_calendar("And before that", calendar_turn)
+    assert not _question_uses_calendar("What do you think about System One models?", calendar_turn)
+
+
 class TestChat:
     def test_premium_chat_uses_razonador_and_publishes_kafka(self, client):
         with patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason:
@@ -576,6 +599,9 @@ class TestChat:
         assert response.status_code == 200
         body = response.json()
         assert body["response"] == "Insulin is a treatment."
+        assert "Current time:" in reason.await_args.kwargs["message"]
+        assert "unix " in reason.await_args.kwargs["message"]
+        assert "diabetes treatment" in reason.await_args.kwargs["message"]
         assert body["assumptions"]
         assert body["sources"] == ["doc-1"]
         assert body["session_id"] == "sess-1"
@@ -1061,6 +1087,15 @@ class TestShield:
         client.publish_turn.assert_not_called()
         assert call.await_args_list[0].kwargs["correlation_id"] == "cid-shield"
         assert call.await_args_list[0].args[1] == "/scan"
+
+    def test_delete_incident_forwards_to_shield(self, client):
+        with patch("routers.shield._shield", new_callable=AsyncMock) as call:
+            call.return_value = {"deleted": True, "id": "inc-1"}
+            removed = client.delete("/api/shield/incidents/inc-1", headers=auth_header())
+        assert removed.status_code == 200
+        assert removed.json()["deleted"] is True
+        assert call.await_args.args[0] == "DELETE"
+        assert call.await_args.args[1] == "/incidents/inc-1"
 
     def test_free_and_missing_jwt(self, client):
         with patch("routers.shield._shield", new_callable=AsyncMock) as call:
@@ -2074,6 +2109,13 @@ class TestBrain:
             patch("routers.chat._rag_context", new_callable=AsyncMock) as rag,
             patch("routers.chat._llm_generate", new_callable=AsyncMock) as llm,
         ):
+            reason.return_value = {
+                "response": "Finish the draft.",
+                "assumptions": [],
+                "sources": ["Acme MSA"],
+                "tokens_used": 1,
+                "session_id": chat_id,
+            }
             rag.return_value = ("notes", ["Acme MSA"])
             llm.return_value = "Finish the draft."
             posted = client.post(
@@ -2082,14 +2124,22 @@ class TestBrain:
                 json={"message": "What is due?", "session_id": chat_id, "use_rag": True},
             )
         assert posted.status_code == 200
+        assert "Launch review" not in reason.await_args.kwargs["message"]
+        assert all(card["origin"] != "calendar" for card in posted.json()["source_cards"])
         listed = client.get(f"/api/chats/{chat_id}/turns", headers=auth_header())
         assert listed.status_code == 200
         turns = listed.json()["turns"]
-        assert turns[0] == {"role": "user", "text": "What is due?", "cards": [], "assumptions": []}
+        assert turns[0] == {
+            "role": "user",
+            "text": "What is due?",
+            "cards": [],
+            "assumptions": [],
+            "files": [],
+        }
         assert turns[1]["role"] == "assistant"
         assert turns[1]["text"] == "Finish the draft."
         assert turns[1]["cards"][0]["origin"] == "memory"
-        reason.assert_not_awaited()
+        reason.assert_awaited()
         hidden = client.get(f"/api/chats/{chat_id}/turns", headers=auth_header("user2"))
         assert hidden.status_code == 404
 
@@ -2132,6 +2182,8 @@ class TestBrain:
         assert "not saved to memory" in prompt
         stored = client.get(f"/api/chats/{chat_id}/turns", headers=auth_header(tier="free"))
         assert stored.json()["turns"][1]["text"] == "From the file."
+        assert stored.json()["turns"][0]["files"] == [{"name": "notes.docx"}]
+        assert "bm90ZXM=" not in stored.text
 
     def test_free_chat_accepts_five_files_and_rejects_six(self, client):
         files = [
@@ -2379,7 +2431,11 @@ class TestBrain:
         assert cards[0]["origin"] == "memory"
         assert cards[1]["origin"] == "memory"
         assert cards[2]["origin"] == "calendar"
-        assert "Launch review" in llm.await_args.kwargs["prompt"]
+        prompt = llm.await_args.kwargs["prompt"]
+        assert "Launch review" in prompt
+        assert "Current time:" in prompt
+        assert "unix " in prompt
+        assert "Each date below is that note's day" in prompt
         reason.assert_not_awaited()
 
     def test_every_source_is_numbered(self, client):

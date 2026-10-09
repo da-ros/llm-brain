@@ -10,7 +10,7 @@ from exceptions import InferenceTimeoutError, ModelNotFoundError, ModelUnavailab
 from fastapi import APIRouter, HTTPException, Request, status
 from logging_setup import log_with_correlation
 from providers.resolver import get_provider
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter(tags=["chat"])
 
@@ -29,6 +29,7 @@ class ChatRequest(BaseModel):
     user_id: str | None = None
     tier: str = "premium"
     context: str | None = None
+    max_new_tokens: int | None = Field(default=None, ge=1)
 
 
 class ChatResponse(BaseModel):
@@ -71,7 +72,12 @@ async def chat(request: Request, body: ChatRequest):
 
     try:
         result = await asyncio.wait_for(
-            asyncio.to_thread(provider.chat, messages_list, body.context),
+            asyncio.to_thread(
+                provider.chat,
+                messages_list,
+                body.context,
+                body.max_new_tokens,
+            ),
             timeout=settings.INFERENCE_TIMEOUT_SECONDS,
         )
     except TimeoutError as exc:
