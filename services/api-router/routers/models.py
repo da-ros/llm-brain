@@ -5,6 +5,7 @@ it after download. These routes do not read the weight file to hash it again.
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -26,6 +27,8 @@ def _root() -> Path:
 
 def _directory(tier: str, user_id: str) -> Path:
     if tier == "premium":
+        if not user_id or user_id != Path(user_id).name or user_id in {".", ".."}:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
         return _root() / "users" / user_id
     return _root() / "base"
 
@@ -116,6 +119,12 @@ async def on_device_file(
             detail="On-device pack is not ready",
         )
     manifest, weight = loaded
+    root = os.path.realpath(_root())
+    if os.path.commonpath([root, os.path.realpath(weight)]) != root:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="On-device pack is not ready",
+        )
     return FileResponse(
         weight, filename=manifest["filename"], media_type="application/octet-stream"
     )
