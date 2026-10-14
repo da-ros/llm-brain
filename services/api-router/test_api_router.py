@@ -2869,7 +2869,8 @@ class TestOnDeviceModels:
         )
         headers = auth_header("../../secret-pack", tier="premium")
         meta = client.get("/api/models/on-device", headers=headers)
-        assert meta.status_code == 404
+        assert meta.status_code == 200
+        assert meta.json()["ready"] is False
         downloaded = client.get("/api/models/on-device/file", headers=headers)
         assert downloaded.status_code == 404
         assert b"secret-weights" not in downloaded.content
