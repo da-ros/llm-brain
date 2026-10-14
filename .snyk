@@ -237,6 +237,10 @@ ignore:
     - '*':
         reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-EXPAT-20514789:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
 
   # librsvg
   SNYK-DEBIAN13-LIBRSVG-20079484:
