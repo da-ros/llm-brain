@@ -523,8 +523,7 @@ def _history_text(history: list[dict], *, replay_visual: bool = False) -> str:
             kind = item.get("kind")
             if replay_visual and item.get("content_base64") and kind in {"image", "video"}:
                 parts.append(
-                    f"Attached {kind} {name} is included for you to see. "
-                    "It is not saved to memory."
+                    f"Attached {kind} {name} is included for you to see. It is not saved to memory."
                 )
                 continue
             body = (item.get("text") or "").strip() or "No text could be extracted."
@@ -598,8 +597,7 @@ def _off_calendar_line(history: list[dict]) -> str:
     if not _last_turn_used_calendar(history):
         return ""
     return (
-        "This question is not about the calendar. "
-        "Answer it directly and do not use calendar notes."
+        "This question is not about the calendar. Answer it directly and do not use calendar notes."
     )
 
 
@@ -632,7 +630,9 @@ def _prompt(
         blocks.append(f"Context from the user's documents:\n\n{context}")
     if notes:
         lines = "\n".join(f"- {note['date']}: {note['note']}" for note in notes)
-        blocks.append(f"Calendar notes (not documents). Each date below is that note's day:\n{lines}")
+        blocks.append(
+            f"Calendar notes (not documents). Each date below is that note's day:\n{lines}"
+        )
     for item in attachments:
         if item.visual and not item.text.strip():
             blocks.append(

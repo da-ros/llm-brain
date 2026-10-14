@@ -58,7 +58,9 @@ def test_chat_and_note_stay_with_the_owner():
     )
     assert renamed.status_code == 200
     assert renamed.json()["title"] == "Morning"
-    assert client.get("/chats", params={"user_id": "user1"}).json()["chats"][0]["title"] == "Morning"
+    assert (
+        client.get("/chats", params={"user_id": "user1"}).json()["chats"][0]["title"] == "Morning"
+    )
     assert (
         client.patch(
             f"/chats/{chat_id}", params={"user_id": "user2"}, json={"title": "Nope"}

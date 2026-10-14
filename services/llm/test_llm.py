@@ -125,9 +125,7 @@ class TestProviderProtocol:
                         {"type": "text", "text": "Is this a scam?"},
                         {
                             "type": "image_url",
-                            "image_url": {
-                                "url": f"data:application/octet-stream;base64,{encoded}"
-                            },
+                            "image_url": {"url": f"data:application/octet-stream;base64,{encoded}"},
                         },
                     ],
                 }
