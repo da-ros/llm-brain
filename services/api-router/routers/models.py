@@ -59,7 +59,9 @@ def _load(directory: Path) -> tuple[dict, Path] | None:
     filename = str(manifest.get("filename") or "")
     if not filename or filename != Path(filename).name or filename in {".", ".."}:
         return None
-    weight = directory / filename
+    weight = (directory / filename).resolve()
+    if not weight.is_relative_to(_root().resolve()):
+        return None
     if not weight.is_file():
         return None
     try:

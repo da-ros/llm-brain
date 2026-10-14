@@ -2858,6 +2858,23 @@ class TestOnDeviceModels:
         assert downloaded.status_code == 404
         assert b"user-a-weights" not in downloaded.content
 
+    def test_user_id_traversal_cannot_escape_the_model_dir(self, client, tmp_path):
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path)
+        (tmp_path / "users").mkdir()
+        _write_pack(
+            tmp_path.parent / "secret-pack",
+            "qwen3.5-4b-finetuned-q4",
+            "premium",
+            b"secret-weights",
+        )
+        headers = auth_header("../../secret-pack", tier="premium")
+        meta = client.get("/api/models/on-device", headers=headers)
+        assert meta.status_code == 200
+        assert meta.json()["ready"] is False
+        downloaded = client.get("/api/models/on-device/file", headers=headers)
+        assert downloaded.status_code == 404
+        assert b"secret-weights" not in downloaded.content
+
     def test_manifest_sha_is_returned_without_reading_the_weight(self, client, tmp_path):
         get_settings().ONDEVICE_MODEL_DIR = str(tmp_path)
         published = "ab" * 32
