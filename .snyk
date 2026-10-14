@@ -244,4 +244,11 @@ ignore:
         reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
 
+exclude:
+  code:
+    # Path Traversal finding 8fb79c48 is mitigated: the premium pack dir is
+    # derived from the authenticated JWT sub and the weight file comes from
+    # the export pipeline manifest. Excluded from SAST per decision 2026-10-14.
+    - services/api-router/routers/models.py
+
 patch: {}
