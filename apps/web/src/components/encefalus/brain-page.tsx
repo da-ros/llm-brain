@@ -441,7 +441,9 @@ export function BrainPage() {
         return;
       }
       const chat = (await response.json()) as ChatThread;
-      setChats((rows) => rows.map((row) => (row.id === chatId ? { ...row, title: chat.title } : row)));
+      setChats((rows) =>
+        rows.map((row) => (row.id === chatId ? { ...row, title: chat.title } : row)),
+      );
       setRenamingId(null);
     } catch {
       setError("Brain is not reachable. Start the API router and sign in.");
@@ -664,63 +666,60 @@ export function BrainPage() {
               New chat
             </Button>
           </div>
-          <div
-            ref={threadRef}
-            className="min-h-0 flex-1 overflow-y-auto"
-          >
-          <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-8 sm:px-7">
-            {turns.length === 0 && (
-              <p className="text-sm leading-6 text-muted-foreground">
-                Start a chat. Attached files stay in this chat for later questions and are not saved
-                to Memory.
-              </p>
-            )}
-            <div className="space-y-7">
-              {turns.map((turn, index) =>
-                turn.role === "user" ? (
-                  <div
-                    key={index}
-                    className="ml-auto max-w-lg rounded-lg border border-border bg-muted px-4 py-3 text-sm"
-                  >
-                    {!!turn.files?.length && (
-                      <div className="mb-2 flex flex-wrap justify-end gap-2">
-                        {turn.files.map((file, fileIndex) => (
-                          <span
-                            key={`${file.name}-${fileIndex}`}
-                            className="inline-flex max-w-36 flex-col items-center gap-0.5"
-                          >
-                            <FileText className="size-4 text-primary" />
-                            <span className="w-full truncate text-center text-[10px] leading-3">
-                              {file.name}
+          <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-8 sm:px-7">
+              {turns.length === 0 && (
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Start a chat. Attached files stay in this chat for later questions and are not
+                  saved to Memory.
+                </p>
+              )}
+              <div className="space-y-7">
+                {turns.map((turn, index) =>
+                  turn.role === "user" ? (
+                    <div
+                      key={index}
+                      className="ml-auto max-w-lg rounded-lg border border-border bg-muted px-4 py-3 text-sm"
+                    >
+                      {!!turn.files?.length && (
+                        <div className="mb-2 flex flex-wrap justify-end gap-2">
+                          {turn.files.map((file, fileIndex) => (
+                            <span
+                              key={`${file.name}-${fileIndex}`}
+                              className="inline-flex max-w-36 flex-col items-center gap-0.5"
+                            >
+                              <FileText className="size-4 text-primary" />
+                              <span className="w-full truncate text-center text-[10px] leading-3">
+                                {file.name}
+                              </span>
                             </span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {turn.text}
-                  </div>
-                ) : (
-                  <div key={index} className="flex gap-3">
-                    <img
-                      src="/encefalus-mark.png"
-                      alt=""
-                      className="size-8 shrink-0 rounded-lg"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="mb-2 text-sm font-semibold">Encefalus</p>
-                      {renderAssistantText(turn.text)}
-                      {!!turn.cards?.length && (
-                        <div className="mt-5 flex flex-wrap gap-2">
-                          {turn.cards.map((card) => (
-                            <SourceCardView key={card.n} card={card} />
                           ))}
                         </div>
                       )}
+                      {turn.text}
                     </div>
-                  </div>
-                ),
-              )}
-            </div>
+                  ) : (
+                    <div key={index} className="flex gap-3">
+                      <img
+                        src="/encefalus-mark.png"
+                        alt=""
+                        className="size-8 shrink-0 rounded-lg"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-2 text-sm font-semibold">Encefalus</p>
+                        {renderAssistantText(turn.text)}
+                        {!!turn.cards?.length && (
+                          <div className="mt-5 flex flex-wrap gap-2">
+                            {turn.cards.map((card) => (
+                              <SourceCardView key={card.n} card={card} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
             </div>
           </div>
           <div className="shrink-0 border-t border-border bg-background px-4 py-3 sm:px-7">

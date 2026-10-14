@@ -14,9 +14,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-BASE_GGUF_URL = (
-    "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"
-)
+BASE_GGUF_URL = "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"
 
 BASE_ID = "qwen3.5-4b-base-q4"
 PREMIUM_ID = "qwen3.5-4b-finetuned-q4"
@@ -83,7 +81,9 @@ def _fetch_base_gguf(dest: Path) -> None:
 
 def export_base(out_dir: Path, *, fixture: bool) -> dict:
     if fixture:
-        return _write_pack(out_dir / "base", pack_id=BASE_ID, tier="free", payload=b"Q4-FIXTURE-BASE")
+        return _write_pack(
+            out_dir / "base", pack_id=BASE_ID, tier="free", payload=b"Q4-FIXTURE-BASE"
+        )
     directory = out_dir / "base"
     directory.mkdir(parents=True, exist_ok=True)
     weight = directory / f"{BASE_ID}.gguf"

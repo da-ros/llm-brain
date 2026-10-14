@@ -2090,7 +2090,9 @@ class TestBrain:
             ).status_code
             == 404
         )
-        assert client.delete(f"/api/chats/{chat_id}", headers=auth_header("user2")).status_code == 404
+        assert (
+            client.delete(f"/api/chats/{chat_id}", headers=auth_header("user2")).status_code == 404
+        )
         removed = client.delete(f"/api/chats/{chat_id}", headers=auth_header())
         assert removed.status_code == 204
         assert client.get("/api/chats", headers=auth_header()).json()["chats"] == []
