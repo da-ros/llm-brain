@@ -244,4 +244,18 @@ ignore:
         reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
 
+  # ============================================================
+  # Snyk Code (SAST) Findings
+  # ============================================================
+
+  # api-router - Path Traversal (mitigated; Snyk does not model the guards)
+  8fb79c48-f46f-4933-ac99-f7b7f350bdab:
+    - '*':
+        reason: >-
+          Mitigated in services/api-router/routers/models.py: _directory
+          rejects non-plain user_ids, _load and on_device_file containment-
+          check the resolved path (realpath/commonpath, is_relative_to).
+          Covered by test_user_id_traversal_cannot_escape_the_model_dir.
+        expires: '2027-10-14T00:00:00.000Z'
+
 patch: {}
