@@ -10,16 +10,6 @@ jobs:
   pipeline:
     name: Backend → Lint → Test → Snyk Code
     runs-on: ubuntu-latest
-    services:
-      mongo:
-        image: mongo:7
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       # ── 0. Quick setup (lint only needs ruff) ─────────────
       - uses: actions/checkout@v7
@@ -29,13 +19,13 @@ jobs:
       - name: Install linter
         run: pip install ruff
 
-      # ── 1. Lint & Format (fast gate, runs while services boot) ─
+      # ── 1. Lint & Format (fast gate) ────────────────────────
       - name: Run ruff lint
         run: ruff check .
       - name: Run ruff format check
         run: ruff format --check .
 
-      # ── 2. Heavy dependencies + services are now ready ─────
+      # ── 2. Heavy dependencies ──────────────────────────────
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libmagic1
       - name: Install dependencies
@@ -43,13 +33,10 @@ jobs:
           for svc in services/*/requirements.txt; do pip install -r "$svc"; done
           pip install pytest pytest-asyncio pytest-cov
 
-      # ── 3. Tests + Coverage (services are healthy by now) ───
+      # ── 3. Tests + Coverage (suite is hermetic: db/LLM mocked) ─
       - name: Run tests with coverage
         run: pytest --cov --cov-report=term-missing
         env:
-          MONGODB_URI: mongodb://localhost:27017
-          MONGODB_DB: llm_brain_test
-          CHROMA_PERSIST_DIR: ./data/chroma_test
           JWT_SECRET_KEY: test-secret
           JWT_ALGORITHM: HS256
           JWT_EXPIRATION_MINUTES: 60
