@@ -244,6 +244,14 @@ ignore:
         reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
 
+  # cyrus-sasl2 - Heap Buffer Overflow (CVE-2026-107161, DIGEST-MD5)
+  SNYK-DEBIAN13-CYRUSSASL2-20652395:
+    - '*':
+        reason: No fixed version available for Debian 13. Pulled in by the
+          python:3.13-slim base image; the vulnerable DIGEST-MD5 client path
+          is unused by any service.
+        expires: '2027-01-01T00:00:00.000Z'
+
 exclude:
   code:
     # Path Traversal finding 8fb79c48 is mitigated: the premium pack dir is
