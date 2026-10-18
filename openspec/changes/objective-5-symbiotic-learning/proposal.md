@@ -15,7 +15,7 @@ in real time.
 - **Frame 3 (RAG, port 8002)**: MongoDB + Chroma, Fernet-encrypted embeddings,
   Top-k retrieval scoped by `user_id`; HTTP sync used by chat.
 - **Frame 4 (LLM port 8003, Fine-Tune port 8004)**: multimodal Qwen3.5-4B inference
-  in a local Docker container for premium users; local LoRA (PEFT/ms-swift) jobs
+  as a host process on port 8003 for premium users; local LoRA (PEFT/ms-swift) jobs
   submitted only by explicit `POST /train` (manual, not automatic).
 - **Frame 1.1 (API Router, port 8000)**: JWT, `X-Request-ID`, `POST /api/chat`
   currently calls RAG then LLM directly.

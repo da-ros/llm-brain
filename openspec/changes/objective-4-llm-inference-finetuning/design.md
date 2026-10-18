@@ -1,4 +1,4 @@
-## Design: LLM Inference (local Qwen3.5-4B container) + Fine-Tuning Services
+## Design: LLM Inference (local Qwen3.5-4B) + Fine-Tuning Services
 
 ### Architecture Overview
 
@@ -11,7 +11,8 @@
 ┌─────────────────────┐    ┌─────────────────────────┐
 │    LLM Service      │    │    Fine-Tune Service     │
 │    Puerto 8003      │    │    Puerto 8004           │
-│                     │    │                           │
+│ (host process —     │    │ (Docker Compose)         │
+│  NOT in Compose)    │    │                          │
 │ POST /generate      │    │ POST /train               │
 │ POST /chat          │    │ GET  /status/:job_id      │
 │ GET  /health        │    │ GET  /health              │
@@ -19,12 +20,13 @@
           │                            │
           ▼                            ▼
 ┌─────────────────────────────────────────────────────┐
-│         Local Docker (laptop) — "cloud"              │
+│         Host / local machine — "cloud"              │
 │                                                      │
 │  ┌──────────────────┐    ┌────────────────────────┐  │
 │  │   Inference       │    │   Fine-Tuning (LoRA)   │  │
 │  │  Qwen3.5-4B       │    │  Qwen3.5-4B + LoRA     │  │
-│  │  (container)      │    │  (PEFT/ms-swift/Unsloth│  │
+│  │ LLM_BACKEND=      │    │  (PEFT/ms-swift/Unsloth│  │
+│  │ qwen_local|ollama │    │   in its container)    │  │
 │  └──────────────────┘    └────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
 ```
@@ -33,20 +35,22 @@
 
 #### 1. LLM Service (`services/llm/`)
 
-**Responsibility**: Receive multimodal inference requests from API Router, run Qwen3.5-4B in the local container, return responses.
+**Responsibility**: Receive multimodal inference requests from API Router, run Qwen3.5-4B through the configured backend, return responses.
 
 | Endpoint | Method | Description | Request | Response |
 |----------|--------|-------------|---------|----------|
 | `/generate` | POST | Text completion | `{"prompt": "...", "user_id": "..."}` | `{"response": "...", "tokens_used": N}` |
 | `/chat` | POST | Multimodal chat with context (text/image/video) | `{"messages": [...], "context": "...", "user_id": "..."}` | `{"response": "...", "tokens_used": N}` |
-| `/health` | GET | Provider status | — | `{"status": "ok", "provider": "qwen-local-container", "model": "qwen3.5-4b"}` |
+| `/health` | GET | Real backend status | — | `{"status": "ok", "backend": "qwen_local"\|"ollama", "provider": "mock"\|"qwen-local"\|"ollama", "model": "qwen3.5-4b"\|"qwen3.5:4b"}` |
 
 **Provider Layer**:
 ```
 providers/
 ├── base.py         ← LLMProvider Protocol
 ├── qwen_local.py   ← Local Qwen3.5-4B provider (base, full precision — not fine-tuned)
-└── resolver.py     ← get_provider() — selects by tier
+├── ollama_local.py ← OllamaProvider — HTTP to a local Ollama server (Linux/Windows)
+└── resolver.py     ← get_provider() — selects by LLM_BACKEND; QWEN_MOCK always wins;
+                       validates tier (free | premium)
 ```
 
 **Key Design Decisions**:
@@ -56,11 +60,13 @@ providers/
    - Easy to mock for testing
    - Clear interface: `chat()`, `complete()`
 
-2. **Local Qwen3.5-4B container** (not AWS Bedrock, not OpenAI):
+2. **Local Qwen3.5-4B host process** (not AWS Bedrock, not OpenAI):
    - Single model family: Qwen3.5-4B (dense, natively multimodal — text, image, video; 262K ctx; Apache 2.0; ~8 GB BF16, ~2.5–3 GB Q4)
-   - "Cloud" = a local Docker container on the laptop; $0, fully offline-capable
+   - "Cloud" = a local process on port 8003; $0, fully offline-capable
+   - Runtime chosen per machine: `LLM_BACKEND=qwen_local` (torch in-process — Mac/Metal) or `LLM_BACKEND=ollama` (local Ollama server — Linux/Windows, Vulkan/CPU; iGPU AMD gfx90c has no ROCm kernels, so PyTorch/ROCm is not viable there)
+   - `QWEN_MOCK=true` (default) wins over any backend: CI and unit tests never load weights or open sockets
    - Serves **base** Qwen3.5-4B (full precision, **not** fine-tuned) for web free and for premium. Web free has no RAG and no memory. Premium may carry RAG context from the API Router.
-   - On-device (Frame 10): phone free = base quantized and does not call this container; Premium = fine-tuned quantized (React Native / Neural Engine / Metal)
+   - On-device (Frame 10): phone free = base quantized and does not call this service; Premium = fine-tuned quantized (React Native / Neural Engine / Metal)
    - Embeddings stay Qwen3-VL-Embedding-2B (same family)
 
 3. **Stateless requests**:
@@ -107,11 +113,20 @@ Triples (JSONL) → Format conversion → Local LoRA over Qwen3.5-4B → LoRA ad
 
 **LLM Service** (`services/llm/config.py`):
 ```python
-# Local Qwen3.5-4B container
+# Runtime: qwen_local = in-process Qwen3.5-4B (Mac/Metal);
+#          ollama = local Ollama server (Linux/Windows). Default keeps CI on qwen_local.
+LLM_BACKEND: str = "qwen_local"
+
+# Qwen3.5-4B (qwen_local backend)
 QWEN_MODEL_ID: str = "qwen3.5-4b"
-QWEN_ADAPTER_PATH: str | None = (
-    None  # LoRA adapter path (Premium on-device build only; cloud unused)
-)
+QWEN_HF_MODEL_ID: str = "Qwen/Qwen3.5-4B"
+QWEN_DEVICE: str = "auto"  # mps (Mac) / cuda / cpu
+QWEN_MOCK: bool = True  # wins over any backend — CI never reaches a real model
+QWEN_ADAPTER_PATH: str | None = None  # LoRA adapter (Premium on-device only; unused here)
+
+# Ollama backend (only used when LLM_BACKEND=ollama)
+OLLAMA_URL: str = "http://127.0.0.1:11434"
+OLLAMA_MODEL: str = "qwen3.5:4b"
 
 # Service
 LLM_HOST: str = "0.0.0.0"
@@ -136,15 +151,12 @@ FINETUNE_PORT: int = 8004
 
 ### Communication with API Router
 
-The API Router (`services/api-router/`) already calls:
+The API Router (`services/api-router/`) already calls (from inside Docker Compose,
+where the LLM Service is reached on the host gateway):
 ```python
-# In services/api-router/routers/chat.py
-async with httpx.AsyncClient(timeout=30.0) as client:
-    llm_response = await client.post(
-        "http://llm-service:8003/generate",
-        json={"prompt": prompt, "user_id": user_id, "tier": tier},
-        headers={"X-Request-ID": correlation_id},
-    )
+# services/api-router/config.py
+LLM_SERVICE_URL: str = "http://host.docker.internal:8003"  # default
+# docker-compose.yml sets the same value as an environment variable
 ```
 
 This integration is already in place — the LLM Service just needs to respond on port 8003.

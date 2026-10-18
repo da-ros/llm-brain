@@ -81,7 +81,7 @@ Formato (CorrelationFilter):
 2026-09-16T15:00:00 [abc-123] INFO agents-service: reason_graph: retrieve_context
 2026-09-16T15:00:00 [abc-123] INFO agents-service: MCP rag_search → RAG http://rag-service:8002/search user_id=user1
 2026-09-16T15:00:00 [abc-123] INFO agents-service: reason_graph: generate_answer
-2026-09-16T15:00:00 [abc-123] INFO agents-service: MCP llm_generate → LLM http://llm-service:8003/chat (Qwen3.5-4B)
+2026-09-16T15:00:00 [abc-123] INFO agents-service: MCP llm_generate → LLM http://host.docker.internal:8003/chat (Qwen3.5-4B)
 2026-09-16T15:00:01 [abc-123] INFO agents-service: reason_graph: extract_assumptions
 ```
 

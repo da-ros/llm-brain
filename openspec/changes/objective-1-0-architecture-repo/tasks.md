@@ -41,7 +41,7 @@
 - [x] C.3 Keep `.env.example` in sync with all settings
 - [x] C.4 Define `LLMProvider` protocol (chat/completion interface)
 - [x] C.5 Implement on-device provider (React Native / Neural Engine / Metal — Free: Qwen3.5-4B base quantized Q4; Premium: fine-tuned quantized Q4)
-- [x] C.6 Implement local containerized "cloud" provider (LLM Service 8003 — Qwen3.5-4B **base**, not fine-tuned)
+- [x] C.6 Implement local "cloud" provider (LLM Service 8003 host process — Qwen3.5-4B **base**, not fine-tuned)
 - [x] C.7 Implement `get_provider()` resolver that selects by `LLM_PROVIDER` and fails fast on unsupported values
 
 ## D. FastAPI Application

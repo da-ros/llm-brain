@@ -44,9 +44,9 @@ SHALL start with documented safe defaults when optional variables are absent.
 The system SHALL select the active LLM provider and model from configuration at runtime, and
 SHALL support at least an on-device provider (Qwen3.5-4B quantized in React Native on iPhone
 via Neural Engine / Metal — Free uses the **base** model; Premium uses the **fine-tuned**
-build) and a local containerized "cloud" provider (Qwen3.5-4B **base**, not fine-tuned,
-for Premium + RAG).
-and a local containerized "cloud" provider (Qwen3.5-4B served by the LLM Service Docker container)
+build) and a "cloud" provider served by the LLM Service on port 8003 — a **host process**
+(Qwen3.5-4B **base**, not fine-tuned, for Premium + RAG; runtime chosen with `LLM_BACKEND`:
+`qwen_local` | `ollama`)
 without code changes to switch between them.
 
 #### Scenario: Switching provider via configuration

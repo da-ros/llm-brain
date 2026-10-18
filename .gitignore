@@ -26,6 +26,8 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+!.env.example-mac
+!.env.example-linux
 *.pem
 *.key
 

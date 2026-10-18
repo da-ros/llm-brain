@@ -194,7 +194,8 @@ class TestHealthEndpoint:
         data = response.json()
         assert data["status"] == "ok"
         assert data["service"] == "llm-service"
-        assert data["provider"] == "qwen-local"
+        assert data["backend"] == "qwen_local"
+        assert data["provider"] == "mock"
         assert data["device"] == "auto"
         assert data["model"] == "qwen3.5-4b"
         assert "api_key" not in data
@@ -383,6 +384,303 @@ def test_settings_cache_reset():
     clear_settings_cache()
     s = get_settings()
     assert s.QWEN_MODEL_ID == "qwen3.5-4b"
+
+
+# ── Ollama provider (Linux backend) ──────────────────────────────
+
+
+class TestOllamaProvider:
+    """LLM_BACKEND=ollama — HTTP provider with mocked Ollama responses."""
+
+    def test_ollama_satisfies_protocol(self):
+        from providers.base import LLMProvider
+        from providers.ollama_local import OllamaProvider
+
+        provider = OllamaProvider(mock=True)
+        assert isinstance(provider, LLMProvider)
+
+    def test_mock_complete_matches_qwen_local_text(self):
+        from providers.ollama_local import OllamaProvider
+
+        provider = OllamaProvider(mock=True)
+        result = provider.complete("hola")
+        assert result.text.startswith("[Qwen3.5-4B base]")
+        assert "hola" in result.text
+        assert result.tokens_used > 0
+
+    def test_mock_chat_with_image_media(self):
+        import base64
+        import hashlib
+
+        from providers.ollama_local import OllamaProvider
+
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        encoded = base64.b64encode(png).decode("ascii")
+        provider = OllamaProvider(mock=True)
+        result = provider.chat(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What is this?"},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{encoded}"},
+                        },
+                    ],
+                }
+            ]
+        )
+        assert "What is this?" in result.text
+        # Mock path with inline media shows the decoded sha, not the base64.
+        assert hashlib.sha256(png).hexdigest() in result.text
+        assert encoded not in result.text
+
+    def test_mock_extract_triples(self):
+        from providers.ollama_local import OllamaProvider
+
+        provider = OllamaProvider(mock=True)
+        triples, tokens = provider.extract_triples("Ibuprofeno trata el dolor.")
+        assert triples
+        assert triples[0]["subject"]
+        assert tokens > 0
+
+    @staticmethod
+    def _fake_ollama(handler):
+        """Patch httpx.Client so OllamaProvider talks to ``handler`` instead."""
+        import httpx
+
+        return patch.object(
+            httpx, "Client", return_value=httpx.Client(transport=httpx.MockTransport(handler))
+        )
+
+    def test_complete_posts_to_ollama_and_decodes(self):
+        import json as _json
+
+        import httpx
+        from providers.ollama_local import OllamaProvider
+
+        captured: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["url"] = str(request.url)
+            captured["body"] = request.read()
+            return httpx.Response(
+                200,
+                json={
+                    "message": {"role": "assistant", "content": "  respuesta  "},
+                    "eval_count": 42,
+                },
+            )
+
+        provider = OllamaProvider(mock=False, model="qwen3.5:4b", url="http://ollama.test:11434")
+        with self._fake_ollama(handler):
+            result = provider.complete("hola", max_new_tokens=64)
+        assert result.text == "respuesta"
+        assert result.tokens_used == 42
+        assert captured["url"] == "http://ollama.test:11434/api/chat"
+        body = _json.loads(captured["body"])
+        assert body["model"] == "qwen3.5:4b"
+        assert body["options"] == {"num_predict": 64}
+        assert body["messages"][0]["content"] == "hola"
+
+    def test_chat_sends_images_and_context(self):
+        import base64
+        import json as _json
+
+        import httpx
+        from providers.ollama_local import OllamaProvider
+
+        captured: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = _json.loads(request.read())
+            return httpx.Response(200, json={"message": {"content": "ok"}, "eval_count": 1})
+
+        provider = OllamaProvider(mock=False)
+        png = b"\x89PNG\r\n\x1a\nphoto"
+        with self._fake_ollama(handler):
+            provider.chat(
+                [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "mira esto"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": "data:image/png;base64," + base64.b64encode(png).decode()
+                                },
+                            },
+                        ],
+                    }
+                ],
+                context="Receta: Ibuprofeno",
+            )
+        messages = captured["body"]["messages"]
+        assert messages[0]["role"] == "system"
+        assert "Ibuprofeno" in messages[0]["content"]
+        assert messages[1]["images"] == [base64.b64encode(png).decode()]
+        assert "mira esto" in messages[1]["content"]
+
+    def test_video_degrades_to_text_marker(self):
+        import json as _json
+
+        import httpx
+        from providers.ollama_local import OllamaProvider
+
+        captured: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = _json.loads(request.read())
+            return httpx.Response(200, json={"message": {"content": "ok"}, "eval_count": 1})
+
+        provider = OllamaProvider(mock=False)
+        with self._fake_ollama(handler):
+            provider.chat(
+                [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "que hay?"},
+                            {
+                                "type": "video_url",
+                                "video_url": {"url": "data:video/mp4;base64,AAAA"},
+                            },
+                        ],
+                    }
+                ]
+            )
+        entry = captured["body"]["messages"][0]
+        assert "[video]" in entry["content"]
+        assert "images" not in entry
+
+    def test_extract_triples_uses_json_format(self):
+        import json as _json
+
+        import httpx
+        from providers.ollama_local import OllamaProvider
+
+        captured: dict = {}
+        payload = [{"subject": "Ibuprofeno", "predicate": "trata", "object": "dolor"}]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = _json.loads(request.read())
+            return httpx.Response(
+                200, json={"message": {"content": _json.dumps(payload)}, "eval_count": 10}
+            )
+
+        provider = OllamaProvider(mock=False)
+        with self._fake_ollama(handler):
+            triples, tokens = provider.extract_triples("Ibuprofeno trata el dolor.")
+        assert captured["body"]["format"] == "json"
+        assert triples[0]["object"] == "dolor"
+        assert tokens == 10
+
+    def test_server_down_raises_model_not_found(self):
+        import httpx
+        from exceptions import ModelNotFoundError
+        from providers.ollama_local import OllamaProvider
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused", request=request)
+
+        provider = OllamaProvider(mock=False, url="http://127.0.0.1:1")
+        with self._fake_ollama(handler), pytest.raises(ModelNotFoundError, match="ollama serve"):
+            provider.complete("hola")
+
+    def test_missing_model_raises_model_not_found(self):
+        import httpx
+        from exceptions import ModelNotFoundError
+        from providers.ollama_local import OllamaProvider
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(404, json={"error": "nf"})
+
+        provider = OllamaProvider(mock=False, model="nope:1b")
+        with self._fake_ollama(handler), pytest.raises(ModelNotFoundError, match="ollama pull"):
+            provider.complete("hola")
+
+    def test_timeout_raises_inference_timeout(self):
+        import httpx
+        from exceptions import InferenceTimeoutError
+        from providers.ollama_local import OllamaProvider
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.TimeoutException("too slow", request=request)
+
+        provider = OllamaProvider(mock=False, timeout_seconds=0.5)
+        with self._fake_ollama(handler), pytest.raises(InferenceTimeoutError):
+            provider.complete("hola")
+
+
+# ── Resolver backend selection (LLM_BACKEND) ─────────────────────
+
+
+class TestResolverBackend:
+    """LLM_BACKEND picks the provider; QWEN_MOCK still wins over any backend."""
+
+    def _fresh(self):
+        import providers.resolver as resolver
+        from config import clear_settings_cache
+
+        clear_settings_cache()
+        resolver._provider = None
+        return resolver
+
+    def test_mock_wins_over_ollama_backend(self):
+        resolver = self._fresh()
+        with patch.dict(os.environ, {"LLM_BACKEND": "ollama", "QWEN_MOCK": "true"}):
+            provider = resolver.get_provider("premium")
+        from providers.qwen_local import QwenLocalProvider
+
+        assert isinstance(provider, QwenLocalProvider)
+        assert provider.mock is True
+
+    def test_ollama_backend_builds_ollama_provider(self):
+        resolver = self._fresh()
+        with patch.dict(
+            os.environ,
+            {"LLM_BACKEND": "ollama", "QWEN_MOCK": "false", "OLLAMA_MODEL": "qwen3.5:4b"},
+        ):
+            provider = resolver.get_provider("premium")
+        from providers.ollama_local import OllamaProvider
+
+        assert isinstance(provider, OllamaProvider)
+        assert provider.model == "qwen3.5:4b"
+        assert provider.mock is False
+
+    def test_qwen_local_backend_builds_qwen_provider(self):
+        resolver = self._fresh()
+        with patch.dict(os.environ, {"LLM_BACKEND": "qwen_local", "QWEN_MOCK": "false"}):
+            provider = resolver.get_provider("free")
+        from providers.qwen_local import QwenLocalProvider
+
+        assert isinstance(provider, QwenLocalProvider)
+        assert provider.mock is False
+
+    def test_unknown_backend_raises(self):
+        resolver = self._fresh()
+        with (
+            patch.dict(os.environ, {"LLM_BACKEND": "vllm", "QWEN_MOCK": "false"}),
+            pytest.raises(ValueError, match="Unsupported LLM_BACKEND"),
+        ):
+            resolver.get_provider("premium")
+
+    def test_provider_is_cached_across_calls(self):
+        resolver = self._fresh()
+        with patch.dict(os.environ, {"LLM_BACKEND": "ollama", "QWEN_MOCK": "true"}):
+            first = resolver.get_provider("free")
+            second = resolver.get_provider("premium")
+        assert first is second
+
+    def test_invalid_tier_still_raises(self):
+        resolver = self._fresh()
+        with pytest.raises(ValueError, match="Unsupported subscription tier"):
+            resolver.get_provider("enterprise")
+
+    def teardown_method(self):
+        self._fresh()
 
 
 # ── Extract endpoint coverage ─────────────────────────────────────

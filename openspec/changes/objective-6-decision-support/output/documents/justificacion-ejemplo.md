@@ -83,7 +83,7 @@ LLM, y lo devuelve en la respuesta.
 2026-09-21T15:02:00 [cid-1] INFO simulator-service: POST /simulate user_id=user1 tier=premium
 2026-09-21T15:02:00 [cid-1] INFO simulator-service: RAG hydrate skipped — client variables cover detected families
 2026-09-21T15:02:00 [cid-1] INFO simulator-service: decision tree leaves=['optimistic', 'baseline', 'pessimistic'] count=3
-2026-09-21T15:02:00 [cid-1] INFO simulator-service: LLM POST /chat http://llm-service:8003/chat temperature=0 model=Qwen3.5-4B
+2026-09-21T15:02:00 [cid-1] INFO simulator-service: LLM POST /chat http://host.docker.internal:8003/chat temperature=0 model=Qwen3.5-4B
 2026-09-21T15:02:01 [cid-1] INFO simulator-service: persisted simulation id=8f2c correlation_id=cid-1
 ```
 

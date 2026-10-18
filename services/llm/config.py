@@ -1,6 +1,7 @@
 """LLM Service configuration.
 
-Qwen3.5-4B base runs in this process on the Mac (Metal), not in a container.
+LLM_BACKEND picks the runtime per machine: qwen_local runs Qwen3.5-4B in
+this process (Mac: Metal), ollama talks to a local Ollama server (Linux).
 LoRA adapters are for the Premium on-device build, not loaded here.
 """
 
@@ -31,13 +32,21 @@ class Settings(BaseSettings):
     LLM_HOST: str = "0.0.0.0"
     LLM_PORT: int = 8003
 
+    # qwen_local = in-process Qwen3.5-4B (Mac/Metal). ollama = local Ollama server.
+    # The default keeps CI and machines without a .env on the current behavior.
+    LLM_BACKEND: str = "qwen_local"
+
     QWEN_MODEL_ID: str = "qwen3.5-4b"
     QWEN_HF_MODEL_ID: str = "Qwen/Qwen3.5-4B"
     QWEN_ADAPTER_PATH: str | None = None
+    # Mock wins over every backend: CI and unit tests never reach a real model.
     QWEN_MOCK: bool = True
     # auto uses Metal on this Mac, CUDA when present, and refuses CPU:
     # the bfloat16 checkpoint crashes the Linux VM's CPU kernels.
     QWEN_DEVICE: str = "auto"
+
+    OLLAMA_URL: str = "http://127.0.0.1:11434"
+    OLLAMA_MODEL: str = "qwen3.5:4b"
     HF_HOME: str = str(_HF_HOME)
     INFERENCE_TIMEOUT_SECONDS: float = 600.0
 

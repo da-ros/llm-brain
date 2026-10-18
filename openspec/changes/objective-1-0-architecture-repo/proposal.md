@@ -44,8 +44,8 @@ The platform supports multiple real users from the MVP.
 - Define `LLMProvider` protocol (chat/completion interface)
 - Implement on-device provider (React Native — Free: Qwen3.5-4B **base** quantized Q4;
   Premium: fine-tuned quantized Q4; Neural Engine / Metal)
-- Implement the local containerized "cloud" provider (premium tier — Qwen3.5-4B **base**,
-  not fine-tuned, served by the LLM Service Docker container on port 8003)
+- Implement the local "cloud" provider (premium tier — Qwen3.5-4B **base**,
+  not fine-tuned, served by the LLM Service host process on port 8003)
 - Implement `get_provider()` resolver
 
 ### FastAPI Application Skeleton

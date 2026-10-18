@@ -1,6 +1,7 @@
 """LLM Service — FastAPI application.
 
 Local Qwen3.5-4B base inference for web free, premium, and ETL triple extraction.
+Backend per machine: qwen_local (in-process, Mac/Metal) or ollama (Linux).
 """
 
 from __future__ import annotations
@@ -30,7 +31,10 @@ def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(
         title="LLM Service",
-        description="Local Qwen3.5-4B base inference on Metal — web free, premium, and ETL",
+        description=(
+            "Local Qwen3.5-4B base inference — qwen_local (Metal) or ollama "
+            "(Linux); web free, premium, and ETL"
+        ),
         version=settings.SERVICE_VERSION,
     )
     application.middleware("http")(add_correlation_id)
@@ -39,9 +43,10 @@ def create_app() -> FastAPI:
     application.include_router(chat.router)
     application.include_router(extract.router)
     logger.info(
-        "LLM Service ready — provider=qwen-local model=%s device=%s",
-        settings.QWEN_MODEL_ID,
-        settings.QWEN_DEVICE,
+        "LLM Service ready — backend=%s model=%s mock=%s",
+        settings.LLM_BACKEND,
+        settings.OLLAMA_MODEL if "ollama" in settings.LLM_BACKEND else settings.QWEN_MODEL_ID,
+        settings.QWEN_MOCK,
     )
     return application
 

@@ -38,7 +38,7 @@ Architecture: API Router (FastAPI) + Microservices (ETL, RAG, LLM, Fine-Tune) + 
 | API Router | 8000 | JWT validation, correlation ID, routing |
 | ETL Service | 8001 | Document parsing, triple extraction |
 | RAG Service | 8002 | MongoDB, Chroma, semantic search |
-| LLM Service | 8003 | Qwen3.5-4B inference (local Docker container) |
+| LLM Service | 8003 | Qwen3.5-4B inference (host process: qwen_local | ollama) |
 | Fine-Tune Service | 8004 | LoRA training (background worker) |
 
 **Rationale**:
@@ -236,7 +236,7 @@ Max retries → dlq-max (permanent failure)
 | Message Queue | Apache Kafka (self-hosted in Docker) | Async communication, retry, DLQ |
 | Document Store | MongoDB (GridFS) — local container | Flexible schema, file storage |
 | Vector Store | Chroma (local) | Semantic search (2048-dim embeddings) |
-| LLM "Cloud" | Qwen3.5-4B **base** (local Docker container, not fine-tuned) | Premium inference + RAG |
+| LLM "Cloud" | Qwen3.5-4B **base** (host process, not fine-tuned) | Premium inference + RAG |
 | LLM On-device | Qwen3.5-4B quantized Q4 — Free = base; Premium = fine-tuned (React Native / Neural Engine / Metal) | On-device inference |
 | Mobile | React Native (iPhone) + Neural Engine / Metal | Native on-device inference |
 | Web | React + Chart.js | Dashboard |
