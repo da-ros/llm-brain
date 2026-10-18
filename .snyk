@@ -60,12 +60,12 @@ ignore:
   # nltk - Directory Traversal (transitive via unstructured; no direct
   # requirement of any service, no upstream fix available)
   SNYK-PYTHON-NLTK-20936872:
-    - nltk@3.10.3:
+    - '*':
         reason: >-
-          No fix available. Transitive dependency of unstructured (document
-          loaders); not a direct requirement of any service. ETL text
-          extraction runs on trusted local files, not attacker-controlled
-          archives.
+          No fix available. Reached only through etl > unstructured@0.18.32
+          > nltk@3.10.3 (transitive); not a direct requirement of any
+          service. ETL text extraction runs on trusted local files, not
+          attacker-controlled archives.
         expires: '2027-01-01T00:00:00.000Z'
 
   # ============================================================
