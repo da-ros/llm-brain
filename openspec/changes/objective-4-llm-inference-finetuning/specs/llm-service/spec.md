@@ -6,18 +6,21 @@
 
 The LLM Service SHALL serve inference on port 8003 using **Qwen3.5-4B** (dense,
 natively multimodal — text, image and video; 262K context; Apache 2.0; ~8 GB in
-BF16, ~2.5–3 GB in Q4) running in a **local Docker container** ("cloud" = local
-container). It SHALL serve the **base** full-precision model (**not** fine-tuned)
-for **web free** and for **premium**. Web free is this same model with no RAG
-and no memory. Premium may include RAG context supplied by the API Router.
+BF16, ~2.5–3 GB in Q4) as a **host process** ("cloud" = local process on port
+8003, outside Docker Compose, reached from containers via
+`host.docker.internal:8003`). The runtime SHALL be selected per machine with
+`LLM_BACKEND` (see the backend-selection requirement below). It SHALL serve the
+**base** full-precision model (**not** fine-tuned) for **web free** and for
+**premium**. Web free is this same model with no RAG and no memory. Premium may
+include RAG context supplied by the API Router.
 It SHALL NOT call AWS Bedrock or any external
 managed inference API, and it SHALL NOT depend on Llama models.
 
-#### Scenario: Web free and premium text completion via local container
+#### Scenario: Web free and premium text completion via the local backend
 
 - **GIVEN** an authenticated web free or premium request
 - **WHEN** the client sends `POST /generate` with a `prompt`, `user_id`, and `tier` of `free` or `premium`
-- **THEN** the service runs the same base Qwen3.5-4B in the local container and responds HTTP 200 with `response` and `tokens_used`
+- **THEN** the service runs the same base Qwen3.5-4B through the configured backend and responds HTTP 200 with `response` and `tokens_used`
 
 #### Scenario: Multimodal chat with RAG context
 
@@ -33,21 +36,48 @@ managed inference API, and it SHALL NOT depend on Llama models.
 
 #### Scenario: Inference errors are surfaced
 
-- **WHEN** the local Qwen3.5-4B container is unavailable or the request times out
-- **THEN** the service responds HTTP 500 (container/model error) or HTTP 504 (timeout) and logs the error with the `X-Request-ID`
+- **WHEN** the configured backend (Qwen local process or Ollama) is unavailable or the request times out
+- **THEN** the service responds HTTP 500 (backend/model error) or HTTP 504 (timeout) and logs the error with the `X-Request-ID`
 
-### Requirement: The container serves web free on the base model
+### Requirement: Backend selection via LLM_BACKEND
+
+The service SHALL select its inference runtime from the `LLM_BACKEND` setting:
+`qwen_local` (default — in-process Qwen3.5-4B via torch/Metal, Mac) or `ollama`
+(HTTP to a local Ollama server, Linux/Windows). `QWEN_MOCK=true` SHALL win over
+any backend: with the mock active the service SHALL NOT load weights nor open
+network sockets, whatever `.env` configures. An unsupported `LLM_BACKEND` value
+SHALL fail with `ValueError` when the provider is resolved.
+
+#### Scenario: Mock wins over any backend
+
+- **GIVEN** a machine whose `.env` sets `LLM_BACKEND=ollama` and `QWEN_MOCK=true`
+- **WHEN** a request resolves the provider
+- **THEN** the resolver returns the mock provider and no Ollama connection is attempted
+
+#### Scenario: Ollama backend on Linux/Windows
+
+- **GIVEN** a machine with `.env` `LLM_BACKEND=ollama`, `QWEN_MOCK=false`, and a running Ollama server
+- **WHEN** a request resolves the provider
+- **THEN** the resolver returns `OllamaProvider` pointing at `OLLAMA_URL` with model `OLLAMA_MODEL`
+
+#### Scenario: Unknown backend is rejected
+
+- **GIVEN** `.env` sets `LLM_BACKEND` to a value other than `qwen_local` or `ollama` and `QWEN_MOCK=false`
+- **WHEN** a request resolves the provider
+- **THEN** the service responds HTTP 500 and logs the `Unsupported LLM_BACKEND` error
+
+### Requirement: The service serves web free on the base model
 
 The LLM Service SHALL serve `tier=free` and `tier=premium` with the same base
 Qwen3.5-4B weights. It SHALL NOT load a LoRA adapter for either tier. An
 unknown tier SHALL be HTTP 400. Phone free SHALL NOT call this service: that
 chat stays on the iPhone with the base Q4 pack (Frame 10).
 
-#### Scenario: Web free uses the base container
+#### Scenario: Web free uses the base model
 
 - **GIVEN** a web free request with `tier=free`
 - **WHEN** the API Router calls `POST /generate` or `POST /chat`
-- **THEN** the service returns HTTP 200 from the base container, with no RAG context and no memory
+- **THEN** the service returns HTTP 200 from the base model, with no RAG context and no memory
 
 #### Scenario: Phone free does not call this service
 
@@ -73,16 +103,18 @@ require fine-tuning for triple extraction.
 - **WHEN** it calls the LLM Service with the document content
 - **THEN** the base Qwen3.5-4B reasons over the content and returns triples (subject-predicate-object + metadata) in JSON
 
-### Requirement: Health endpoint reports the local Qwen model
+### Requirement: Health endpoint reports the real backend
 
-The `GET /health` endpoint SHALL remain public and report the served model as
-the local Qwen3.5-4B container.
+The `GET /health` endpoint SHALL remain public and report the backend actually
+in use: `backend` (`qwen_local` | `ollama`), `provider` (`mock` when
+`QWEN_MOCK=true`, else `qwen-local` | `ollama`) and `model` (`qwen3.5-4b` for
+`qwen_local`, `OLLAMA_MODEL` for `ollama`). It SHALL NOT expose secrets.
 
 #### Scenario: Public health
 
 - **GIVEN** the LLM Service is running
 - **WHEN** a client sends `GET /health`
-- **THEN** the service responds HTTP 200 with `service: "llm-service"`, `provider` indicating the local Qwen3.5-4B container, and `model: "qwen3.5-4b"`
+- **THEN** the service responds HTTP 200 with `service: "llm-service"`, the real `backend` and `provider`, and the `model` for that backend (e.g. `provider: "mock"` under CI defaults, `provider: "ollama"` with `LLM_BACKEND=ollama` and the mock off)
 
 ## Notes
 
@@ -94,7 +126,7 @@ the local Qwen3.5-4B container.
 
 #### POST /generate
 
-Realiza una completion de texto con Qwen3.5-4B (contenedor local).
+Realiza una completion de texto con Qwen3.5-4B (backend local configurado).
 
 **Request**:
 ```json
@@ -114,7 +146,7 @@ Realiza una completion de texto con Qwen3.5-4B (contenedor local).
 
 **Errors**:
 - 400: Invalid request (missing prompt, or `tier` other than `free` or `premium`)
-- 500: Inference error (local Qwen3.5-4B container unavailable / model error)
+- 500: Inference error (backend unavailable / model error, p.ej. `Unsupported LLM_BACKEND`)
 - 504: Inference timeout
 
 #### POST /chat
@@ -142,33 +174,46 @@ Realiza un chat multimodal (texto, imagen, video) con contexto RAG opcional.
 
 #### GET /health
 
-**Response 200**:
+**Response 200** (backend real; ejemplo con mock activo — CI):
 ```json
 {
   "status": "ok",
   "service": "llm-service",
-  "provider": "qwen-local-container",
+  "backend": "qwen_local",
+  "provider": "mock",
+  "device": "auto",
   "model": "qwen3.5-4b",
   "version": "0.1.0"
 }
 ```
 
+Con `LLM_BACKEND=ollama` y `QWEN_MOCK=false`: `"backend": "ollama"`,
+`"provider": "ollama"`, `"model": "qwen3.5:4b"`.
+
 ### Configuration
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
-| `QWEN_MODEL_ID` | `qwen3.5-4b` | Modelo base servido en el contenedor local (sin fine-tuning) |
+| `LLM_BACKEND` | `qwen_local` | Runtime: `qwen_local` (torch in-process) o `ollama` (server Ollama local) |
+| `QWEN_MOCK` | `true` | Gana sobre cualquier backend; CI y tests nunca tocan un modelo real |
+| `QWEN_MODEL_ID` | `qwen3.5-4b` | Modelo base servido (sin fine-tuning) |
+| `QWEN_HF_MODEL_ID` | `Qwen/Qwen3.5-4B` | Repo de Hugging Face (descarga a `data/huggingface`) |
+| `QWEN_DEVICE` | `auto` | `mps` (Mac) / `cuda` / `cpu` — solo backend `qwen_local` |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Server Ollama — solo backend `ollama` |
+| `OLLAMA_MODEL` | `qwen3.5:4b` | Tag del modelo en Ollama |
 | `LLM_HOST` | `0.0.0.0` | Bind host |
 | `LLM_PORT` | `8003` | Bind port |
 
 ### Dependencies
 
-- Qwen3.5-4B **base** (contenedor Docker local; "cloud" = local container; not fine-tuned)
+- Backend `qwen_local`: Qwen3.5-4B **base** BF16 de Hugging Face (~9.3 GB) + `requirements-gpu.txt` (torch, Mac)
+- Backend `ollama`: server Ollama local + `ollama pull qwen3.5:4b` (~4 GB) — solo `httpx`, sin torch
+- En ambos: `QWEN_MOCK=true` (default) no necesita nada
 
 ### Integration
 
-- **Upstream**: API Router (`services/api-router/routers/chat.py`) llama a `http://llm-service:8003/generate`; ETL Service (Frame 2) llama al modelo base para extraer triples
-- **Downstream**: contenedor local Qwen3.5-4B
+- **Upstream**: API Router (`LLM_SERVICE_URL=http://host.docker.internal:8003`, idem en `docker-compose.yml`); ETL Service (Frame 2) llama al modelo base para extraer triples
+- **Downstream** (`qwen_local`): pesos en `data/huggingface` / checkpoint local; (`ollama`): servidor Ollama en `OLLAMA_URL`
 
 ### Correlation ID
 

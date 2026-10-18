@@ -7,7 +7,7 @@
                 <mxCell id="title" value="Frame 4 — LLM Service Data Flow&#10;Web free and premium share the base model. ETL uses that same model. Phone free never enters this service." style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;fontStyle=1" parent="1" vertex="1">
                     <mxGeometry x="280" y="12" width="1300" height="56" as="geometry"/>
                 </mxCell>
-                <mxCell id="f1" value="FLOW 1 — PREMIUM INFERENCE (sync, 30s timeout)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" parent="1" vertex="1">
+                <mxCell id="f1" value="FLOW 1 — PREMIUM INFERENCE (sync, 600s timeout)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" parent="1" vertex="1">
                     <mxGeometry x="60" y="80" width="520" height="24" as="geometry"/>
                 </mxCell>
                 <mxCell id="c1" value="1. Client" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" parent="1" vertex="1">
@@ -19,10 +19,10 @@
                 <mxCell id="c3" value="3. LLM Service&#10;POST /generate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="480" y="120" width="160" height="70" as="geometry"/>
                 </mxCell>
-                <mxCell id="c4" value="4. get_provider&#10;tier=free or premium" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="c4" value="4. resolver&#10;LLM_BACKEND + tier" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="700" y="110" width="160" height="90" as="geometry"/>
                 </mxCell>
-                <mxCell id="c5" value="5. QwenLocalProvider&#10;complete(prompt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                <mxCell id="c5" value="5. provider.complete&#10;(qwen_local | ollama)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="920" y="120" width="180" height="70" as="geometry"/>
                 </mxCell>
                 <mxCell id="c6" value="6. Qwen3.5-4B&#10;base runtime" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
@@ -49,7 +49,7 @@
                 <mxCell id="a45" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="c4" target="c5" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="a45l" value="provider" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#82b366" parent="a45" vertex="1" connectable="0">
+                <mxCell id="a45l" value="QWEN_MOCK → mock" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#82b366" parent="a45" vertex="1" connectable="0">
                     <mxGeometry relative="1" as="geometry"><mxPoint y="-10" as="offset"/></mxGeometry>
                 </mxCell>
                 <mxCell id="a56" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeWidth=2;endArrow=classic;strokeColor=#d6b656;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="c5" target="c6" edge="1">
@@ -138,7 +138,7 @@
                 <mxCell id="err2" value="Unknown tier&#10;→ 400" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="310" y="580" width="240" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="err3" value="Container / model error&#10;→ 500" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="err3" value="Backend / model error&#10;→ 500" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="580" y="580" width="220" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="err4" value="Inference timeout&#10;→ 504" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" parent="1" vertex="1">
@@ -147,7 +147,7 @@
                 <mxCell id="notes" value="KEY DESIGN NOTES" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#333333" parent="1" vertex="1">
                     <mxGeometry x="60" y="670" width="240" height="24" as="geometry"/>
                 </mxCell>
-                <mxCell id="n1" value="• Solid arrows travel left → right (call). Dashed arrows are responses.&#10;• Provider is created per request. Sync QwenLocalProvider runs via asyncio.to_thread + wait_for.&#10;• tokens_used is counted on every 200 response. Cloud stays base; no LoRA adapter is applied here.&#10;• Correlation ID is copied from X-Request-ID; this service does not mint a new UUID." style="text;html=1;align=left;verticalAlign=top;strokeColor=none;fillColor=none;fontSize=12;" parent="1" vertex="1">
+                <mxCell id="n1" value="• Solid arrows travel left → right (call). Dashed arrows are responses.&#10;• Provider is cached after the first resolve (a new object per request would reload 9 GB). Sync providers run via asyncio.to_thread + wait_for.&#10;• tokens_used is counted on every 200 response. Cloud stays base; no LoRA adapter is applied here.&#10;• Correlation ID is copied from X-Request-ID; this service does not mint a new UUID." style="text;html=1;align=left;verticalAlign=top;strokeColor=none;fillColor=none;fontSize=12;" parent="1" vertex="1">
                     <mxGeometry x="60" y="700" width="1200" height="90" as="geometry"/>
                 </mxCell>
             </root>

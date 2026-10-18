@@ -14,7 +14,8 @@ context: |
        file type) -> content reasoned by Qwen3.5-4B -> JSON triples + metadata; >=100 items.
     3. Hybrid store + RAG: MongoDB (docs/binaries via GridFS, local container) + Chroma
        (2048-dim multimodal embeddings via Qwen3-VL-Embedding-2B); LangChain Top-k retrieval.
-    4. LLM: single multimodal Qwen3.5-4B — LOCAL Docker container serves **base** model
+    4. LLM: single multimodal Qwen3.5-4B — LOCAL host process (LLM_BACKEND=qwen_local|ollama)
+      serves **base** model
        (Premium cloud + RAG). On-device: Free = base quantized; Premium = fine-tuned
        quantized (React Native / Neural Engine / Metal). Local LoRA fine-tuning feeds
        Premium on-device only.
@@ -34,7 +35,8 @@ context: |
     - Parsers: LangChain document loaders out-of-the-box (any format, incl. OCR/video).
     - Data: MongoDB (local Docker, GridFS for binaries), Chroma (local Docker, 2048-dim).
     - LLM: single multimodal Qwen3.5-4B (text/image/video).
-      Cloud = local Docker container with **base** Qwen3.5-4B (not fine-tuned; Premium + RAG).
+      Cloud = local host process on port 8003 with **base** Qwen3.5-4B (not fine-tuned;
+      Premium + RAG). Runtime per machine: qwen_local (torch/Metal) or ollama (Linux/Windows).
       On-device Free = **base** Qwen3.5-4B quantized (Q4) in React Native on iPhone via
       Neural Engine / Metal — out of the box, no fine-tuning, no cloud access.
       On-device Premium = **fine-tuned** Qwen3.5-4B quantized (Q4) in React Native, plus
@@ -42,14 +44,14 @@ context: |
     - Embeddings: Qwen3-VL-Embedding-2B (2048-dim, multimodal, Matryoshka-truncatable).
     - Infra: Docker Compose, GitHub Actions CI. (AWS ECS Fargate + API Gateway = future.)
     - Fine-tuning: LOCAL LoRA (PEFT / ms-swift / Unsloth) over Qwen3.5-4B — output is the
-      **Premium on-device** build only (cloud container stays base).
-    - Inference: local Qwen3.5-4B base container (Premium cloud) / on-device React Native
+      **Premium on-device** build only (the cloud host process stays base).
+    - Inference: local Qwen3.5-4B base host process (Premium cloud) / on-device React Native
       (Free = base; Premium = fine-tuned).
 
   Subscription profiles (multi-tenant):
     - Free: Qwen3.5-4B base quantized on-device in React Native (iPhone Neural Engine /
       Metal); no fine-tuning; no cloud access; no context, no files.
-    - Premium: fine-tuned Qwen3.5-4B on-device + cloud base Qwen3.5-4B (container, not
+    - Premium: fine-tuned Qwen3.5-4B on-device + cloud base Qwen3.5-4B (host process, not
       fine-tuned) + RAG, files, web dashboard.
     - Each user authenticates (JWT + bcrypt) and has isolated data (user_id).
 
@@ -149,7 +151,7 @@ frames:
   frame-4:
     directory: objective-4-llm-inference-finetuning
     title: "LLM Inference (local Qwen3.5-4B) + Fine-Tuning Services"
-    description: "Multimodal LLM inference service (port 8003) serving **base** Qwen3.5-4B in a local Docker container (Premium cloud + RAG), and local LoRA fine-tuning service (port 8004) that produces the **Premium on-device** build. Free on-device = base quantized (Frame 10). Built BEFORE Frame 2 so ETL can call the base model."
+    description: "Multimodal LLM inference service (port 8003, host process with LLM_BACKEND=qwen_local|ollama) serving **base** Qwen3.5-4B (Premium cloud + RAG), and local LoRA fine-tuning service (port 8004) that produces the **Premium on-device** build. Free on-device = base quantized (Frame 10). Built BEFORE Frame 2 so ETL can call the base model."
     anteproyecto_objectives:
       - "Objetivo Específico 4 (LLM principal)"
     depends_on: ["frame-1-1"]
@@ -250,7 +252,7 @@ frames:
   frame-10:
     directory: objective-10-mobile-app
     title: "Mobile App (React Native)"
-    description: "React Native iPhone app with auth, navigation, and on-device Qwen3.5-4B via Neural Engine / Metal — Free uses base (out of the box); Premium uses fine-tuned on-device plus cloud base container"
+    description: "React Native iPhone app with auth, navigation, and on-device Qwen3.5-4B via Neural Engine / Metal — Free uses base (out of the box); Premium uses fine-tuned on-device plus cloud base host process"
     anteproyecto_objectives:
       - "Objetivo Específico 1 (mobile foundation)"
       - "Objetivo Específico 4 (Qwen3.5-4B on-device via React Native / Neural Engine / Metal)"

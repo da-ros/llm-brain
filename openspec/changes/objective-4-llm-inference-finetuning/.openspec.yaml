@@ -2,7 +2,7 @@ schema: spec-driven
 created: 2026-08-31
 frame: frame-4
 title: "LLM Inference (local Qwen3.5-4B) + Fine-Tuning Services"
-description: "Multimodal LLM inference service (port 8003) serving Qwen3.5-4B in a local Docker container, and local LoRA fine-tuning service (port 8004)"
+description: "Multimodal LLM inference service (port 8003, host process with LLM_BACKEND=qwen_local|ollama) serving Qwen3.5-4B base, and local LoRA fine-tuning service (port 8004)"
 anteproyecto_objectives:
   - "Objetivo Específico 4 (LLM principal)"
 depends_on:
@@ -13,7 +13,7 @@ services:
   - name: llm-service
     directory: services/llm
     port: 8003
-    description: "Local Qwen3.5-4B multimodal inference (container) — web free, premium, and ETL triple extraction"
+    description: "Local Qwen3.5-4B multimodal inference (host process: qwen_local or ollama) — web free, premium, and ETL triple extraction"
   - name: finetune-service
     directory: services/finetune
     port: 8004

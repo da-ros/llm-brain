@@ -9,7 +9,6 @@ from config import get_settings
 from exceptions import InferenceTimeoutError, ModelNotFoundError, ModelUnavailableError
 from fastapi import APIRouter, HTTPException, Request, status
 from logging_setup import log_with_correlation
-from providers.qwen_local import QwenLocalProvider
 from providers.resolver import get_provider
 from pydantic import BaseModel
 
@@ -55,10 +54,10 @@ async def extract(request: Request, body: ExtractRequest):
         log_with_correlation(correlation_id, "warning", f"Invalid tier: {body.tier}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    if not isinstance(provider, QwenLocalProvider):
+    if not hasattr(provider, "extract_triples"):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Triple extraction requires the local Qwen3.5-4B provider",
+            detail="Triple extraction requires a provider with extract_triples",
         )
 
     try:

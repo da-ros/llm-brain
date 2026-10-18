@@ -172,7 +172,7 @@ LLM 5xx / timeout / bad JSON → 502/504, no persist
 SIMULATOR_HOST=0.0.0.0
 SIMULATOR_PORT=8007
 RAG_SERVICE_URL=http://rag-service:8002
-LLM_SERVICE_URL=http://llm-service:8003
+LLM_SERVICE_URL=http://host.docker.internal:8003
 LLM_TEMPERATURE=0
 MONGODB_URI=...
 MONGODB_DB=llm_brain

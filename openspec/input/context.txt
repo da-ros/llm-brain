@@ -11,9 +11,15 @@ Modelo de negocio: plataforma **multi-usuario** con dos niveles de suscripción 
 Cada usuario se registra, inicia sesión y tiene su propia suscripción. Los datos están aislados por usuario.
 
 > **Estado actual: SOLO DESARROLLO LOCAL.** No se despliega en la nube todavía.
-> El "modelo en la nube" es un **proceso en la Mac** (puerto 8003), no un contenedor:
-> **PyTorch** carga **Qwen3.5-4B base** (sin fine-tuning) en **Metal (MPS)**.
-> Docker no ve la GPU de Apple, y el checkpoint BF16 no corre en la CPU de esa VM.
+> El "modelo en la nube" es un **proceso en el host** (puerto 8003), no un contenedor.
+> El runtime lo decide la variable **`LLM_BACKEND`** por máquina: en la **Mac**
+> (`qwen_local`) **PyTorch** carga **Qwen3.5-4B base** (sin fine-tuning) en
+> **Metal (MPS)**; en **Linux/Windows** (`ollama`) el mismo servicio delega la
+> inferencia a un servidor **Ollama** local (llama.cpp — la iGPU AMD `gfx90c` de
+> Barcelo **no** está en los kernels ROCm de PyTorch, por eso Ollama). `QWEN_MOCK=true`
+> (default) gana sobre cualquier backend y lo deja en mock. **La guía completa de
+> arranque (requisitos, puertos, descarga del modelo, Compose) está en
+> [`docs/local-execution.md`](../../docs/local-execution.md).**
 > Los demás servicios lo llaman por `host.docker.internal:8003`. **Free web** usa
 > ese proceso, sin RAG y sin memoria. **Free móvil** no lo llama: corre el mismo
 > modelo **base cuantizado (Q4, GGUF)** con **llama.cpp** en la **GPU (Metal)** del
@@ -45,7 +51,7 @@ Gated DeltaNet que esos runtimes aún no bajan a Q4. No hay WebGPU en el navegad
 | **Free** | Qwen3.5-4B **base** Q4 GGUF, llama.cpp en la GPU. Siempre. Sin LoRA y sin el proceso 8003 | No | Hasta 5, solo en el teléfono (no se suben) |
 | **Premium** | Interruptor: LoRA Q4 GGUF on-device, **o** proceso base (8003) + RAG y memoria | Sí, solo en ese modo cloud | Hasta 5. On-device se quedan en el teléfono; en cloud van con el chat |
 
-> **Free web** ≠ **Free móvil**. Web: proceso base en la Mac, sin RAG ni memoria.
+> **Free web** ≠ **Free móvil**. Web: proceso base en el host, sin RAG ni memoria.
 > Móvil: solo el Q4 GGUF en el iPhone. Premium móvil elige uno de los dos modos.
 
 ## Modelo de Usuario
@@ -108,8 +114,8 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 │                     │              │ │  LLM Service    │ │
 │                     │              │ │  Puerto 8003    │ │
 │                     │              │ │ Qwen3.5-4B      │ │
-│                     │              │ │ (proceso Mac,   │ │
-│                     │              │ │  PyTorch/Metal) │ │
+│                     │              │ │ (proceso en host)│ │
+│                     │              │ │qwen_local|ollama│ │
 │                     │              │ └─────────────────┘ │
 │                     │              │ ┌─────────────────┐ │
 │                     │              │ │ Fine-Tune Svc   │ │
@@ -139,7 +145,7 @@ operaciones pesadas y sync (HTTP) para consultas rápidas.
 | **API Router** | 8000 | JWT validation, correlation ID, routing interno a servicios |
 | **ETL Service** | 8001 | Loaders LangChain (cualquier archivo), extracción de triples por LLM, distillation |
 | **RAG Service** | 8002 | MongoDB, Chroma, embeddings Qwen3-VL-Embedding-2B (o el hash mock si `EMBEDDING_MOCK=true`), semantic search, context injection |
-| **LLM Service** | 8003 | Inferencia multimodal Qwen3.5-4B. **Proceso en la Mac** (PyTorch, Metal/MPS). No está en `docker-compose`. Pesos `Qwen/Qwen3.5-4B` en `data/huggingface`. Timeout 600s. `QWEN_MOCK=true` salta los pesos |
+| **LLM Service** | 8003 | Inferencia multimodal Qwen3.5-4B. **Proceso en el host** (no en `docker-compose`). Backend según `LLM_BACKEND`: `qwen_local` = PyTorch/Metal en la Mac; `ollama` = servidor Ollama local en Linux/Windows. Pesos `Qwen/Qwen3.5-4B` en `data/huggingface` (o `ollama pull qwen3.5:4b`). Timeout 600s. `QWEN_MOCK=true` (default) salta los pesos. Ver `docs/local-execution.md` |
 | **Fine-Tune Service** | 8004 | LoRA local (PEFT) sobre Qwen3.5-4B. El adapter es por usuario y solo alimenta el GGUF **Premium on-device**. `LORA_MOCK=true` es el default local. No entrena el proceso de 8003 |
 | **Chroma** | 8005 | Vector store: embeddings 2048-dim + chunk_text + metadata (local dev). El contenedor escucha 8000; el host publica 8005 |
 | **Agents Service** | 8006 | Bucle simbiótico: LangGraph (`reason_graph` + `learn_graph`) + MCP (Ingestor, Razonador, Evaluador). Premium only |
@@ -269,8 +275,11 @@ GET  /health:      1000 req/min (monitoreo)
 - **Único modelo** para todo: **Qwen3.5-4B** (nativo multimodal — **texto, imagen y
   video**; 262K de contexto; Apache 2.0). En la Mac el checkpoint es BF16 (~9 GB,
   `Qwen/Qwen3.5-4B`). En el teléfono el archivo es GGUF **Q4_K_M** (~2,7 GB).
-- **"Cloud" = proceso en la Mac** (LLM Service, puerto 8003, PyTorch + Metal): **Qwen3.5-4B
-  base**, sin fine-tuning. Acepta plan **free** y **premium** con los mismos pesos.
+- **"Cloud" = proceso en el host** (LLM Service, puerto 8003): **Qwen3.5-4B
+  base**, sin fine-tuning, servido según `LLM_BACKEND` — in-process con
+  **PyTorch + Metal** en la Mac (`qwen_local`), o vía servidor **Ollama**
+  local en Linux/Windows (`ollama`, ~4 GB Q4_K_M + encoder CLIP). Acepta plan
+  **free** y **premium** con los mismos pesos.
   **Free web:** ese modelo, sin RAG y sin memoria. **Premium:** el mismo modelo con RAG.
   Docker no lo contiene: lo llama por `host.docker.internal:8003`. `QWEN_MOCK=true` no
   carga los pesos.
@@ -389,21 +398,26 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 
 ## Despliegue
 
-> **MVP = solo local.** No hay despliegue en la nube por ahora. API, RAG, ETL, Agents,
-> Fine-Tune, Simulator, Shield, Analytics, Web, Kafka, Mongo y Chroma corren en Docker
-> Compose. El LLM (Qwen3.5-4B) corre **fuera** de Compose, en la Mac, para usar Metal.
-> La columna Producción es **trabajo futuro** y no forma parte del alcance actual.
+> **MVP = solo local. Guía completa de arranque: [`docs/local-execution.md`](../../docs/local-execution.md)**
+> (requisitos, `.env` por máquina, descarga de Qwen desde Hugging Face,
+> puertos libres y qué archivo sobreescribir si hay conflictos).
+> No hay despliegue en la nube por ahora. API, RAG, ETL, Agents, Fine-Tune,
+> Simulator, Shield, Analytics, Web, Kafka, Mongo y Chroma corren en Docker
+> Compose. El LLM (Qwen3.5-4B) corre **fuera** de Compose, en el host, para usar
+> Metal (Mac) u Ollama (Linux/Windows). La columna Producción es **trabajo
+> futuro** y no forma parte del alcance actual.
 
 | Entorno | Infraestructura | Propósito |
 |---------|-----------------|-----------|
-| **Local (MVP)** | Docker Compose + proceso LLM en la Mac | Desarrollo y pruebas. Clientes → API Router directo (sin AWS API GW). LLM en el puerto 8003 del host. |
+| **Local (MVP)** | Docker Compose + proceso LLM en el host | Desarrollo y pruebas. Clientes → API Router directo (sin AWS API GW). LLM en el puerto 8003 del host. |
 | **Producción (futuro)** | AWS ECS Fargate | Escalado, disponibilidad, load. AWS API Gateway para routing externo |
 
 ### Decisiones de infraestructura
 
-- **Docker** para todos los servicios excepto el LLM, que corre en la Mac (PyTorch / Metal)
+- **Docker** para todos los servicios excepto el LLM, que corre en el host
+  (PyTorch / Metal en la Mac, o servidor Ollama en Linux/Windows)
 - **LLM "cloud" = proceso local (base, sin fine-tuning)** para Free web (sin RAG) y Premium (con RAG). On-device Free = Q4 GGUF base. On-device Premium = Q4 GGUF de su LoRA
-- **Cada servicio en Compose** tiene su propio Dockerfile. El LLM no tiene imagen: es un proceso Python en la Mac
+- **Cada servicio en Compose** tiene su propio Dockerfile. El LLM no tiene imagen: es un proceso Python en el host
 - **Kafka**: Self-hosted en Docker (local) / AWS MSK (producción futura)
 - **ECS Fargate / AWS API Gateway**: producción futura; en el MVP se accede directo al API Router
 
@@ -420,7 +434,7 @@ sobre correos/mensajes/SMS de prueba. Muestra alertas emergentes y registra inci
 | RAG | LangChain, Chroma |
 | Agents / bucle simbiótico | LangGraph (orquestación) + MCP tool contracts; nodos HTTP hacia RAG/LLM/Fine-Tune |
 | Document Store | MongoDB (GridFS para binarios) — contenedor local |
-| LLM (inferencia) | Proceso PyTorch/Metal en la Mac: Free web sin RAG; Premium con RAG. On-device: llama.cpp, Q4 GGUF base (Free) o de su LoRA (Premium) |
+| LLM (inferencia) | Proceso en el host (8003): PyTorch/Metal en la Mac (`LLM_BACKEND=qwen_local`) u Ollama en Linux/Windows (`ollama`). Free web sin RAG; Premium con RAG. On-device: llama.cpp, Q4 GGUF base (Free) o de su LoRA (Premium) |
 | Web | TanStack Start (React) + Recharts, host `localhost:3080` |
 | Móvil | React Native (iPhone) + llama.cpp (`llama.rn`) en la GPU (Metal) |
 | Infra Local (MVP) | Docker Compose para los servicios; LLM fuera del Compose, puerto 8003 |
@@ -512,7 +526,7 @@ Fuentes:
 - **Fuera de alcance**: UI Multilingüe
 
 ### Plataformas
-- **Incluido**: Web app (TanStack Start) + **React Native (iPhone)** con Qwen3.5-4B on-device vía llama.cpp / Metal; el LLM de la Mac también es local
+- **Incluido**: Web app (TanStack Start) + **React Native (iPhone)** con Qwen3.5-4B on-device vía llama.cpp / Metal; el LLM del host también es local
 - **Fuera de alcance**: PWA / WebGPU en navegador, asistentes de voz, despliegue en la nube
 
 ### Tipos de datos
@@ -561,7 +575,7 @@ Cada paso indica qué se hará, cómo se ejecutará y para qué contribuye al lo
 
 3. **Almacén híbrido y RAG**: **MongoDB local** (GridFS) para binarios y registros, **Chroma** para embeddings 2048-dim + chunk_text. Embeddings **multimodales** con **Qwen3-VL-Embedding-2B**. LangChain para búsqueda Top-k y recuperación semántica (cross-modal).
 
-4. **LLM principal (proceso en la Mac) + LLM on-device**: PyTorch/Metal sirve **Qwen3.5-4B base** (sin fine-tuning) a **Free web** (sin RAG ni memoria) y a **Premium** (con RAG). **Free móvil** usa ese mismo modelo **base Q4 GGUF** con **llama.cpp** en el iPhone, sin llamar al puerto 8003. El LoRA local alimenta solo el GGUF on-device de Premium. Objetivo on-device: ≤2s (>18 tok/s).
+4. **LLM principal (proceso en el host) + LLM on-device**: el LLM Service (puerto 8003) sirve **Qwen3.5-4B base** (sin fine-tuning) a **Free web** (sin RAG ni memoria) y a **Premium** (con RAG), con backend `qwen_local` (PyTorch/Metal en la Mac) u `ollama` (Linux/Windows). **Free móvil** usa ese mismo modelo **base Q4 GGUF** con **llama.cpp** en el iPhone, sin llamar al puerto 8003. El LoRA local alimenta solo el GGUF on-device de Premium. Objetivo on-device: ≤2s (>18 tok/s).
 
 5. **Bucle de aprendizaje simbiótico**: Agents Service (puerto 8006) con LangGraph
    (`reason_graph` + `learn_graph`) y tres agentes MCP (Ingestor, Razonador, Evaluador).

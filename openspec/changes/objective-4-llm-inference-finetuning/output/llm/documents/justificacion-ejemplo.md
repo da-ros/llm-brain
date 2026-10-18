@@ -1,8 +1,10 @@
 # Justificación — LLM Service (Frame 4)
 
-El LLM Service es el **contenedor local** que sirve **Qwen3.5-4B base** (sin
-fine-tuning) en el puerto 8003. "Cloud" en el MVP = este proceso Docker en la
-laptop. AWS Bedrock, Llama y APIs gestionadas quedan fuera de alcance.
+El LLM Service es el **proceso en el host** que sirve **Qwen3.5-4B base** (sin
+fine-tuning) en el puerto 8003. "Cloud" en el MVP = este proceso local. El
+runtime lo elige `LLM_BACKEND`: `qwen_local` (torch in-process, Mac/Metal) u
+`ollama` (server Ollama local, Linux/Windows). AWS Bedrock, Llama y APIs
+gestionadas quedan fuera de alcance.
 
 ## El problema que resuelve
 
@@ -22,13 +24,14 @@ El servicio **no** entrena, **no** aplica adapters LoRA y **no** llama a la nube
 | Módulo | Responsabilidad |
 |--------|-----------------|
 | `main.py` | App FastAPI, middleware de correlation ID, montaje de routers |
-| `config.py` | pydantic-settings: `QWEN_MODEL_ID`, timeout, `QWEN_MOCK` |
+| `config.py` | pydantic-settings: `LLM_BACKEND`, `QWEN_MODEL_ID`, `OLLAMA_*`, timeout, `QWEN_MOCK` |
 | `logging_setup.py` | `CorrelationFilter` + `log_with_correlation` |
 | `exceptions.py` | `ModelUnavailableError`, `ModelNotFoundError`, `InferenceTimeoutError` |
 | `providers/base.py` | Protocol `LLMProvider` + `LLMResult` |
-| `providers/qwen_local.py` | Inferencia local (mock en CI; transformers si `QWEN_MOCK=false`) |
-| `providers/resolver.py` | `free` y `premium` → el mismo `QwenLocalProvider` base |
-| `routers/health.py` | `GET /health` público, `provider: qwen-local-container` |
+| `providers/qwen_local.py` | Backend `qwen_local` — inferencia in-process (mock en CI; transformers si `QWEN_MOCK=false`) |
+| `providers/ollama_local.py` | Backend `ollama` — `OllamaProvider` por HTTP (httpx) a `OLLAMA_URL` |
+| `providers/resolver.py` | `free` y `premium` → el mismo provider base; `LLM_BACKEND` elige runtime y `QWEN_MOCK` gana siempre |
+| `routers/health.py` | `GET /health` público con `backend` + `provider` real (mock \| qwen-local \| ollama) |
 | `routers/generate.py` | `POST /generate` |
 | `routers/chat.py` | `POST /chat` multimodal + RAG `context` |
 | `routers/extract.py` | `POST /extract` triples JSON |
@@ -55,7 +58,8 @@ Errores:
 
 ```
 2026-08-31T10:00:00 [def-456] WARNING llm-service: Invalid tier: unknown
-2026-08-31T10:00:01 [ghi-789] ERROR llm-service: Qwen3.5-4B container/model error: Qwen3.5-4B container unavailable
+2026-08-31T10:00:01 [ghi-789] ERROR llm-service: Qwen3.5-4B model error: Qwen3.5-4B model unavailable: ...
+2026-08-31T10:00:01 [mno-345] ERROR llm-service: LLM error: Ollama server not reachable at http://127.0.0.1:11434. Is `ollama serve` running?
 2026-08-31T10:00:01 [jkl-012] ERROR llm-service: Qwen3.5-4B inference timeout
 ```
 
@@ -63,19 +67,19 @@ Errores:
 
 | Pattern | Where | Purpose |
 |---------|-------|---------|
-| Strategy | `get_provider(tier)` | Web free y Premium = el mismo contenedor base |
-| Adapter | `QwenLocalProvider` | HuggingFace / mock → Protocol `chat` / `complete` |
-| DIP | routers dependen de `LLMProvider`, no de transformers |
+| Strategy | `get_provider(tier)` + `LLM_BACKEND` | Web free y Premium = el mismo provider base; el runtime lo decide la configuración de la máquina |
+| Adapter | `QwenLocalProvider`, `OllamaProvider` | HuggingFace in-process / Ollama HTTP / mock → Protocol `chat` / `complete` |
+| DIP | routers dependen de `LLMProvider`, no de transformers ni de httpx |
 
 ## SOLID
 
 | Principio | Aplicación |
 |-----------|-----------|
 | **S** | Un provider, un runtime, un endpoint por verbo |
-| **O** | Otro backend local se agrega implementando el Protocol |
+| **O** | Backend nuevo = clase nueva (`OllamaProvider` 2026-10); el resolver solo gana una rama, los routers no cambian |
 | **L** | Cualquier `LLMProvider` es sustituible en los routers |
 | **I** | Solo `chat()` y `complete()` |
-| **D** | Routers → Protocol, no → Qwen weights |
+| **D** | Routers → Protocol, no → Qwen weights ni → Ollama |
 
 ## Errores HTTP
 
@@ -83,5 +87,6 @@ Errores:
 |------|--------|
 | Prompt / messages / user_id faltante | 400 |
 | Tier distinto de free o premium | 400 |
-| Contenedor o pesos ausentes | 500 |
+| Backend o pesos ausentes (Qwen local / Ollama) | 500 |
+| `LLM_BACKEND` desconocido | 500 (`ValueError` al resolver) |
 | Timeout de inferencia | 504 |

@@ -27,7 +27,7 @@ Solid = call / write. Dashed = HTTP 200/202 response.
 | Razonador / graphs | MCP registry | tools are the only way to reach RAG/LLM/Fine-Tune |
 | MCP `rag_search` | RAG :8002 | HTTP **GET /search** with `user_id` + `X-Request-ID` |
 | RAG :8002 | MCP | context + sources — dashed |
-| MCP `llm_generate` | LLM :8003 | HTTP **POST /chat** (Qwen3.5-4B base container) |
+| MCP `llm_generate` | LLM :8003 | HTTP **POST /chat** (Qwen3.5-4B base, host process) |
 | LLM :8003 | MCP | answer + `tokens_used` — dashed |
 | Ingestor | MongoDB | upsert `agent_interactions` (unique `correlation_id`) |
 | Evaluador | MongoDB | `agent_feedback` + `finetune_batches` — **no** `/train` |

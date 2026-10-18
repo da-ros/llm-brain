@@ -11,7 +11,7 @@ structured JSON triples using **LangChain document loaders** and **LLM-based rea
 ### Context from Frame 1
 
 Frame 1 established:
-- **FastAPI backend** with JWT auth, config layer, and LLM Service (Qwen3.5-4B, local container)
+- **FastAPI backend** with JWT auth, config layer, and LLM Service (Qwen3.5-4B, host process :8003)
 - **MongoDB (local container, GridFS)** for original binaries, **Chroma** for vector embeddings
 - **Docker Compose** for local development (LOCAL-ONLY MVP; AWS is future/out of scope)
 - **Per-user data isolation** via `user_id` scoping

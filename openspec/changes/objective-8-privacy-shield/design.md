@@ -183,7 +183,7 @@ Cross-user id       → 404
 SHIELD_HOST=0.0.0.0
 SHIELD_PORT=8009
 RAG_SERVICE_URL=http://rag-service:8002
-LLM_SERVICE_URL=http://llm-service:8003
+LLM_SERVICE_URL=http://host.docker.internal:8003
 LLM_TEMPERATURE=0
 MONGODB_URI=...
 SIMILARITY_THRESHOLD=0.80

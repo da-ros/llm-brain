@@ -22,7 +22,7 @@
                 <mxCell id="ondevice" value="On-device LLM&#10;React Native / Neural Engine / Metal&#10;&#10;Free: Qwen3.5-4B base Q4&#10;Premium: Qwen3.5-4B fine-tuned Q4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=12;" parent="1" vertex="1">
                     <mxGeometry x="1040" y="120" width="320" height="140" as="geometry"/>
                 </mxCell>
-                <mxCell id="llm" value="LLM Service (local container)&#10;Qwen3.5-4B base (not fine-tuned)&#10;Port 8003 — Premium + RAG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=12;" parent="1" vertex="1">
+                <mxCell id="llm" value="LLM Service (host process)&#10;Qwen3.5-4B base (not fine-tuned)&#10;Port 8003 — Premium + RAG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=12;" parent="1" vertex="1">
                     <mxGeometry x="1040" y="290" width="320" height="120" as="geometry"/>
                 </mxCell>
                 <mxCell id="mongo" value="MongoDB (local Docker)&#10;Documents, GridFS, task_status" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" parent="1" vertex="1">
@@ -61,7 +61,7 @@
                 <mxCell id="r4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;strokeColor=#82b366;exitX=1;exitY=0.45;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="system" target="llm" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="r4_label" value="Premium cloud (local container)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11" parent="r4" vertex="1" connectable="0">
+                <mxCell id="r4_label" value="Premium cloud (host process)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11" parent="r4" vertex="1" connectable="0">
                     <mxGeometry x="-0.1" relative="1" as="geometry">
                         <mxPoint as="offset"/>
                     </mxGeometry>

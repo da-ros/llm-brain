@@ -94,7 +94,7 @@ Ham (`alert` false): `alert false — not persisted`.
 ### LLM POST /chat
 
 ```
-2026-09-24T01:40:01 [8f3a] INFO shield-service: LLM POST /chat http://llm-service:8003/chat temperature=0 model=Qwen3.5-4B
+2026-09-24T01:40:01 [8f3a] INFO shield-service: LLM POST /chat http://host.docker.internal:8003/chat temperature=0 model=Qwen3.5-4B
 ```
 
 JSON inválido: `LLM JSON invalid — retry 1`. Tras el segundo fallo:

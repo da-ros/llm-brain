@@ -1,7 +1,7 @@
 ## Why
 
 The thesis client for Qwen3.5-4B on the iPhone does not exist yet. Frame 4
-serves the **base** model in a local container and writes a LoRA adapter for
+serves the **base** model as a host process and writes a LoRA adapter for
 a later on-device build. Frame 7 is the Encefalus web app, where Memory,
 Decisions, Analytics, Shield, and Learning already live. Frame 10 is the
 React Native app: Free runs the base model quantized on the phone, and
@@ -10,13 +10,13 @@ Frame 7 already exposes on the web.
 
 ## Context from Frame 4 and Frame 7
 
-- **Frame 4 (LLM Service, port 8003)**: the container serves **base**
+- **Frame 4 (LLM Service, port 8003)**: the host process serves **base**
   Qwen3.5-4B for Premium cloud inference. Free chat is specified as
-  on-device and is not handled by that container. Target for a short
+  on-device and is not handled by that service. Target for a short
   on-device reply: ≤2s and >18 tok/s. Weights are about 2.5–3 GB at Q4.
 - **Frame 4 (Fine-Tune Service, port 8004)**: local LoRA writes an
   adapter. This frame merges that adapter and quantizes it to Q4 for the
-  Premium phone build. The container stays base.
+  Premium phone build. The host process stays base.
 - **Frame 1.1**: JWT, `X-Request-ID`, and the router on port 8000. The
   phone uses the same account routes as the web app:
   `POST /api/auth/signup`, `POST /api/auth/signin`, `GET /api/account`,
@@ -61,7 +61,7 @@ with Google, Forgot password, and the microphone on the composer.
   `qwen3.5-4b-finetuned-q4`, merged from that user's LoRA adapter
   (`ADAPTER_OUTPUT_DIR/{user_id}/adapter`). Until that user's file
   exists, Premium on-device keeps the base pack and says the personal
-  model is not built yet. The cloud container is not replaced.
+  model is not built yet. The cloud service is not replaced.
 - **Model & Device Status** shows measured sizes against a 4.1 GB budget,
   model-ready, offline-ready, and the average time of short replies.
   Reinstall downloads again. Clear Cache removes cache only.
@@ -98,7 +98,7 @@ with Google, Forgot password, and the microphone on the composer.
   that user's LoRA pack and cloud chat with RAG and memory.
 - `on-device-model`: Q4 export of base Qwen3.5-4B, and the Premium pack
   that merges the Frame 4 LoRA adapter before the same quantization.
-  Manifest, checksum, and the rule that the cloud container stays base.
+  Manifest, checksum, and the rule that the cloud service stays base.
 
 ### Modified Capabilities
 

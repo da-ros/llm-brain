@@ -203,7 +203,7 @@ HTTP to Agents Service.
 AGENTS_HOST=0.0.0.0
 AGENTS_PORT=8006
 RAG_SERVICE_URL=http://rag-service:8002
-LLM_SERVICE_URL=http://llm-service:8003
+LLM_SERVICE_URL=http://host.docker.internal:8003
 FINETUNE_SERVICE_URL=http://finetune-service:8004
 KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 KAFKA_TOPIC_SESSION_TURN=session.turn.completed

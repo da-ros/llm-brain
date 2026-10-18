@@ -43,7 +43,7 @@
                 <mxCell id="rag" value="RAG Service · 8002&#10;MongoDB + Chroma · Top-k" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="1160" y="250" width="250" height="90" as="geometry"/>
                 </mxCell>
-                <mxCell id="llm" value="LLM Service · 8003&#10;Qwen3.5-4B base container&#10;Premium cloud + RAG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                <mxCell id="llm" value="LLM Service · 8003&#10;Qwen3.5-4B base host process&#10;Premium cloud + RAG (not in Compose)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="1160" y="360" width="250" height="90" as="geometry"/>
                 </mxCell>
                 <mxCell id="finetune" value="Fine-Tune Service · 8004&#10;Local LoRA → Premium on-device" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">

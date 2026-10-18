@@ -82,7 +82,7 @@ interfaz no lo llama.
 2026-10-01T00:12:11 [cid-ui] INFO api-gateway: GET /api/analytics/correlations user_id=user1
 2026-10-01T00:12:11 [cid-ui] INFO api-gateway: GET analytics-service:8008/correlations
 2026-10-01T00:14:02 [cid-analytics] INFO analytics-service: POST /ingest user_id=user1 filename=diary.csv
-2026-10-01T00:14:03 [cid-analytics] INFO analytics-service: LLM POST /chat http://llm-service:8003/chat temperature=0 model=Qwen3.5-4B
+2026-10-01T00:14:03 [cid-analytics] INFO analytics-service: LLM POST /chat http://host.docker.internal:8003/chat temperature=0 model=Qwen3.5-4B
 2026-10-01T00:14:04 [cid-analytics] INFO analytics-service: snapshot id=snap-1 rows_upserted=2
 ```
 
