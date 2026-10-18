@@ -70,3 +70,9 @@ docker-compose.override.yml
 # --- Logs ---
 *.log
 logs/
+
+
+# Models
+Qwen*
+*LLM-LOCAL* 
+
