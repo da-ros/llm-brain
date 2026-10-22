@@ -410,6 +410,55 @@ class TestRAGIntegration:
         assert "diabetes" in context.lower()
         assert "receta.pdf" in context
 
+    @pytest.mark.asyncio
+    async def test_ingest_cites_the_uploaded_filename(self, tmp_path):
+        service, memory = _service()
+        path = tmp_path / "facts.jsonl"
+        path.write_text(
+            json.dumps(
+                {
+                    "subject": "Yo",
+                    "predicate": "surf",
+                    "object": "Ocean City",
+                    "metadata": {"source_file": "tmpubnut7q8.docx"},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        await service.ingest_triples(
+            "user1",
+            "doc1",
+            str(path),
+            filename="memories-1.docx",
+        )
+        assert memory.items[0]["metadata"]["source"] == "memories-1.docx"
+
+    @pytest.mark.asyncio
+    async def test_delete_catalog_removes_vectors_for_the_source(self):
+        service, memory = _service()
+        service.documents.get_document = AsyncMock(
+            return_value={
+                "_id": "mongo-1",
+                "user_id": "user1",
+                "source_id": "task-1",
+                "triples_path": "",
+            }
+        )
+        service.documents.delete_document = AsyncMock(return_value=True)
+        memory.items.append(
+            {
+                "id": "chunk",
+                "vector": [1.0, 0.0],
+                "metadata": {"user_id": "user1", "doc_id": "task-1"},
+                "document": "Ocean City",
+            }
+        )
+        removed = await service.delete_catalog_document("mongo-1", "user1")
+        assert removed["source_id"] == "task-1"
+        assert removed["embeddings"] == 1
+        assert memory.items == []
+
 
 class TestRAGHttp:
     def test_health(self):

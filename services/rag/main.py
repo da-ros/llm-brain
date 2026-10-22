@@ -228,6 +228,26 @@ def create_app() -> FastAPI:
         docs = await rag_service.documents.list_documents(user_id)
         return {"documents": docs, "total": len(docs)}
 
+    @application.delete("/documents/{doc_id}")
+    async def delete_document(
+        request: Request,
+        doc_id: str,
+        user_id: str = Query(..., description="User ID for isolation"),
+    ):
+        correlation_id = getattr(request.state, "correlation_id", "no-id")
+        log_with_correlation(correlation_id, "info", f"DELETE /documents/{doc_id}")
+        try:
+            removed = await rag_service.delete_catalog_document(doc_id, user_id)
+        except Exception as exc:
+            log_with_correlation(correlation_id, "error", f"Delete failed: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Delete error",
+            ) from exc
+        if removed is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        return removed
+
     @application.get("/documents/{doc_id}")
     async def get_document(
         doc_id: str,

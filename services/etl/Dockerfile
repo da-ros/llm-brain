@@ -3,8 +3,8 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # libmagic = python-magic MIME detection.
-# tesseract/poppler/ffmpeg = runtime for Unstructured* loaders (OCR/PDF/video),
-# not a bespoke Tesseract pipeline in our code.
+# tesseract/poppler/ffmpeg = runtime for Unstructured* loaders (OCR/PDF/video).
+# UnstructuredImageLoader OCRs through that Tesseract binary.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libmagic1 \
@@ -19,7 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# unstructured-inference depends on opencv-python, and that 5.x wheel
+# illegal-instructions here. Reinstall headless 4.13 after removing it.
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y opencv-python opencv-python-headless \
+    && pip install --no-cache-dir --force-reinstall --no-deps opencv-python-headless==4.13.0.92
 
 COPY . .
 RUN mkdir -p /app/data/triples

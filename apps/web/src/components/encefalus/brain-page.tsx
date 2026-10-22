@@ -679,24 +679,22 @@ export function BrainPage() {
                   turn.role === "user" ? (
                     <div
                       key={index}
-                      className="ml-auto max-w-lg rounded-lg border border-border bg-muted px-4 py-3 text-sm"
+                      className="ml-auto flex w-full max-w-lg flex-col items-end gap-2"
                     >
-                      {!!turn.files?.length && (
-                        <div className="mb-2 flex flex-wrap justify-end gap-2">
-                          {turn.files.map((file, fileIndex) => (
-                            <span
-                              key={`${file.name}-${fileIndex}`}
-                              className="inline-flex max-w-36 flex-col items-center gap-0.5"
-                            >
-                              <FileText className="size-4 text-primary" />
-                              <span className="w-full truncate text-center text-[10px] leading-3">
-                                {file.name}
-                              </span>
-                            </span>
-                          ))}
+                      {turn.files?.map((file, fileIndex) => (
+                        <span
+                          key={`${file.name}-${fileIndex}`}
+                          className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs"
+                        >
+                          <FileText className="size-3.5 shrink-0 text-primary" />
+                          <span className="truncate">{file.name}</span>
+                        </span>
+                      ))}
+                      {turn.text ? (
+                        <div className="max-w-full rounded-lg border border-border bg-muted px-4 py-3 text-sm">
+                          {turn.text}
                         </div>
-                      )}
-                      {turn.text}
+                      ) : null}
                     </div>
                   ) : (
                     <div key={index} className="flex gap-3">

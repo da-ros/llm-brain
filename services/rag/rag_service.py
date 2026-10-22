@@ -28,6 +28,20 @@ def _clip_summary(texts: list[str], limit: int = 180) -> str:
     return compact[: limit - 3].rstrip() + "..."
 
 
+def _remove_triples_file(triples_path: str, user_id: str) -> None:
+    """Delete the JSONL for this user when the path stays inside the triples directory."""
+    if not triples_path or not user_id or "/" in user_id or user_id in {".", ".."}:
+        return
+    root = (Path("/app/data/triples") / user_id).resolve()
+    try:
+        candidate = Path(triples_path).resolve()
+    except OSError:
+        return
+    if candidate.parent != root or candidate.suffix != ".jsonl":
+        return
+    candidate.unlink(missing_ok=True)
+
+
 def modality_from_type(doc_type: str | None) -> str:
     """Map a document type / MIME to text | image | video."""
     value = (doc_type or "text").lower()
@@ -147,6 +161,7 @@ class RAGService:
             return 0
 
         modality = modality_from_type(doc_type)
+        stored_name = (filename or "").strip()
         chunks: list[str] = []
         metadatas: list[dict[str, Any]] = []
         ids: list[str] = []
@@ -161,7 +176,7 @@ class RAGService:
                         "modality": "text",
                         "triple_index": index,
                         "chunk_index": chunk_index,
-                        "source": sources[index],
+                        "source": stored_name or sources[index],
                     }
                 )
                 ids.append(f"{user_id}_{doc_id}_{index}_chunk{chunk_index}")
@@ -189,7 +204,7 @@ class RAGService:
                         "modality": modality,
                         "triple_index": -1,
                         "chunk_index": 0,
-                        "source": sources[0] if sources else "",
+                        "source": stored_name or (sources[0] if sources else ""),
                     }
                 )
                 ids.append(f"{user_id}_{doc_id}_{modality}")
@@ -279,6 +294,24 @@ class RAGService:
     async def delete_document_embeddings(self, doc_id: str, user_id: str) -> int:
         """Delete Chroma rows for one document (user-scoped)."""
         return await self.vector_store.delete_where({"user_id": user_id, "doc_id": doc_id})
+
+    async def delete_catalog_document(self, doc_id: str, user_id: str) -> dict[str, Any] | None:
+        """Remove one indexed file: its vectors, catalog row, and original bytes."""
+        existing = await self.documents.get_document(doc_id, user_id)
+        if existing is None:
+            return None
+        source_id = str(existing.get("source_id") or "")
+        embeddings = 0
+        if source_id:
+            embeddings = await self.delete_document_embeddings(source_id, user_id)
+        triples_path = str(existing.get("triples_path") or "")
+        removed = await self.documents.delete_document(doc_id, user_id)
+        _remove_triples_file(triples_path, user_id)
+        return {
+            "deleted": removed,
+            "embeddings": embeddings,
+            "source_id": source_id,
+        }
 
     async def delete_user_memory(self, user_id: str) -> dict[str, int]:
         """Drop every vector and raw document that belongs to this user."""

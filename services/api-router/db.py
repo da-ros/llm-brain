@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from config import get_settings
@@ -114,6 +115,30 @@ async def list_user_tasks(user_id: str) -> list[dict[str, Any]]:
         return []
     cursor = _db().task_status.find({"user_id": user_id}).sort("created_at", -1)
     return await cursor.to_list(length=200)
+
+
+async def delete_owned_task(correlation_id: str, user_id: str) -> bool:
+    """Delete one upload job and its GridFS file when it belongs to user_id."""
+    if database() is None or not correlation_id:
+        return False
+    task = await find_task(correlation_id)
+    if not task or task.get("user_id") != user_id:
+        return False
+    file_id = str(task.get("file_id") or "")
+    if file_id:
+        from contextlib import suppress
+
+        from bson import ObjectId
+        from bson.errors import InvalidId
+        from motor.motor_asyncio import AsyncIOMotorGridFSBucket
+
+        with suppress(InvalidId, Exception):
+            await AsyncIOMotorGridFSBucket(_db()).delete(ObjectId(file_id))
+    await _db().task_status.delete_one({"_id": correlation_id, "user_id": user_id})
+    triples = Path("/app/data/triples") / user_id / f"{correlation_id}.jsonl"
+    if correlation_id not in {".", ".."} and "/" not in correlation_id:
+        triples.unlink(missing_ok=True)
+    return True
 
 
 async def delete_user_uploads(user_id: str) -> int:

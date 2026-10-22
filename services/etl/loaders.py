@@ -248,8 +248,16 @@ class UnstructuredImageLoaderAdapter:
         self.file_path = file_path
 
     def load(self) -> list[Any]:
-        documents = _run_loader(_image_loader_class(), self.file_path, "UnstructuredImageLoader")
-        logger.info("LangChain loader selected: UnstructuredImageLoader")
+        # ocr_only reads words with Tesseract. The default image strategy is
+        # hi_res, which downloads a layout model before that OCR runs.
+        documents = _run_loader(
+            _image_loader_class(),
+            self.file_path,
+            "UnstructuredImageLoader",
+            strategy="ocr_only",
+            languages=["eng", "spa"],
+        )
+        logger.info("LangChain loader selected: UnstructuredImageLoader (ocr_only)")
         return documents
 
 

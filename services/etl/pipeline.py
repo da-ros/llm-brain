@@ -79,6 +79,7 @@ def distill(
     output_dir: str | None = None,
     correlation_id: str = "no-id",
     write_output: bool = True,
+    filename: str | None = None,
 ) -> list[Triple]:
     """Load a document, ask the LLM Service to emit triples, optionally write JSONL.
 
@@ -126,7 +127,8 @@ def distill(
             user_id=user_id,
             correlation_id=correlation_id,
         )
-    source_file = source_name(str(path), documents)
+    given_name = Path(filename).name if filename else ""
+    source_file = given_name or source_name(str(path), documents)
     page = first_page(documents)
     section = first_section(documents)
 

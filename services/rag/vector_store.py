@@ -119,7 +119,10 @@ class ChromaVectorStore:
             self._collection.delete(ids=ids)
 
     async def delete_where(self, where: dict[str, Any]) -> int:
-        existing = self._collection.get(where=where, include=[])
+        query = where
+        if where and not any(key.startswith("$") for key in where) and len(where) > 1:
+            query = {"$and": [{key: value} for key, value in where.items()]}
+        existing = self._collection.get(where=query, include=[])
         ids = existing.get("ids") or []
         if ids:
             self._collection.delete(ids=ids)

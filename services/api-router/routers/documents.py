@@ -7,13 +7,14 @@ Embedded: the vectors are in memory, so Brain can recall the file.
 Distilled does not mean the file is queued for fine-tuning.
 """
 
+from pathlib import Path
 from typing import Annotated
 
 import httpx
 from auth import require_premium
 from config import get_settings
-from db import list_user_tasks
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from db import delete_owned_task, list_user_tasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from logging_setup import log_with_correlation
 
 router = APIRouter(prefix="/api", tags=["documents"])
@@ -42,6 +43,53 @@ async def search_documents(
     correlation_id = request.state.correlation_id
     log_with_correlation(correlation_id, "info", "GET /api/documents/search")
     return await _catalog(request, user, kind=kind, query=q)
+
+
+@router.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def delete_document(
+    request: Request,
+    doc_id: str,
+    user: Annotated[dict, Depends(require_premium)],
+):
+    """Remove one memory file. A queued upload is removed even before embedding."""
+    correlation_id = request.state.correlation_id
+    settings = get_settings()
+    user_id = user["user_id"]
+    log_with_correlation(correlation_id, "info", f"DELETE /api/documents/{doc_id}")
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(
+                f"{settings.RAG_SERVICE_URL}/documents/{doc_id}",
+                params={"user_id": user_id},
+                headers={"X-Request-ID": correlation_id},
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Memory could not be deleted.",
+        ) from exc
+    if response.status_code == status.HTTP_200_OK:
+        source_id = str((response.json() or {}).get("source_id") or "")
+        if source_id:
+            await delete_owned_task(source_id, user_id)
+        _remove_local_triples(user_id, source_id or doc_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    if response.status_code != status.HTTP_404_NOT_FOUND:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Memory could not be deleted.",
+        )
+    removed = await delete_owned_task(doc_id, user_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _remove_local_triples(user_id: str, correlation_id: str) -> None:
+    if not correlation_id or "/" in correlation_id or correlation_id in {".", ".."}:
+        return
+    path = Path("/app/data/triples") / user_id / f"{correlation_id}.jsonl"
+    path.unlink(missing_ok=True)
 
 
 @router.get("/documents/{doc_id}")
