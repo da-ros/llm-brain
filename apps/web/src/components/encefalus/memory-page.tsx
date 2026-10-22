@@ -7,6 +7,7 @@ import {
   FileVideo,
   Plus,
   Search,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -208,7 +209,19 @@ export function MemoryPage() {
         </section>
         <aside className="bg-card/45 p-5">
           {selected ? (
-            <Detail file={selected} />
+            <Detail
+              file={selected}
+              onDelete={async (id) => {
+                const response = await fetch(`/api/documents/${encodeURIComponent(id)}`, {
+                  method: "DELETE",
+                  headers: authHeaders(),
+                });
+                if (!response.ok) {
+                  throw new Error(await readError(response));
+                }
+                await load(query, kind);
+              }}
+            />
           ) : (
             <p className="text-sm text-muted-foreground">Select a file to see its summary.</p>
           )}
@@ -238,8 +251,35 @@ function fileIcon(file: MemoryFile) {
   return FileText;
 }
 
-function Detail({ file }: { file: MemoryFile }) {
+function Detail({
+  file,
+  onDelete,
+}: {
+  file: MemoryFile;
+  onDelete: (id: string) => Promise<void>;
+}) {
   const Icon = fileIcon(file);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  useEffect(() => {
+    setConfirming(false);
+    setDeleteError("");
+    setBusy(false);
+  }, [file.id]);
+
+  async function remove() {
+    setBusy(true);
+    setDeleteError("");
+    try {
+      await onDelete(file.id);
+    } catch (exc) {
+      setDeleteError(exc instanceof Error ? exc.message : "That file could not be deleted.");
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <div className="flex items-center gap-3">
@@ -260,6 +300,37 @@ function Detail({ file }: { file: MemoryFile }) {
       <Button asChild className="mt-6 w-full">
         <Link to="/brain">Ask Brain about this</Link>
       </Button>
+      {confirming ? (
+        <div className="mt-3">
+          <p className="text-xs leading-5 text-muted-foreground">
+            Remove this file from Memory? Brain will stop using it.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              disabled={busy}
+              onClick={() => void remove()}
+            >
+              <Trash2 />
+              {busy ? "Deleting…" : "Delete"}
+            </Button>
+            <Button variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" className="mt-3 w-full" onClick={() => setConfirming(true)}>
+          <Trash2 />
+          Delete memory
+        </Button>
+      )}
+      {deleteError && (
+        <div className="mt-3">
+          <Notice>{deleteError}</Notice>
+        </div>
+      )}
     </>
   );
 }

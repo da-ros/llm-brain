@@ -84,6 +84,16 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _show_visual(correlation_id: str, mime: str, exc: Exception) -> dict:
+    """A photo or clip the loader cannot read is still shown to the model."""
+    log_with_correlation(
+        correlation_id,
+        "warning",
+        f"POST /parse visual loader failed, showing the file to the model: {exc}",
+    )
+    return {"text": "", "mime": mime, "show_bytes": True}
+
+
 def _load_attachment(file: bytes, suffix: str, mime: str, correlation_id: str) -> dict:
     """Run the LangChain loader. Empty OCR on a photo or clip asks the caller to show the bytes."""
     visual = mime.startswith(("image/", "video/"))
@@ -102,11 +112,19 @@ def _load_attachment(file: bytes, suffix: str, mime: str, correlation_id: str) -
             # OCR or the clip loader found no words. The caller still has
             # the bytes and shows them to the LLM. This route does not.
             return {"text": "", "mime": mime, "show_bytes": True}
-        except (UnsupportedFileTypeError, LoaderError) as exc:
+        except UnsupportedFileTypeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
+        except LoaderError as exc:
+            if visual:
+                return _show_visual(correlation_id, mime, exc)
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
             ) from exc
         except Exception as exc:  # surface any loader crash as a clean 422
+            if visual:
+                return _show_visual(correlation_id, mime, exc)
             log_with_correlation(correlation_id, "warning", f"POST /parse failed: {exc}")
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

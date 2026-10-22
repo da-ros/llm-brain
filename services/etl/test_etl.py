@@ -204,6 +204,20 @@ class TestLoaderWrappers:
             loaded = UnstructuredHTMLLoaderAdapter("page.html").load()
         assert loaded[0].page_content == "body text"
 
+    def test_image_loader_uses_tesseract_ocr(self):
+        from loaders import UnstructuredImageLoaderAdapter
+
+        fake = MagicMock()
+        fake.return_value.load.return_value = [FakeDoc("Invoice 42")]
+        with patch("loaders._image_loader_class", return_value=fake):
+            loaded = UnstructuredImageLoaderAdapter("/tmp/photo.png").load()
+        fake.assert_called_once_with(
+            "/tmp/photo.png",
+            strategy="ocr_only",
+            languages=["eng", "spa"],
+        )
+        assert loaded[0].page_content == "Invoice 42"
+
     def test_video_loader_wraps_unstructured_file_loader(self):
         from loaders import VideoFileLoader
 
@@ -329,8 +343,25 @@ class TestPipeline:
         assert len(lines) == 2
         row = json.loads(lines[0])
         assert row["subject"] == "Patient"
-        # user B path must not exist
         assert not (tmp_path / "triples" / "user-b").exists()
+
+    def test_distill_uses_the_original_filename_not_the_temp_path(self, tmp_path):
+        from pipeline import distill
+
+        source = tmp_path / "tmpubnut7q8.txt"
+        source.write_text("The patient has diabetes and takes metformin.", encoding="utf-8")
+        with patch("loaders._text_loader_class", return_value=BuiltinTextLoader):
+            triples = distill(
+                str(source),
+                user_id="user-a",
+                document_id="doc-1",
+                mime_type="text/plain",
+                llm_client=FakeExtractor(),
+                output_dir=str(tmp_path / "triples"),
+                filename="memories-1.docx",
+                write_output=False,
+            )
+        assert triples[0].metadata["source_file"] == "memories-1.docx"
 
     def test_image_with_ocr_text_is_extracted_without_a_description(self, tmp_path):
         from pipeline import distill
@@ -758,6 +789,26 @@ class TestParseEndpoint:
         body = response.json()
         assert body["text"] == "Invoice 42"
         assert body["show_bytes"] is False
+
+    def test_image_loader_crash_asks_to_show_the_bytes(self):
+        from exceptions import LoaderError
+        from main import app
+
+        class _Boom:
+            def __init__(self, file_path: str) -> None:
+                self.file_path = file_path
+
+            def load(self):
+                raise LoaderError("UnstructuredImageLoader failed: No module named 'pi_heif'")
+
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 16
+        with patch("main.select", return_value=_Boom), TestClient(app) as client:
+            response = client.post("/parse", params={"filename": "photo.png"}, content=png)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["text"] == ""
+        assert body["mime"] == "image/png"
+        assert body["show_bytes"] is True
 
     def test_image_without_text_asks_to_show_the_bytes(self):
         from main import app

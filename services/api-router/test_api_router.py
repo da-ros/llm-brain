@@ -576,6 +576,7 @@ def test_clock_line_names_the_given_day():
     ]
     assert _question_uses_calendar("What do we have today?", [])
     assert _question_uses_calendar("And before that", calendar_turn)
+    assert not _question_uses_calendar("what day is it today ?", calendar_turn)
     assert not _question_uses_calendar("What do you think about System One models?", calendar_turn)
 
 
@@ -896,6 +897,53 @@ class TestDocuments:
         assert rows["plan.docx"]["summary"] == "Scope and payment terms"
         assert "voice.m4a" not in rows
         assert response.json()["counts"] == {"document": 2, "image": 0, "video": 1}
+
+    def test_delete_embedded_file(self, client):
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {"deleted": True, "source_id": "task-1", "embeddings": 2}
+        instance = AsyncMock()
+        instance.delete = AsyncMock(return_value=response)
+        instance.__aenter__.return_value = instance
+        instance.__aexit__.return_value = False
+        with (
+            patch("routers.documents.httpx.AsyncClient", return_value=instance),
+            patch("routers.documents.delete_owned_task", new_callable=AsyncMock) as jobs,
+        ):
+            removed = client.delete("/api/documents/mongo-1", headers=auth_header())
+        assert removed.status_code == 204
+        jobs.assert_awaited_once_with("task-1", "user1")
+
+    def test_delete_queued_file_when_rag_has_no_row(self, client):
+        response = MagicMock()
+        response.status_code = 404
+        instance = AsyncMock()
+        instance.delete = AsyncMock(return_value=response)
+        instance.__aenter__.return_value = instance
+        instance.__aexit__.return_value = False
+        with (
+            patch("routers.documents.httpx.AsyncClient", return_value=instance),
+            patch("routers.documents.delete_owned_task", new_callable=AsyncMock) as jobs,
+        ):
+            jobs.return_value = True
+            removed = client.delete("/api/documents/queue-1", headers=auth_header())
+        assert removed.status_code == 204
+        jobs.assert_awaited_once_with("queue-1", "user1")
+
+    def test_delete_missing_file_is_404(self, client):
+        response = MagicMock()
+        response.status_code = 404
+        instance = AsyncMock()
+        instance.delete = AsyncMock(return_value=response)
+        instance.__aenter__.return_value = instance
+        instance.__aexit__.return_value = False
+        with (
+            patch("routers.documents.httpx.AsyncClient", return_value=instance),
+            patch("routers.documents.delete_owned_task", new_callable=AsyncMock) as jobs,
+        ):
+            jobs.return_value = False
+            removed = client.delete("/api/documents/missing", headers=auth_header())
+        assert removed.status_code == 404
 
 
 def test_task_document_includes_ttl_expiry():
@@ -1419,6 +1467,35 @@ class TestConsumerThread:
         from kafka_io import stop_consumer_thread
 
         stop_consumer_thread()  # Should not raise
+
+    def test_handler_is_scheduled_on_the_application_loop(self):
+        from kafka_io import _submit_task_response
+
+        loop = MagicMock()
+        loop.is_closed.return_value = False
+        future = MagicMock()
+        payload = {"correlation_id": "cid-1", "status": "success"}
+        with (
+            patch("kafka_io._loop", loop),
+            patch("kafka_io.apply_task_response", return_value=None),
+            patch("kafka_io.asyncio.run_coroutine_threadsafe", return_value=future) as schedule,
+        ):
+            _submit_task_response(payload)
+        scheduled = schedule.call_args.args
+        assert scheduled[1] is loop
+        future.result.assert_called_once_with()
+
+    def test_handler_failure_stays_on_this_message(self):
+        from kafka_io import _submit_task_response
+
+        future = MagicMock()
+        future.result.side_effect = RuntimeError("attached to a different loop")
+        with (
+            patch("kafka_io._loop", MagicMock(is_closed=lambda: False)),
+            patch("kafka_io.apply_task_response", return_value=None),
+            patch("kafka_io.asyncio.run_coroutine_threadsafe", return_value=future),
+        ):
+            _submit_task_response({"correlation_id": "cid-1"})
 
 
 # ── MIME utility coverage (mimeutil.py) ──────────────────────────

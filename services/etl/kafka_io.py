@@ -105,6 +105,7 @@ def process_file_message(
                 llm_client=llm_client,
                 output_dir=output_dir,
                 correlation_id=correlation_id,
+                filename=name,
             )
         finally:
             Path(tmp_path).unlink(missing_ok=True)

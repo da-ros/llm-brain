@@ -12,6 +12,7 @@ Retry policy (design):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import threading
 from typing import Any, Literal
@@ -25,6 +26,9 @@ ResponseAction = Literal["success", "retry", "error", "dlq-max"]
 
 _stop = threading.Event()
 _consumer_thread: threading.Thread | None = None
+# Motor is bound to the uvicorn loop. The consumer thread must schedule
+# handlers there; a private loop raises "attached to a different loop".
+_loop: asyncio.AbstractEventLoop | None = None
 
 
 def classify_response(
@@ -265,6 +269,18 @@ async def apply_task_response(data: dict[str, Any]) -> None:
     )
 
 
+def _submit_task_response(payload: dict[str, Any]) -> None:
+    """Run the handler on the application loop, where Motor was created."""
+    if _loop is None or _loop.is_closed():
+        logger.error("task.response dropped: application event loop is not running")
+        return
+    future = asyncio.run_coroutine_threadsafe(apply_task_response(payload), _loop)
+    try:
+        future.result()
+    except Exception:
+        logger.exception("task.response handler failed")
+
+
 def _consume() -> None:
     from kafka import KafkaConsumer
 
@@ -283,28 +299,27 @@ def _consume() -> None:
         return
 
     logger.info("Consuming from topic %s", settings.KAFKA_TOPIC_TASK_RESPONSE)
-    loop = None
     try:
-        import asyncio
-
-        loop = asyncio.new_event_loop()
         while not _stop.is_set():
             records = consumer.poll(timeout_ms=1000)
             for _tp, messages in records.items():
                 for message in messages:
-                    loop.run_until_complete(apply_task_response(message.value))
+                    _submit_task_response(message.value)
     except Exception:
         logger.exception("Kafka consumer error")
     finally:
-        if loop is not None:
-            loop.close()
         consumer.close()
 
 
 def start_consumer_thread() -> None:
     """Start the task.response consumer in a daemon thread."""
-    global _consumer_thread
+    global _consumer_thread, _loop
     _stop.clear()
+    try:
+        _loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _loop = None
+        logger.error("Kafka consumer started without a running event loop")
     _consumer_thread = threading.Thread(
         target=_consume,
         name="api-router-kafka-consumer",

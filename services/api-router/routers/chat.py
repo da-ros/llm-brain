@@ -544,18 +544,37 @@ def _agents_message(history: list[dict], message: str) -> str:
     if aside:
         parts.append(aside)
     parts.append(_with_history(history, message))
+    if _asks_for_the_date(message):
+        parts.append(_date_authority_line())
     return "\n\n".join(parts)
+
+
+def _now(now: datetime | None = None) -> datetime:
+    zone = ZoneInfo(get_settings().APP_TIMEZONE)
+    return now.astimezone(zone) if now is not None else datetime.now(zone)
+
+
+def _written_day(current: datetime) -> str:
+    return f"{current.strftime('%A, %B')} {current.day}, {current.year}"
 
 
 def _clock_line(now: datetime | None = None) -> str:
     """Wall clock for this request. Note dates are not a substitute for it."""
-    zone = ZoneInfo(get_settings().APP_TIMEZONE)
-    current = now.astimezone(zone) if now is not None else datetime.now(zone)
-    written = f"{current.strftime('%A, %B')} {current.day}, {current.year}"
+    current = _now(now)
     return (
-        f"Current time: {written} "
+        f"Current time: {_written_day(current)} "
         f"({current.isoformat(timespec='minutes')}, unix {int(current.timestamp())}). "
         "Answer questions about today's date from this clock."
+    )
+
+
+def _date_authority_line(now: datetime | None = None) -> str:
+    """A date question must use the clock, including when history names another day."""
+    current = _now(now)
+    written = _written_day(current)
+    return (
+        f"The user is asking what day it is. Today's date is {written}. "
+        "Answer with that date. Do not copy a date from earlier messages or calendar notes."
     )
 
 
@@ -572,6 +591,21 @@ _CALENDAR_FOLLOWUP_RE = re.compile(
     r"\b(?:before that|after that|and before|the previous|the one before|what about that)\b",
     re.I,
 )
+_DATE_QUESTION_RE = re.compile(
+    r"\b(?:"
+    r"what(?:'s| is)(?: the)? (?:current )?(?:date|day|time)"
+    r"|what (?:day|time|date) is it"
+    r"|what day is today"
+    r"|which day is (?:it|today)"
+    r"|what(?:'s| is) today"
+    r"|today'?s date"
+    r")\b",
+    re.I,
+)
+_DATE_QUESTION_EXCLUSION_RE = re.compile(
+    r"\b(?:calendar|schedule|meeting|meetings|event|events|appointment|appointments|agenda)\b",
+    re.I,
+)
 
 
 def _last_turn_used_calendar(history: list[dict]) -> bool:
@@ -585,9 +619,19 @@ def _last_turn_used_calendar(history: list[dict]) -> bool:
     return False
 
 
+def _asks_for_the_date(message: str) -> bool:
+    """True when the question wants the clock, not the schedule."""
+    text = message or ""
+    if _DATE_QUESTION_EXCLUSION_RE.search(text):
+        return False
+    return bool(_DATE_QUESTION_RE.search(text))
+
+
 def _question_uses_calendar(message: str, history: list[dict]) -> bool:
     """Notes are for a schedule question, or a short follow-up to one."""
     text = message or ""
+    if _asks_for_the_date(text):
+        return False
     if _SCHEDULE_RE.search(text):
         return True
     return bool(_last_turn_used_calendar(history) and _CALENDAR_FOLLOWUP_RE.search(text))
@@ -602,7 +646,7 @@ def _off_calendar_line(history: list[dict]) -> str:
 
 
 async def _prompt_notes(user_id: str, correlation_id: str) -> list[dict[str, str]]:
-    today = date.today()
+    today = _now().date()
     start = (today - timedelta(days=7)).isoformat()
     end = (today + timedelta(days=14)).isoformat()
     return await list_notes(user_id, start, end, correlation_id=correlation_id)
@@ -629,10 +673,7 @@ def _prompt(
     if context_used:
         blocks.append(f"Context from the user's documents:\n\n{context}")
     if notes:
-        lines = "\n".join(f"- {note['date']}: {note['note']}" for note in notes)
-        blocks.append(
-            f"Calendar notes (not documents). Each date below is that note's day:\n{lines}"
-        )
+        blocks.append(_notes_block(notes))
     for item in attachments:
         if item.visual and not item.text.strip():
             blocks.append(
@@ -643,7 +684,22 @@ def _prompt(
         blocks.append(f"Attached file {item.name} (not saved to memory):\n{body}")
     if not blocks:
         return message
-    return "\n\n".join(blocks) + f"\n\nAnswer the user's question: {message}"
+    prompt = "\n\n".join(blocks) + f"\n\nAnswer the user's question: {message}"
+    if _asks_for_the_date(message):
+        prompt += f"\n\n{_date_authority_line()}"
+    return prompt
+
+
+def _notes_block(notes: list[dict[str, str]], now: datetime | None = None) -> str:
+    current = _now(now).date()
+    written = _written_day(_now(now))
+    lines = "\n".join(f"- {note['date']}: {note['note']}" for note in notes)
+    return (
+        "Calendar notes (not documents). "
+        f"Today is {written} ({current.isoformat()}). "
+        "A note belongs to today only when its date is that day. "
+        f"Each date below is that note's day:\n{lines}"
+    )
 
 
 def _calendar_label(notes: list[dict[str, str]]) -> str | None:
@@ -664,8 +720,12 @@ def _source_cards(
     calendar_label: str | None,
     attachment_names: list[str],
 ) -> list[SourceCard]:
+    memory_labels: list[str] = []
+    for label in (str(item).strip() for item in sources):
+        if label and label not in memory_labels:
+            memory_labels.append(label)
     cards: list[tuple[str, Literal["memory", "calendar", "attachment"]]] = [
-        (label, "memory") for label in (str(item).strip() for item in sources) if label
+        (label, "memory") for label in memory_labels
     ]
     if calendar_label:
         cards.append((calendar_label, "calendar"))
