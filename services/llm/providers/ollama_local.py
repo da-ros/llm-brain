@@ -35,11 +35,13 @@ class OllamaProvider:
         url: str = "http://127.0.0.1:11434",
         mock: bool = True,
         timeout_seconds: float = 600.0,
+        think: bool = False,
     ) -> None:
         self.model = model
         self.url = url.rstrip("/")
         self.mock = mock
         self.timeout_seconds = timeout_seconds
+        self.think = think
 
     # ── mock ─────────────────────────────────────────────────────
 
@@ -104,7 +106,12 @@ class OllamaProvider:
             if images:
                 entry["images"] = images
             ollama_messages.append(entry)
-        payload: dict = {"model": self.model, "messages": ollama_messages, "stream": False}
+        payload: dict = {
+            "model": self.model,
+            "messages": ollama_messages,
+            "stream": False,
+            "think": self.think,
+        }
         if max_new_tokens is not None:
             payload["options"] = {"num_predict": max_new_tokens}
         return payload
@@ -141,7 +148,7 @@ class OllamaProvider:
             messages[0]["images"] = images
         data = self._post(
             "/api/chat",
-            {"model": self.model, "messages": messages, "stream": False}
+            {"model": self.model, "messages": messages, "stream": False, "think": self.think}
             | ({"options": {"num_predict": max_new_tokens}} if max_new_tokens else {}),
         )
         return self._decode_response(data, prompt)
@@ -185,6 +192,7 @@ class OllamaProvider:
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": False,
+                "think": self.think,
                 "format": "json",
                 "options": {"num_predict": 1024},
             },

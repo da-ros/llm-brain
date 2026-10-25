@@ -60,6 +60,12 @@ SHALL fail with `ValueError` when the provider is resolved.
 - **WHEN** a request resolves the provider
 - **THEN** the resolver returns `OllamaProvider` pointing at `OLLAMA_URL` with model `OLLAMA_MODEL`
 
+#### Scenario: Ollama thinking off by default
+
+- **GIVEN** `LLM_BACKEND=ollama`, `QWEN_MOCK=false`, and `OLLAMA_THINK` unset or `false`
+- **WHEN** the service sends a chat/complete/extract request to Ollama
+- **THEN** the payload includes `think: false` (short answers without model reasoning; opt in with `OLLAMA_THINK=true`)
+
 #### Scenario: Unknown backend is rejected
 
 - **GIVEN** `.env` sets `LLM_BACKEND` to a value other than `qwen_local` or `ollama` and `QWEN_MOCK=false`
@@ -201,6 +207,7 @@ Con `LLM_BACKEND=ollama` y `QWEN_MOCK=false`: `"backend": "ollama"`,
 | `QWEN_DEVICE` | `auto` | `mps` (Mac) / `cuda` / `cpu` — solo backend `qwen_local` |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Server Ollama — solo backend `ollama` |
 | `OLLAMA_MODEL` | `qwen3.5:4b` | Tag del modelo en Ollama |
+| `OLLAMA_THINK` | `false` | Thinking (reasoning) de Ollama: `false` = respuestas rápidas; `true` = razona antes (lento, ~10x tokens) — solo backend `ollama` |
 | `LLM_HOST` | `0.0.0.0` | Bind host |
 | `LLM_PORT` | `8003` | Bind port |
 

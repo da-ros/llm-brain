@@ -127,6 +127,9 @@ QWEN_ADAPTER_PATH: str | None = None  # LoRA adapter (Premium on-device only; un
 # Ollama backend (only used when LLM_BACKEND=ollama)
 OLLAMA_URL: str = "http://127.0.0.1:11434"
 OLLAMA_MODEL: str = "qwen3.5:4b"
+# thinking (reasoning): false = respuestas rápidas (default); true = razona
+# antes de responder (lento, ~10x tokens)
+OLLAMA_THINK: bool = False
 
 # Service
 LLM_HOST: str = "0.0.0.0"

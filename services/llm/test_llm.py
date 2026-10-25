@@ -447,11 +447,20 @@ class TestOllamaProvider:
 
     @staticmethod
     def _fake_ollama(handler):
-        """Patch httpx.Client so OllamaProvider talks to ``handler`` instead."""
+        """Patch httpx.Client so OllamaProvider talks to ``handler`` instead.
+
+        Each _post opens (and closes) its own client, so the patch builds a
+        fresh client per call instead of reusing one closed instance.
+        """
         import httpx
 
+        original_client = httpx.Client
         return patch.object(
-            httpx, "Client", return_value=httpx.Client(transport=httpx.MockTransport(handler))
+            httpx,
+            "Client",
+            side_effect=lambda *args, **kwargs: original_client(
+                transport=httpx.MockTransport(handler)
+            ),
         )
 
     def test_complete_posts_to_ollama_and_decodes(self):
@@ -577,6 +586,44 @@ class TestOllamaProvider:
         assert triples[0]["object"] == "dolor"
         assert tokens == 10
 
+    def test_payloads_disable_think_by_default(self):
+        import json as _json
+
+        import httpx
+        from providers.ollama_local import OllamaProvider
+
+        bodies: list[dict] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            bodies.append(_json.loads(request.read()))
+            return httpx.Response(200, json={"message": {"content": "ok"}, "eval_count": 1})
+
+        provider = OllamaProvider(mock=False)
+        with self._fake_ollama(handler):
+            provider.complete("hola")
+            provider.chat([{"role": "user", "content": "hola"}])
+            provider.extract_triples("Ibuprofeno trata el dolor.")
+        assert len(bodies) == 3
+        for body in bodies:
+            assert body["think"] is False
+
+    def test_think_enabled_propagates_to_payload(self):
+        import json as _json
+
+        import httpx
+        from providers.ollama_local import OllamaProvider
+
+        captured: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = _json.loads(request.read())
+            return httpx.Response(200, json={"message": {"content": "ok"}, "eval_count": 1})
+
+        provider = OllamaProvider(mock=False, think=True)
+        with self._fake_ollama(handler):
+            provider.complete("hola")
+        assert captured["body"]["think"] is True
+
     def test_server_down_raises_model_not_found(self):
         import httpx
         from exceptions import ModelNotFoundError
@@ -657,6 +704,22 @@ class TestResolverBackend:
         from providers.qwen_local import QwenLocalProvider
 
         assert isinstance(provider, QwenLocalProvider)
+
+    def test_resolver_passes_ollama_think_setting(self):
+        resolver = self._fresh()
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_BACKEND": "ollama",
+                "QWEN_MOCK": "false",
+                "OLLAMA_THINK": "true",
+            },
+        ):
+            provider = resolver.get_provider("premium")
+        from providers.ollama_local import OllamaProvider
+
+        assert isinstance(provider, OllamaProvider)
+        assert provider.think is True
         assert provider.mock is False
 
     def test_unknown_backend_raises(self):

@@ -49,7 +49,9 @@ No hace falta torch: el backend solo habla HTTP con Ollama.
    ollama pull qwen3.5:4b
    ```
 3. Preset `.env`: `LLM_BACKEND=ollama`, `OLLAMA_URL=http://127.0.0.1:11434`,
-   `QWEN_MOCK=false`.
+   `QWEN_MOCK=false`. Opcional: `OLLAMA_THINK=false` (default) — el modelo
+   responde sin razonamiento previo: mucho más rápido para respuestas cortas
+   y extracciones; ponlo en `true` si quieres que piense antes de responder.
 4. El server de Ollama debe estar corriendo (`ollama serve` — el instalador
    normalmente lo deja como servicio del SO).
 

@@ -111,3 +111,9 @@
       `docs/running-llm-local.md` (solo LLM, en español)
 - [x] J.8 Tests: OllamaProvider (mock + HTTP con MockTransport + errores) y
       matriz del resolver (`LLM_BACKEND` × `QWEN_MOCK`) — ruff + pytest verdes
+- [x] J.9 `OLLAMA_THINK` (2026-10-25, `605fc9b`) — default `false`: `think` en
+      los 3 payloads de `OllamaProvider` (`complete`/`chat`/`extract_triples`),
+      setting en `config.py`, wiring en el resolver, tests de payload + fix del
+      helper `_fake_ollama` (un `httpx.Client` por `_post`), docs (`.env.example*`,
+      `running-llm-local.md`, `local-execution.md`). Verificado con Ollama real:
+      1721→106 tokens / 160→14.4 s en una respuesta de 3 oraciones (~11 tok/s CPU)

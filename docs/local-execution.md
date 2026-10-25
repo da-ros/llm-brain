@@ -16,7 +16,7 @@
 | `git`, `curl` | Cualquier versión reciente |
 | Espacio en disco | ~10 GB (modelo Qwen) + ~3 GB (imágenes Docker) + ~4 GB (Ollama, solo si aplica) |
 | GPU | **No requerida.** Metal (Mac), iGPU/CPU con Ollama (Linux/Windows) o CPU con mock |
-| Ollama | Solo si el equipo usa `LLM_BACKEND=ollama` — [ollama.com](https://ollama.com) |
+| Ollama | Solo si el equipo usa `LLM_BACKEND=ollama` — instalar con:<br>`curl -fsSL https://ollama.com/install.sh \| sh` (Linux) · [instalador Windows](https://ollama.com/download) |
 | `huggingface_hub` (CLI `hf`) | Solo si descarga el modelo con el backend `qwen_local` |
 
 **Puertos que deben estar libres** (ver §7 para qué tocar si alguno está ocupado):
@@ -59,6 +59,7 @@ Lo que cambia entre ambos presets es **solo el bloque LLM**:
 LLM_BACKEND=ollama
 OLLAMA_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen3.5:4b
+OLLAMA_THINK=false
 QWEN_MOCK=false
 
 # .env.example-mac (in-process)
@@ -104,6 +105,13 @@ HF_HOME=data/huggingface hf download Qwen/Qwen3.5-4B
   `ollama pull qwen3.5:4b` (~4 GB) — el servidor Ollama maneja su propio almacenamiento.
   La descarga de HF solo es obligatoria para `qwen_local` (y para el Fine-Tune
   Service cuando se desactive `LORA_MOCK`).
+- **`OLLAMA_THINK=false` (default)** desactiva el razonamiento del modelo: en
+  respuestas cortas y extracciones tarda **~10x menos** (con thinking, una
+  respuesta de 3 oraciones genera ~1700 tokens de razonamiento; sin él, ~100).
+
+**Rendimiento verificado** (2026-10-25, Ryzen 7 7730U 8C/16T, 64 GB RAM, CPU
+solo — iGPU AMD `gfx90c` sin kernels ROCm): **~11 tok/s** de generación con
+`qwen3.5:4b` vía Ollama. Tu equipo puede variar según CPU.
 
 ---
 
@@ -216,4 +224,6 @@ entre contenedores usa el puerto interno.
 | 504 en `/generate` | Primera carga del modelo (descarga HF + load) | Descarga por CLI (§4) y reintenta |
 | `Ollama server not reachable` | `ollama serve` no corriendo o URL distinta | `ollama serve` / revisa `OLLAMA_URL` |
 | `Ollama model ... not found` | Modelo no descargado | `ollama pull qwen3.5:4b` |
+| `ollama ps` → 100% CPU (sin GPU) | **Normal** en iGPU AMD sin kernels ROCm (p. ej. `gfx90c`) — Ollama cae a CPU | No es error; funciona igual. Verificado: ~11 tok/s en CPU |
+| Genera tokens "de más" o muy lento | Thinking del modelo activo | `.env` → `OLLAMA_THINK=false` (default) y reinicia el LLM Service |
 | `port is already allocated` | Conflicto de puertos | Tabla §7 — archivo a editar según el puerto |

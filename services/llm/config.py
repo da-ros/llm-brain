@@ -47,6 +47,9 @@ class Settings(BaseSettings):
 
     OLLAMA_URL: str = "http://127.0.0.1:11434"
     OLLAMA_MODEL: str = "qwen3.5:4b"
+    # Ollama thinking (reasoning): false = fast short answers (extraction,
+    # chat). true = model reasons before answering (slow, ~10x tokens).
+    OLLAMA_THINK: bool = False
     HF_HOME: str = str(_HF_HOME)
     INFERENCE_TIMEOUT_SECONDS: float = 600.0
 
