@@ -40,6 +40,7 @@ def _build_provider() -> LLMProvider:
             url=settings.OLLAMA_URL,
             mock=False,
             timeout_seconds=settings.INFERENCE_TIMEOUT_SECONDS,
+            think=settings.OLLAMA_THINK,
         )
     if backend not in {"qwen_local", "local"}:
         raise ValueError(
