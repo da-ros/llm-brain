@@ -29,9 +29,12 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libmagic1
       - name: Install dependencies
+        env:
+          UV_SYSTEM_PYTHON: "1"
         run: |
-          for svc in services/*/requirements.txt; do pip install -r "$svc"; done
-          pip install pytest pytest-asyncio pytest-cov
+          pip install uv==0.13.5
+          for svc in services/*/requirements.txt; do uv pip install -r "$svc"; done
+          uv pip install pytest pytest-asyncio pytest-cov
 
       # ── 3. Tests + Coverage (suite is hermetic: db/LLM mocked) ─
       - name: Run tests with coverage
