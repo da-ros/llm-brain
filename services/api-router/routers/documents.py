@@ -45,7 +45,9 @@ async def search_documents(
     return await _catalog(request, user, kind=kind, query=q)
 
 
-@router.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.delete(
+    "/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
+)
 async def delete_document(
     request: Request,
     doc_id: str,
