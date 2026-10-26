@@ -251,13 +251,7 @@ function fileIcon(file: MemoryFile) {
   return FileText;
 }
 
-function Detail({
-  file,
-  onDelete,
-}: {
-  file: MemoryFile;
-  onDelete: (id: string) => Promise<void>;
-}) {
+function Detail({ file, onDelete }: { file: MemoryFile; onDelete: (id: string) => Promise<void> }) {
   const Icon = fileIcon(file);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
