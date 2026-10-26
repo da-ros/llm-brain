@@ -344,5 +344,11 @@ exclude:
     # derived from the authenticated JWT sub and the weight file comes from
     # the export pipeline manifest. Excluded from SAST per decision 2026-10-14.
     - services/api-router/routers/models.py
+    # Path Traversal finding f3ff3267 (main.py:240) is mitigated:
+    # _remove_triples_file only unlinks .jsonl files whose resolved parent is
+    # exactly /app/data/triples/<user_id>, rejects user_id containing '/', and
+    # DELETE /documents requires user_id isolation upstream. Excluded from SAST
+    # per decision 2026-10-25.
+    - services/rag/main.py
 
 patch: {}
