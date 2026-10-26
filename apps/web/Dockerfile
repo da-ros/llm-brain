@@ -15,7 +15,7 @@ FROM node:22-trixie-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NITRO_PORT=3000
-RUN apt-get update && apt-get upgrade -y \
+RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
         /opt/yarn* \
         /usr/local/lib/node_modules/npm \
