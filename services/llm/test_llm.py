@@ -184,7 +184,8 @@ class TestProviderResolver:
 
 
 class TestHealthEndpoint:
-    def test_health_reports_local_qwen(self):
+    def test_health_reports_configured_backend(self):
+        from config import get_settings
         from fastapi.testclient import TestClient
         from main import app
 
@@ -192,12 +193,22 @@ class TestHealthEndpoint:
         response = client.get("/health")
         assert response.status_code == 200
         data = response.json()
+        settings = get_settings()
+        backend = settings.LLM_BACKEND.strip().lower()
+        expected_provider = (
+            "mock"
+            if settings.QWEN_MOCK
+            else ("ollama" if backend in {"ollama", "ollama_local"} else "qwen-local")
+        )
+        expected_model = (
+            settings.OLLAMA_MODEL if expected_provider == "ollama" else settings.QWEN_MODEL_ID
+        )
         assert data["status"] == "ok"
         assert data["service"] == "llm-service"
-        assert data["backend"] == "qwen_local"
-        assert data["provider"] == "mock"
-        assert data["device"] == "auto"
-        assert data["model"] == "qwen3.5-4b"
+        assert data["backend"] == backend
+        assert data["provider"] == expected_provider
+        assert data["device"] == settings.QWEN_DEVICE
+        assert data["model"] == expected_model
         assert "api_key" not in data
         assert "secret" not in data
 
