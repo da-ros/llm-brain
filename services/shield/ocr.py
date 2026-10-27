@@ -1,9 +1,9 @@
 """OCR an image with Tesseract. Video is never passed here.
 
-UnstructuredImageLoader imports the PDF layout stack (pdfminer, then
-unstructured-inference and torch) before it reads the file. That import
-is what turned POST /scan into a 500. Tesseract is the OCR engine that
-loader uses for plain text, which is all a screenshot scan needs.
+Pillow + pytesseract read the bytes directly, skipping
+UnstructuredImageLoader's import chain (that chain is what once turned
+POST /scan into a 500). Tesseract is the OCR engine the loader uses for
+plain text, which is all a screenshot scan needs.
 """
 
 from __future__ import annotations
