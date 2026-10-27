@@ -18,11 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# unstructured-inference depends on opencv-python, and that 5.x wheel
-# illegal-instructions here. Reinstall headless 4.13 after removing it.
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip uninstall -y opencv-python opencv-python-headless \
-    && pip install --no-cache-dir --force-reinstall --no-deps opencv-python-headless==4.13.0.92
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 RUN mkdir -p /app/data/triples
