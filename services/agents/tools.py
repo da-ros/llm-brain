@@ -160,21 +160,154 @@ async def rag_search(arguments: dict[str, Any]) -> dict[str, Any]:
     results = data.get("results") or []
     sources: list[str] = []
     parts: list[str] = []
-    for index, item in enumerate(results, 1):
+    evidence: list[dict[str, str]] = []
+    for item in results:
         meta = item.get("metadata") or {}
         text = item.get("document") or meta.get("chunk_text") or meta.get("text") or ""
         source = meta.get("source") or meta.get("doc_id") or meta.get("gridfs_id") or ""
+        if _bare_fact(text):
+            continue
         if source:
             sources.append(str(source))
         if text:
-            parts.append(f"[{index}] {text}")
-    return {"context": "\n".join(parts), "sources": sources, "results": results}
+            statement = _with_source(text, str(source))
+            parts.append(f"[{len(parts) + 1}] {statement}")
+            evidence.append({"source": str(source), "text": text})
+    return {
+        "context": "\n".join(parts),
+        "sources": sources,
+        "evidence": evidence,
+        "results": results,
+    }
+
+
+_CONTENT_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "of",
+        "to",
+        "and",
+        "or",
+        "in",
+        "on",
+        "for",
+        "with",
+        "from",
+        "that",
+        "this",
+        "it",
+        "be",
+        "thing",
+        "things",
+        "at",
+        "by",
+        "as",
+        "into",
+        "over",
+        "than",
+        "then",
+        "also",
+        "not",
+        "no",
+        "yes",
+    }
+)
+
+
+def _with_source(text: str, source: str) -> str:
+    """Keep the filename on the line the model reads. Search never sees it."""
+    label = (source or "").strip()
+    if not label:
+        return text
+    return f"{text} (source: {label})"
+
+
+def _file_extension(source: str) -> str:
+    """The format is the filename suffix, such as mp4 or mpeg."""
+    name = (source or "").replace("\\", "/").rsplit("/", 1)[-1].lower()
+    if "." not in name:
+        return ""
+    suffix = name.rsplit(".", 1)[-1].strip(".,;:\"'()[]")
+    if len(suffix) < 2 or suffix in _CONTENT_STOPWORDS:
+        return ""
+    return suffix
+
+
+def _content_words(text: str) -> list[str]:
+    words = []
+    for raw in (text or "").lower().split():
+        token = raw.strip(".,;:\"'()[]")
+        if token and token not in _CONTENT_STOPWORDS:
+            words.append(token)
+    return words
+
+
+_TYPE_WORDS = frozenset(
+    {"thing", "things", "person", "place", "date", "time", "organization", "organisation"}
+)
+
+
+def _bare_fact(text: str) -> bool:
+    """A line that only labels a type does not say what happened."""
+    words = [word.strip(".,;:\"'()[]").lower() for word in (text or "").split()]
+    words = [word for word in words if word]
+    if not words or words[-1] not in _TYPE_WORDS:
+        return False
+    return len(words) == 1 or words[-2] in {"a", "an", "is", "are"}
+
+
+def _words_needed(fact_word_count: int) -> int:
+    """A long passage must share more than a place and a year."""
+    if fact_word_count <= 1:
+        return 1
+    if fact_word_count >= 12:
+        return 4
+    return 2
+
+
+def cited_sources(evidence: list[dict[str, str]], answer: str) -> list[str]:
+    """Files whose fact, or whose format, shares words with the sentence that was said."""
+    answer_words = set(_content_words(answer))
+    sources: list[str] = []
+    for item in evidence:
+        source = (item.get("source") or "").strip()
+        fact_words = list(dict.fromkeys(_content_words(item.get("text") or "")))
+        overlap = [word for word in fact_words if word in answer_words]
+        names_format = _file_extension(source) in answer_words
+        if not names_format and len(overlap) < _words_needed(len(fact_words)):
+            continue
+        if source and source not in sources:
+            sources.append(source)
+    return sources
+
+
+_DIRECT_ANSWER = (
+    "Reply in plain sentences. State the fact. "
+    "When you give a date, copy that date from the statements. "
+    "Do not mention the context, the numbered statements, or how the answer was found."
+)
+
+
+def _direct_question(query: str) -> str:
+    """Keep the transcript, then tell the model to answer in a sentence."""
+    text = (query or "").rstrip()
+    if text.endswith(_DIRECT_ANSWER):
+        return text
+    if not text:
+        return _DIRECT_ANSWER
+    return f"{text}\n\n{_DIRECT_ANSWER}"
 
 
 async def llm_generate(arguments: dict[str, Any]) -> dict[str, Any]:
     """HTTP POST LLM /chat (Qwen3.5-4B). Timeout → 504, 5xx → 502."""
     settings = get_settings()
-    query = arguments.get("query") or ""
+    query = _direct_question(arguments.get("query") or "")
     user_id = arguments.get("user_id") or ""
     context = arguments.get("context") or None
     correlation_id = arguments.get("correlation_id") or "no-id"

@@ -58,6 +58,8 @@ class ChatRequest(BaseModel):
     message: str
     use_rag: bool = True
     session_id: str | None = None
+    memory_id: str = ""
+    memory_name: str = ""
     attachment_filename: str | None = None
     attachment_base64: str | None = None
     attachments: list[ChatAttachment] = Field(default_factory=list)
@@ -134,6 +136,7 @@ async def _agents_reason(
     session_id: str | None,
     correlation_id: str,
     agents_url: str,
+    search_query: str = "",
 ) -> dict:
     async with httpx.AsyncClient(timeout=get_settings().INFERENCE_TIMEOUT_SECONDS) as client:
         response = await client.post(
@@ -142,6 +145,7 @@ async def _agents_reason(
                 "user_id": user_id,
                 "subscription_tier": "premium",
                 "message": message,
+                "search_query": search_query,
                 "session_id": session_id,
             },
             headers={"X-Request-ID": correlation_id},
@@ -209,7 +213,12 @@ async def chat(
         log_with_correlation(correlation_id, "info", "Calling Agents Service POST /reason")
         try:
             data = await _agents_reason(
-                message=_agents_message(history, chat_request.message),
+                message=_agents_message(
+                    history, chat_request.message, chat_request.memory_name
+                ),
+                search_query=_standalone_search(
+                    history, chat_request.message, chat_request.memory_name
+                ),
                 user_id=user_id,
                 session_id=chat_request.session_id,
                 correlation_id=correlation_id,
@@ -279,7 +288,9 @@ async def chat(
         log_with_correlation(correlation_id, "info", "Calling RAG Service for context")
         try:
             context, sources = await _rag_context(
-                message=chat_request.message,
+                message=_standalone_search(
+                    history, chat_request.message, chat_request.memory_name
+                ),
                 user_id=user_id,
                 correlation_id=correlation_id,
                 rag_url=settings.RAG_SERVICE_URL,
@@ -306,6 +317,7 @@ async def chat(
         attachments=attachments,
         history=history,
         replay_visual=bool(prior_media),
+        memory_name=chat_request.memory_name,
     )
 
     log_with_correlation(correlation_id, "info", "Calling LLM Service for response")
@@ -538,8 +550,77 @@ def _with_history(history: list[dict], message: str) -> str:
     return f"{earlier}\n\nAnswer the user's question: {message}"
 
 
-def _agents_message(history: list[dict], message: str) -> str:
+def _memory_name(name: str) -> str:
+    return " ".join((name or "").split())[:200]
+
+
+def _memory_line(name: str) -> str:
+    cleaned = _memory_name(name)
+    if not cleaned:
+        return ""
+    return (
+        f"The user is asking about the memory file {cleaned}. Prefer facts from that file."
+    )
+
+
+def _search_text(message: str, memory_name: str) -> str:
+    cleaned = _memory_name(memory_name)
+    text = message or ""
+    if not cleaned:
+        return text
+    return f"{cleaned}\n{text}"
+
+
+_FOLLOWUP_OPENING_RE = re.compile(
+    r"^(?:yeah|yes|yep|ok|okay|and|but|so|also|right|wait|no|what about|how about)\b",
+    re.I,
+)
+_FOLLOWUP_ANAPHOR_RE = re.compile(
+    r"\b(?:its|it's|their|theirs|that|this|those|these|they|them|he|she|her|him|his)\b",
+    re.I,
+)
+_BARE_IT_RE = re.compile(r"\bit\b", re.I)
+_CORRECTION_RE = re.compile(
+    r"^(?:reconsider|try again|again|wrong|nope|incorrect|that(?:'|’)s wrong)[.!?\s]*$",
+    re.I,
+)
+
+
+def _previous_user_question(history: list[dict]) -> str:
+    """The last question the user asked. Assistant replies stay out of search."""
+    for turn in reversed(history or []):
+        if turn.get("role") == "user":
+            return " ".join(str(turn.get("text") or "").split())
+    return ""
+
+
+def _depends_on_prior_turn(message: str) -> bool:
+    """A follow-up points at the turn before. A question that names its subject does not."""
+    text = " ".join((message or "").split())
+    if not text:
+        return False
+    if _FOLLOWUP_OPENING_RE.search(text) or _FOLLOWUP_ANAPHOR_RE.search(text):
+        return True
+    if _CORRECTION_RE.search(text):
+        return True
+    return bool(_BARE_IT_RE.search(text) and len(text.split()) <= 8)
+
+
+def _standalone_search(history: list[dict], message: str, memory_name: str = "") -> str:
+    """Search text for this turn. A follow-up keeps the previous question and drops the reply."""
+    current = " ".join((message or "").split())
+    prior = _previous_user_question(history)
+    body = current
+    if prior and current and _depends_on_prior_turn(current):
+        body = f"{prior}\n{current}"
+    return _search_text(body, memory_name)
+
+
+def _agents_message(history: list[dict], message: str, memory_name: str = "") -> str:
     parts = [_clock_line()]
+    focus = _memory_line(memory_name)
+    if focus:
+        parts.append(focus)
     aside = _off_calendar_line(history)
     if aside:
         parts.append(aside)
@@ -652,6 +733,13 @@ async def _prompt_notes(user_id: str, correlation_id: str) -> list[dict[str, str
     return await list_notes(user_id, start, end, correlation_id=correlation_id)
 
 
+_DIRECT_ANSWER = (
+    "Reply in plain sentences. State the fact. "
+    "When you give a date, copy that date from the statements. "
+    "Do not mention the context, the numbered statements, or how the answer was found."
+)
+
+
 def _prompt(
     message: str,
     *,
@@ -661,8 +749,12 @@ def _prompt(
     attachments: list[ChatFile],
     history: list[dict],
     replay_visual: bool = False,
+    memory_name: str = "",
 ) -> str:
     blocks: list[str] = [_clock_line()]
+    focus = _memory_line(memory_name)
+    if focus:
+        blocks.append(focus)
     if not notes:
         aside = _off_calendar_line(history)
         if aside:
@@ -687,7 +779,7 @@ def _prompt(
     prompt = "\n\n".join(blocks) + f"\n\nAnswer the user's question: {message}"
     if _asks_for_the_date(message):
         prompt += f"\n\n{_date_authority_line()}"
-    return prompt
+    return f"{prompt}\n\n{_DIRECT_ANSWER}"
 
 
 def _notes_block(notes: list[dict[str, str]], now: datetime | None = None) -> str:

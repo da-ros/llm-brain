@@ -94,9 +94,23 @@ async def delete_chat(user_id: str, chat_id: str, *, correlation_id: str = "no-i
     return True
 
 
-async def create_chat(user_id: str, *, correlation_id: str = "no-id") -> dict[str, Any]:
+async def create_chat(
+    user_id: str,
+    *,
+    correlation_id: str = "no-id",
+    memory_id: str = "",
+    memory_name: str = "",
+) -> dict[str, Any]:
+    payload = None
+    name = " ".join(memory_name.split())
+    if name:
+        payload = {"memory_id": memory_id.strip(), "memory_name": name}
     response = await _request(
-        "POST", "/chats", correlation_id=correlation_id, params={"user_id": user_id}
+        "POST",
+        "/chats",
+        correlation_id=correlation_id,
+        params={"user_id": user_id},
+        json=payload,
     )
     _raise_for_status(response)
     return response.json()

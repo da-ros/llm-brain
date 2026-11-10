@@ -580,6 +580,49 @@ def test_clock_line_names_the_given_day():
     assert not _question_uses_calendar("What do you think about System One models?", calendar_turn)
 
 
+def test_agents_message_names_the_referenced_memory():
+    from routers.chat import _agents_message, _memory_line, _search_text
+
+    assert _memory_line("  ") == ""
+    text = _agents_message([], "What does it say?", "memories-1.docx")
+    assert "memories-1.docx" in text
+    assert "What does it say?" in text
+    assert "memory file" not in _agents_message([], "What does it say?")
+    assert _search_text("What does it say?", "memories-1.docx").startswith("memories-1.docx")
+
+
+def test_followup_search_keeps_the_previous_question():
+    from routers.chat import _standalone_search
+
+    history = [
+        {"role": "user", "text": "What was the memory box framework?"},
+        {
+            "role": "assistant",
+            "text": "The Memory Box is a lantern log, which is an offline-first personal memory journal.",
+        },
+    ]
+    search = _standalone_search(history, "Yeah, but what's its approach or framework?")
+    assert search == (
+        "What was the memory box framework?\nYeah, but what's its approach or framework?"
+    )
+    assert "offline-first" not in search
+    assert "lantern log" not in search.lower()
+
+    named = _standalone_search(history, "And what's its approach?", "about_nora.md")
+    assert named.startswith("about_nora.md\nWhat was the memory box framework?")
+
+    fresh = _standalone_search(
+        history,
+        "How much did the studio rental cost, and was it reimbursed?",
+    )
+    assert fresh == "How much did the studio rental cost, and was it reimbursed?"
+    assert _standalone_search([], "What was the memory box framework?") == (
+        "What was the memory box framework?"
+    )
+    reconsider = _standalone_search(history, "Reconsider.")
+    assert reconsider == ("What was the memory box framework?\nReconsider.")
+
+
 class TestChat:
     def test_premium_chat_uses_razonador_and_publishes_kafka(self, client):
         with patch("routers.chat._agents_reason", new_callable=AsyncMock) as reason:
@@ -603,6 +646,7 @@ class TestChat:
         assert "Current time:" in reason.await_args.kwargs["message"]
         assert "unix " in reason.await_args.kwargs["message"]
         assert "diabetes treatment" in reason.await_args.kwargs["message"]
+        assert reason.await_args.kwargs["search_query"] == "diabetes treatment"
         assert body["assumptions"]
         assert body["sources"] == ["doc-1"]
         assert body["session_id"] == "sess-1"
@@ -1709,6 +1753,31 @@ class TestIsAllowedUploadMime:
 
         assert is_allowed_upload_mime("video/quicktime") is True
 
+    def test_csv_excel_and_calendar_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("text/csv") is True
+        assert is_allowed_upload_mime("text/calendar") is True
+        assert is_allowed_upload_mime("text/x-vcalendar") is True
+        assert is_allowed_upload_mime("application/vnd.ms-excel") is True
+        assert (
+            is_allowed_upload_mime(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            is True
+        )
+
+    def test_old_doc_rejected(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("application/msword") is False
+
+    def test_heic_and_heif_allowed(self):
+        from mimeutil import is_allowed_upload_mime
+
+        assert is_allowed_upload_mime("image/heic") is True
+        assert is_allowed_upload_mime("image/heif") is True
+
     def test_non_video_unknown_not_allowed(self):
         from mimeutil import is_allowed_upload_mime
 
@@ -2173,6 +2242,17 @@ class TestBrain:
         removed = client.delete(f"/api/chats/{chat_id}", headers=auth_header())
         assert removed.status_code == 204
         assert client.get("/api/chats", headers=auth_header()).json()["chats"] == []
+
+    def test_new_chat_can_reference_a_memory(self, client):
+        created = client.post(
+            "/api/chats",
+            headers=auth_header(),
+            json={"memory_id": "doc-1", "memory_name": "memories-1.docx"},
+        )
+        assert created.status_code == 201
+        assert created.json()["memory"] == {"id": "doc-1", "name": "memories-1.docx"}
+        listed = client.get("/api/chats", headers=auth_header())
+        assert listed.json()["chats"][0]["memory"]["name"] == "memories-1.docx"
 
     def test_turns_stay_on_the_chat(self, client):
         created = client.post("/api/chats", headers=auth_header())
@@ -2785,6 +2865,46 @@ class TestAccount:
             headers={"Authorization": f"Bearer {changed.json()['access_token']}"},
         )
         assert refreshed.json()["plan"] == "free"
+
+    def test_an_old_token_still_opens_the_account(self, client, monkeypatch):
+        from datetime import timedelta
+
+        from fastapi.security import HTTPAuthorizationCredentials
+
+        from auth import verify_token
+
+        settings = get_settings()
+        monkeypatch.setattr(settings, "JWT_EXPIRATION_MINUTES", 0)
+        created = client.post(
+            "/api/auth/signup",
+            json={
+                "name": "Grace Hopper",
+                "email": "grace@example.com",
+                "password": "password1",
+                "plan": "premium",
+            },
+        )
+        user_id = created.json()["user"]["id"]
+        stale = jwt.encode(
+            {
+                "sub": user_id,
+                "subscription_tier": "premium",
+                "exp": datetime.now(UTC) - timedelta(hours=3),
+            },
+            SECRET,
+            algorithm="HS256",
+        )
+        request = MagicMock()
+        request.state.correlation_id = "stale-token"
+        user = verify_token(
+            request,
+            HTTPAuthorizationCredentials(scheme="Bearer", credentials=stale),
+        )
+        assert user["user_id"] == user_id
+        opened = client.get("/api/account", headers={"Authorization": f"Bearer {stale}"})
+        assert opened.status_code == 200
+        issued = jwt.decode(created.json()["access_token"], SECRET, algorithms=["HS256"])
+        assert "exp" not in issued
 
     def test_short_password_is_422(self, client):
         response = client.post(

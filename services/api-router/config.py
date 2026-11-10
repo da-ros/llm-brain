@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     # --- Auth (JWT) ---
     JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRATION_MINUTES: int = 60
+    JWT_EXPIRATION_MINUTES: int = 0
 
     # --- MongoDB ---
     MONGODB_URI: str = "mongodb://localhost:27017"

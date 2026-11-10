@@ -34,11 +34,13 @@ def verify_token(
         )
 
     settings = get_settings()
+    options = {"verify_exp": False} if settings.JWT_EXPIRATION_MINUTES <= 0 else None
     try:
         payload = decode(
             credentials.credentials,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
+            options=options,
         )
     except ExpiredSignatureError as exc:
         log_with_correlation(correlation_id, "warning", "JWT validation failed: Token expired")

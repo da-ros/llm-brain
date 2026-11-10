@@ -194,7 +194,8 @@ class OllamaProvider:
                 "stream": False,
                 "think": self.think,
                 "format": "json",
-                "options": {"num_predict": 1024},
+                # -1 lets the list finish. 1024 cut a real note off mid-array.
+                "options": {"num_predict": -1},
             },
         )
         result = self._decode_response(data, prompt)

@@ -53,12 +53,12 @@ def publish_task_response(payload: dict[str, Any]) -> None:
     )
 
 
-def _clip_summary(triples: list, limit: int = 180) -> str:
+def _clip_summary(triples: list, limit: int = 250) -> str:
     parts = [
         " ".join(part for part in (item.subject, item.predicate, item.object) if part)
         for item in triples
     ]
-    compact = " ".join(" ".join(parts).split())
+    compact = "; ".join(" ".join(part.split()) for part in parts if part.strip())
     if len(compact) <= limit:
         return compact
     return compact[: limit - 3].rstrip() + "..."

@@ -12,7 +12,7 @@ services:
       - KAFKA_ENABLED=true
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-local-dev-secret-not-for-production}
       - JWT_ALGORITHM=HS256
-      - JWT_EXPIRATION_MINUTES=60
+      - JWT_EXPIRATION_MINUTES=0
       - RAG_SERVICE_URL=http://rag-service:8002
       - LLM_SERVICE_URL=http://host.docker.internal:8003
       - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
@@ -227,7 +227,10 @@ services:
       - EMBEDDING_MODEL=Qwen/Qwen3-VL-Embedding-2B
       - EMBEDDING_DIM=2048
       - EMBEDDING_MOCK=${EMBEDDING_MOCK:-true}
-      - RAG_TOP_K=3
+      - HF_HOME=/app/data/huggingface
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+      - RAG_TOP_K=8
       - RAG_CHUNK_SIZE=1000
       - RAG_CHUNK_OVERLAP=200
       - FERNET_KEY=${FERNET_KEY:-JEWS9jt7GqTkkv1N8y-Kld5V8IeFZMw_UFFhn4h-xsU=}

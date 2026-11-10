@@ -59,6 +59,7 @@ class ReasonRequest(BaseModel):
     user_id: str
     subscription_tier: str = "free"
     message: str
+    search_query: str = ""
     session_id: str | None = None
 
 
@@ -148,6 +149,7 @@ def create_app() -> FastAPI:
                 "session_id": session_id,
                 "correlation_id": correlation_id,
                 "query": body.message,
+                "search_query": body.search_query,
                 "context": "",
                 "sources": [],
                 "response": "",

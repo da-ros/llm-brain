@@ -8,8 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-embedding.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-embedding.txt
+
+# HEIC photos. Separate from the torch install so that layer stays cached.
+RUN pip install --no-cache-dir pi_heif==1.1.1
 
 COPY . .
 

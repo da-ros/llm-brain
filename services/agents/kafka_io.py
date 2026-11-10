@@ -45,7 +45,15 @@ async def process_session_turn(message: dict[str, Any]) -> dict[str, Any]:
         correlation_id_var.reset(token)
 
 
-def _consume() -> None:
+def _save_on_server_loop(loop: asyncio.AbstractEventLoop, message: dict[str, Any]) -> None:
+    """Save one turn on the server loop. The database client is bound to that loop."""
+    try:
+        asyncio.run_coroutine_threadsafe(process_session_turn(message), loop).result()
+    except Exception:
+        logger.exception("session.turn.completed was not saved")
+
+
+def _consume(loop: asyncio.AbstractEventLoop) -> None:
     from kafka import KafkaConsumer
 
     settings = get_settings()
@@ -63,28 +71,26 @@ def _consume() -> None:
         return
 
     logger.info("Consuming from topic %s", settings.KAFKA_TOPIC_SESSION_TURN)
-    loop = None
     try:
-        loop = asyncio.new_event_loop()
         while not _stop.is_set():
             records = consumer.poll(timeout_ms=1000)
             for _tp, messages in records.items():
                 for message in messages:
-                    loop.run_until_complete(process_session_turn(message.value))
+                    _save_on_server_loop(loop, message.value)
     except Exception:
         logger.exception("Kafka consumer error")
     finally:
-        if loop is not None:
-            loop.close()
         consumer.close()
 
 
 def start_consumer_thread() -> None:
     """Start the session.turn.completed consumer in a daemon thread."""
     global _consumer_thread
+    loop = asyncio.get_running_loop()
     _stop.clear()
     _consumer_thread = threading.Thread(
         target=_consume,
+        args=(loop,),
         name="agents-kafka-consumer",
         daemon=True,
     )

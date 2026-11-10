@@ -5,7 +5,7 @@ from __future__ import annotations
 from auth import verify_token
 from brain_client import create_chat, delete_chat, list_chats, list_turns, rename_chat
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -15,9 +15,32 @@ async def get_chats(request: Request, user: dict = Depends(verify_token)):
     return {"chats": await list_chats(user["user_id"], correlation_id=request.state.correlation_id)}
 
 
+class NewChat(BaseModel):
+    memory_id: str = ""
+    memory_name: str = Field(default="", max_length=200)
+
+
+def _new_chat(raw: bytes) -> NewChat:
+    if not raw.strip():
+        return NewChat()
+    try:
+        return NewChat.model_validate_json(raw)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Memory reference is invalid",
+        ) from exc
+
+
 @router.post("", status_code=201)
 async def post_chat(request: Request, user: dict = Depends(verify_token)):
-    return await create_chat(user["user_id"], correlation_id=request.state.correlation_id)
+    body = _new_chat(await request.body())
+    return await create_chat(
+        user["user_id"],
+        correlation_id=request.state.correlation_id,
+        memory_id=body.memory_id,
+        memory_name=body.memory_name,
+    )
 
 
 class RenameChat(BaseModel):

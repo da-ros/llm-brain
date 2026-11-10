@@ -7,17 +7,18 @@ from typing import Any
 from base import NO_PERSONAL_CONTEXT
 from exceptions import LLMTimeoutError, LLMUpstreamError
 from logging_setup import log_with_correlation
-from tools import invoke_tool
+from tools import cited_sources, invoke_tool
 
 
 async def retrieve_context(state: dict[str, Any]) -> dict[str, Any]:
     """Razonador retrieve node via rag_search (HTTP RAG 8002)."""
     correlation_id = state.get("correlation_id") or "no-id"
     log_with_correlation(correlation_id, "info", "reason_graph: retrieve_context")
+    asked = (state.get("search_query") or "").strip()
     result = await invoke_tool(
         "rag_search",
         {
-            "query": state.get("query") or "",
+            "query": asked or (state.get("query") or ""),
             "user_id": state.get("user_id") or "",
             "correlation_id": correlation_id,
         },
@@ -25,6 +26,7 @@ async def retrieve_context(state: dict[str, Any]) -> dict[str, Any]:
     return {
         "context": result.get("context") or "",
         "sources": result.get("sources") or [],
+        "evidence": result.get("evidence") or [],
     }
 
 
@@ -66,7 +68,12 @@ async def extract_assumptions(state: dict[str, Any]) -> dict[str, Any]:
     correlation_id = state.get("correlation_id") or "no-id"
     log_with_correlation(correlation_id, "info", "reason_graph: extract_assumptions")
     context = (state.get("context") or "").strip()
-    sources = state.get("sources") or []
+    evidence = state.get("evidence") or []
+    sources = (
+        cited_sources(evidence, state.get("response") or "")
+        if evidence
+        else (state.get("sources") or [])
+    )
     assumptions: list[str] = []
     if not context or context == NO_PERSONAL_CONTEXT:
         assumptions.append(NO_PERSONAL_CONTEXT)
@@ -76,4 +83,4 @@ async def extract_assumptions(state: dict[str, Any]) -> dict[str, Any]:
         assumptions.append(f"Retrieved {len(sources)} source(s) from RAG Top-k search.")
     if not assumptions:
         assumptions.append(NO_PERSONAL_CONTEXT)
-    return {"assumptions": assumptions}
+    return {"assumptions": assumptions, "sources": sources}

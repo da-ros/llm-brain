@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   FileImage,
@@ -292,7 +292,17 @@ function Detail({ file, onDelete }: { file: MemoryFile; onDelete: (id: string) =
         <dd>{file.status}</dd>
       </dl>
       <Button asChild className="mt-6 w-full">
-        <Link to="/brain">Ask Brain about this</Link>
+        <Link
+          to="/brain"
+          onClick={() => {
+            sessionStorage.setItem(
+              "encefalus-open-memory",
+              JSON.stringify({ id: file.id, name: file.name }),
+            );
+          }}
+        >
+          Ask Brain about this
+        </Link>
       </Button>
       {confirming ? (
         <div className="mt-3">
@@ -349,6 +359,29 @@ function KindButton({
 
 function UploadDialog({ onUploaded }: { onUploaded: () => void }) {
   const [error, setError] = useState("");
+  const [over, setOver] = useState(false);
+
+  function onDragEnter(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setOver(true);
+  }
+
+  function onDragOver(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setOver(true);
+  }
+
+  function onDragLeave(event: DragEvent<HTMLElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setOver(false);
+  }
+
+  function onDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setOver(false);
+    void upload(event.dataTransfer.files);
+  }
 
   async function upload(list: FileList | null) {
     const file = list?.[0];
@@ -376,14 +409,23 @@ function UploadDialog({ onUploaded }: { onUploaded: () => void }) {
           Add memory
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
         <DialogHeader>
           <DialogTitle>Add to your Brain</DialogTitle>
           <DialogDescription>
             Documents, images, and video become searchable personal context.
           </DialogDescription>
         </DialogHeader>
-        <label className="mt-2 grid min-h-64 cursor-pointer place-items-center rounded-lg border border-dashed border-input bg-muted/30 p-8 text-center">
+        <label
+          className={`mt-2 grid min-h-64 cursor-pointer place-items-center rounded-lg border border-dashed p-8 text-center ${
+            over ? "border-primary bg-primary/10" : "border-input bg-muted/30"
+          }`}
+        >
           <input
             className="sr-only"
             type="file"
@@ -391,9 +433,9 @@ function UploadDialog({ onUploaded }: { onUploaded: () => void }) {
           />
           <span>
             <Upload className="mx-auto size-7 text-primary" />
-            <b className="mt-4 block text-sm">Choose a file</b>
+            <b className="mt-4 block text-sm">Drop a file here</b>
             <span className="mt-2 block text-xs leading-5 text-muted-foreground">
-              PDF, Word, text, images, and video
+              or click to choose one. PDF, Word, Excel, CSV, calendars, text, images, and video
             </span>
           </span>
         </label>

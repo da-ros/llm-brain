@@ -10,7 +10,8 @@ import {
 } from "@/components/encefalus/primitives";
 import { useAccount } from "@/lib/account";
 
-type ChatThread = { id: string; title: string };
+type MemoryRef = { id: string; name: string };
+type ChatThread = { id: string; title: string; memory?: MemoryRef };
 type SourceCard = { n: number; label: string; origin: "memory" | "calendar" | "attachment" };
 type TurnFile = { name: string };
 type Turn = {
@@ -24,17 +25,17 @@ type Note = { date: string; note: string };
 
 const FILE_KINDS = [
   { label: "Documents", detail: "PDF, Word, text, Markdown" },
-  { label: "Spreadsheets", detail: "Excel, CSV" },
-  { label: "Pages and mail", detail: "HTML, email" },
-  { label: "Images", detail: "PNG, JPEG, GIF, WebP, TIFF, BMP" },
-  { label: "Video", detail: "MP4, MOV, WebM, AVI, MKV" },
+  { label: "Spreadsheets", detail: "Excel, CSV, TSV" },
+  { label: "Pages and mail", detail: "HTML, email, calendars" },
+  { label: "Images", detail: "PNG, JPEG, GIF, WebP, TIFF, BMP, HEIC" },
+  { label: "Video", detail: "MP4, MOV, WebM, AVI, MKV, MPEG" },
 ];
 
 const FILE_LIMIT = 5;
+const OPEN_MEMORY_KEY = "encefalus-open-memory";
 
 const ACCEPT = [
   ".pdf",
-  ".doc",
   ".docx",
   ".txt",
   ".md",
@@ -55,6 +56,8 @@ const ACCEPT = [
   ".tif",
   ".tiff",
   ".bmp",
+  ".heic",
+  ".heif",
   ".mp4",
   ".mov",
   ".webm",
@@ -249,6 +252,26 @@ function renderAssistantText(text: string): ReactNode {
   return <div className="space-y-3 text-sm leading-6">{blocks}</div>;
 }
 
+function takeMemoryRequest(): MemoryRef | null {
+  const raw = sessionStorage.getItem(OPEN_MEMORY_KEY);
+  if (!raw) return null;
+  sessionStorage.removeItem(OPEN_MEMORY_KEY);
+  try {
+    const parsed = JSON.parse(raw) as MemoryRef;
+    const name = parsed?.name?.trim() ?? "";
+    if (!name) return null;
+    return { id: parsed.id?.trim() ?? "", name };
+  } catch {
+    return null;
+  }
+}
+
+function asChat(row: ChatThread): ChatThread {
+  const name = row.memory?.name?.trim() ?? "";
+  if (!name) return { id: row.id, title: row.title };
+  return { id: row.id, title: row.title, memory: { id: row.memory?.id ?? "", name } };
+}
+
 function authHeaders(): HeadersInit {
   const token = sessionStorage.getItem("access_token") ?? "";
   return {
@@ -287,16 +310,29 @@ export function BrainPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const bootStarted = useRef(false);
+  const openingMemory = useRef<MemoryRef | null>(null);
 
   const openChats = openIds
     .map((id) => chats.find((chat) => chat.id === id))
     .filter((chat): chat is ChatThread => Boolean(chat));
+  const activeChat = chats.find((chat) => chat.id === activeId);
+  const memory = activeChat?.memory;
   const turns = activeId ? (threads[activeId] ?? []) : [];
   const latest = [...turns].reverse().find((turn) => turn.role === "assistant");
   const cards = latest?.cards ?? [];
 
   useEffect(() => {
-    void loadChats();
+    if (bootStarted.current) return;
+    bootStarted.current = true;
+    const requested = takeMemoryRequest();
+    openingMemory.current = requested;
+    void (async () => {
+      await loadChats();
+      if (requested) await openMemoryChat(requested);
+      openingMemory.current = null;
+    })();
   }, []);
 
   useEffect(() => {
@@ -322,12 +358,24 @@ export function BrainPage() {
     composer.style.height = `${Math.min(composer.scrollHeight, 160)}px`;
   }, [message]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && menuRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [menuOpen]);
+
   async function loadChats() {
     const response = await fetch("/api/chats", { headers: authHeaders() });
     if (!response.ok) return;
     const body = await response.json();
-    const rows = (body.chats ?? []) as ChatThread[];
+    const rows = ((body.chats ?? []) as ChatThread[]).map(asChat);
     setChats(rows);
+    if (openingMemory.current) return;
     setOpenIds((current) => {
       const live = current.filter((id) => rows.some((row) => row.id === id));
       if (live.length > 0) return live;
@@ -380,6 +428,35 @@ export function BrainPage() {
     } catch {
       return;
     }
+  }
+
+  async function openMemoryChat(requested: MemoryRef) {
+    setError("");
+    let response: Response;
+    try {
+      response = await fetch("/api/chats", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ memory_id: requested.id, memory_name: requested.name }),
+      });
+    } catch {
+      setError("Brain is not reachable. Start the API router and sign in.");
+      openingMemory.current = null;
+      await loadChats();
+      return;
+    }
+    if (!response.ok) {
+      setError(await readError(response));
+      openingMemory.current = null;
+      await loadChats();
+      return;
+    }
+    const created = asChat((await response.json()) as ChatThread);
+    const chat = created.memory ? created : { ...created, memory: requested };
+    skipLoad.current.add(chat.id);
+    setChats((rows) => [chat, ...rows.filter((row) => row.id !== chat.id)]);
+    setThreads((current) => ({ ...current, [chat.id]: current[chat.id] ?? [] }));
+    showChat(chat.id);
   }
 
   async function newChat() {
@@ -495,6 +572,7 @@ export function BrainPage() {
       }
     }
     const attached = files;
+    const memoryRef = chats.find((chat) => chat.id === chatId)?.memory;
     setThreads((current) => ({
       ...current,
       [chatId]: [
@@ -512,6 +590,9 @@ export function BrainPage() {
           message: text,
           use_rag: premium,
           session_id: chatId,
+          ...(memoryRef
+            ? { memory_id: memoryRef.id, memory_name: memoryRef.name }
+            : {}),
           ...(attached.length
             ? {
                 attachments: attached.map((item) => ({
@@ -573,7 +654,7 @@ export function BrainPage() {
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_310px]">
         <section className="flex min-h-0 min-w-0 flex-col border-r border-border">
           <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-            <div className="relative">
+            <div className="relative" ref={menuRef}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -668,10 +749,16 @@ export function BrainPage() {
           </div>
           <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-8 sm:px-7">
+              {memory && (
+                <div className="mb-6">
+                  <MemoryReferenceCard name={memory.name} />
+                </div>
+              )}
               {turns.length === 0 && (
                 <p className="text-sm leading-6 text-muted-foreground">
-                  Start a chat. Attached files stay in this chat for later questions and are not
-                  saved to Memory.
+                  {memory
+                    ? "Ask a question about this memory."
+                    : "Start a chat. Attached files stay in this chat for later questions and are not saved to Memory."}
                 </p>
               )}
               <div className="space-y-7">
@@ -955,6 +1042,20 @@ function readFile(file: File): Promise<{ name: string; base64: string }> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+function MemoryReferenceCard({ name }: { name: string }) {
+  return (
+    <div className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-left">
+      <FileText className="size-3.5 shrink-0 text-primary" />
+      <span className="min-w-0">
+        <span className="block truncate text-[11px] font-semibold leading-4">{name}</span>
+        <span className="block text-[10px] leading-3 text-muted-foreground">
+          Referencing this memory
+        </span>
+      </span>
+    </div>
+  );
 }
 
 function sourceNote(origin: SourceCard["origin"]) {

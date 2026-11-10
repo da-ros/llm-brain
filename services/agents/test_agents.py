@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -181,6 +182,29 @@ class TestReasonGraph:
         assert result.get("error")
         assert result.get("error_kind") == "upstream"
         assert not result.get("assumptions")
+
+    @pytest.mark.asyncio
+    async def test_search_uses_the_question_and_the_answer_keeps_the_transcript(self):
+        seen: dict[str, str] = {}
+
+        async def fake_rag(arguments):
+            seen["search"] = arguments.get("query") or ""
+            return {"context": "Pixel species cat", "sources": ["about_nora.md"], "results": []}
+
+        async def fake_llm(arguments):
+            seen["answer"] = arguments.get("query") or ""
+            return {"response": "Pixel.", "tokens_used": 2}
+
+        with patch.dict(HANDLERS, {"rag_search": fake_rag, "llm_generate": fake_llm}):
+            result = await run_reason_graph(
+                _reason_state(
+                    query="Current time: Thursday.\n\nEarlier in this chat:\n\nUser: who am I?\n\nAnswer the user's question: What is the name of my cat?",
+                    search_query="What is the name of my cat?",
+                )
+            )
+        assert seen["search"] == "What is the name of my cat?"
+        assert "who am I?" in seen["answer"]
+        assert result["response"] == "Pixel."
 
 
 class TestLearnGraph:
@@ -624,6 +648,140 @@ class TestRagSearch:
         assert "sources" in result
 
     @pytest.mark.asyncio
+    async def test_bare_thing_lines_are_left_out_of_the_context(self):
+        from tools import rag_search
+
+        mock_resp = _mock_response(
+            200,
+            {
+                "results": [
+                    {"document": "Pixel is orange cat", "metadata": {"source": "about_nora.md"}},
+                    {
+                        "document": "weekly review is thing",
+                        "metadata": {"source": "journal_2026.docx"},
+                    },
+                ]
+            },
+        )
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get.return_value = mock_resp
+        with patch("tools.httpx.AsyncClient", return_value=mock_client):
+            result = await rag_search({"query": "pet", "user_id": "u1", "correlation_id": "cid"})
+        assert result["sources"] == ["about_nora.md"]
+        assert result["context"] == "[1] Pixel is orange cat (source: about_nora.md)"
+        assert "weekly review" not in result["context"]
+
+    @pytest.mark.asyncio
+    async def test_a_place_label_is_left_out_of_the_context(self):
+        from tools import rag_search
+
+        mock_resp = _mock_response(
+            200,
+            {
+                "results": [
+                    {
+                        "document": (
+                            "Lantern Log retrieval design review scheduled "
+                            "October 21, 2026, 16:00–16:45 New York time "
+                            "at North Room, Bellwater Workshop House"
+                        ),
+                        "metadata": {"source": "nora_calendar.ics"},
+                    },
+                    {
+                        "document": "North Room is a place",
+                        "metadata": {"source": "nora_calendar.ics"},
+                    },
+                ]
+            },
+        )
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get.return_value = mock_resp
+        with patch("tools.httpx.AsyncClient", return_value=mock_client):
+            result = await rag_search({"query": "review", "user_id": "u1", "correlation_id": "cid"})
+        assert "North Room is a place" not in result["context"]
+        assert "16:00–16:45" in result["context"]
+
+    def test_chips_keep_the_fact_the_answer_repeats(self):
+        from tools import cited_sources
+
+        evidence = [
+            {"source": "about_nora.md", "text": "Pixel is orange cat"},
+            {"source": "personal_timeline.csv", "text": "Pixel is orange cat"},
+            {"source": "journal_2026.docx", "text": "Pixel celebrated birthday"},
+            {"source": "cedar_cove_recap.avi", "text": "voice note is a thing"},
+        ]
+        sources = cited_sources(
+            evidence,
+            "Yes, you have a pet named Pixel, who is an orange cat.",
+        )
+        assert sources == ["about_nora.md", "personal_timeline.csv"]
+
+    def test_a_shared_place_and_year_does_not_cite_another_story(self):
+        from tools import cited_sources
+
+        meeting = (
+            "Lantern Log retrieval design review scheduled October 21, 2026, "
+            "16:00–16:45 New York time at North Room, Bellwater Workshop House."
+        )
+        recap = (
+            "Cedar Cove recap, Sunday June 14, 2026. Nora took the 7:40 a.m. train "
+            "from Bellwater. Back at Lantern Log, the version-two retrieval goal is "
+            "a p95 under 500 ms."
+        )
+        weekly = (
+            "Nora's weekly review changed on September 3, 2026. "
+            "Before, Sunday evenings. Now, Saturday mornings."
+        )
+        evidence = [
+            {"source": "nora_calendar.ics", "text": meeting},
+            {"source": "weekly_review_schedule.bmp", "text": weekly},
+            {"source": "cedar_cove_recap.mp4", "text": recap},
+            {"source": "cedar_cove_recap.mov", "text": recap},
+            {"source": "lantern_log_dashboard.xlsx", "text": "Offline retrieval selected Keyword fallback for retrieval"},
+        ]
+        sources = cited_sources(
+            evidence,
+            "The retrieval design review was scheduled for October 21, 2026, "
+            "at 16:00–16:45 New York time in the North Room at the Bellwater Workshop House.",
+        )
+        assert sources == ["nora_calendar.ics"]
+
+    def test_chips_keep_a_file_named_by_its_format(self):
+        from tools import cited_sources
+
+        evidence = [
+            {
+                "source": "cedar_cove_recap.mp4",
+                "text": "Nora took the 7:40 a.m. train from Bellwater.",
+            },
+            {
+                "source": "cedar_cove_recap.mov",
+                "text": "Nora took the 7:40 a.m. train from Bellwater.",
+            },
+            {
+                "source": "october_usage_recap.mpeg",
+                "text": "24 of the 31 onboarded users wrote an entry that week.",
+            },
+            {
+                "source": "lantern_log_dashboard.xlsx",
+                "text": "Engagement snapshot recorded 24 of 31 wrote an entry that week.",
+            },
+        ]
+        sources = cited_sources(
+            evidence,
+            "MP4, MOV, WebM, AVI, and MKV share the older story. MPEG has the October 26 figure.",
+        )
+        assert sources == [
+            "cedar_cove_recap.mp4",
+            "cedar_cove_recap.mov",
+            "october_usage_recap.mpeg",
+        ]
+
+    @pytest.mark.asyncio
     async def test_rag_search_http_error_returns_empty(self):
         from tools import rag_search
 
@@ -663,6 +821,10 @@ class TestLlmGenerate:
         with patch("tools.httpx.AsyncClient", return_value=mock_client):
             result = await llm_generate({"query": "hi", "user_id": "u1", "correlation_id": "cid-1"})
         assert result["response"] == "hello"
+        content = mock_client.post.await_args.kwargs["json"]["messages"][0]["content"]
+        assert content.startswith("hi")
+        assert "Reply in plain sentences." in content
+        assert "copy that date from the statements" in content
 
     @pytest.mark.asyncio
     async def test_llm_generate_timeout(self):
@@ -1326,6 +1488,38 @@ class TestKafkaIo:
         from kafka_io import stop_consumer_thread
 
         stop_consumer_thread()
+
+    @pytest.mark.asyncio
+    async def test_turn_is_saved_on_the_server_loop(self):
+        import kafka_io
+
+        loop = asyncio.get_running_loop()
+        seen: dict = {}
+
+        async def fake_process(message):
+            seen["loop"] = asyncio.get_running_loop()
+            seen["user_id"] = message["user_id"]
+
+        with patch.object(kafka_io, "process_session_turn", fake_process):
+            await asyncio.to_thread(
+                kafka_io._save_on_server_loop,
+                loop,
+                {"user_id": "57eec20b", "correlation_id": "c"},
+            )
+        assert seen["loop"] is loop
+        assert seen["user_id"] == "57eec20b"
+
+    @pytest.mark.asyncio
+    async def test_a_failed_save_leaves_the_listener_running(self):
+        import kafka_io
+
+        loop = asyncio.get_running_loop()
+
+        async def boom(_message):
+            raise RuntimeError("attached to a different loop")
+
+        with patch.object(kafka_io, "process_session_turn", boom):
+            await asyncio.to_thread(kafka_io._save_on_server_loop, loop, {"user_id": "u"})
 
 
 class TestAnalyticsQuery:

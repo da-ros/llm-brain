@@ -75,3 +75,28 @@ def test_chat_and_note_stay_with_the_owner():
     assert removed.status_code == 204
     assert client.get("/chats", params={"user_id": "user1"}).json()["chats"] == []
     assert client.get(f"/chats/{chat_id}/turns", params={"user_id": "user1"}).status_code == 404
+
+
+def test_new_chat_keeps_the_memory_it_references():
+    import conversations
+    from fastapi import FastAPI
+
+    conversations.reset_memory()
+    conversations.bind(None)
+    app = FastAPI()
+    app.include_router(conversations.router)
+    client = TestClient(app)
+
+    created = client.post(
+        "/chats",
+        params={"user_id": "user1"},
+        json={"memory_id": " doc-1 ", "memory_name": " memories-1.docx "},
+    )
+    assert created.status_code == 201
+    assert created.json()["title"] == "New chat"
+    assert created.json()["memory"] == {"id": "doc-1", "name": "memories-1.docx"}
+    listed = client.get("/chats", params={"user_id": "user1"})
+    assert listed.json()["chats"][0]["memory"]["name"] == "memories-1.docx"
+    plain = client.post("/chats", params={"user_id": "user1"})
+    assert plain.status_code == 201
+    assert "memory" not in plain.json()

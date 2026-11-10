@@ -16,9 +16,21 @@ from exceptions import (
 from jsonl import write_triples
 from llm_client import LLMServiceClient, TripleExtractor
 from logging_setup import log_with_correlation
-from triples import Triple, triple_from_llm
+from calendar_events import event_triples
+from triples import Triple, enrich_metadata, triple_from_llm
 
-_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".bmp"}
+_IMAGE_SUFFIXES = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".bmp",
+    ".heic",
+    ".heif",
+}
 _VIDEO_SUFFIXES = {".mp4", ".mov", ".webm", ".avi", ".mkv", ".mpeg", ".mpg"}
 
 
@@ -69,6 +81,52 @@ def _description(
     return text.strip()
 
 
+def _is_calendar(file_path: str, mime_type: str | None, filename: str | None) -> bool:
+    mime = (mime_type or "").split(";")[0].strip().lower()
+    suffixes = {Path(file_path).suffix.lower(), Path(filename or "").suffix.lower()}
+    return mime in {"text/calendar", "text/x-vcalendar"} or ".ics" in suffixes
+
+
+def _one_note(
+    text: str,
+    *,
+    source_file: str,
+    user_id: str,
+    page: int | None,
+    section: str | None,
+) -> list[Triple]:
+    """A photo or clip is one memory. Its fields stay in that one passage."""
+    body = " ".join(text.split())
+    if not body:
+        raise CorruptFileError("No text could be read from the file")
+    return [
+        Triple(
+            subject=source_file,
+            predicate="records",
+            object=body,
+            metadata=enrich_metadata(
+                {"source notes": "Kept as one note"},
+                source_file=source_file,
+                user_id=user_id,
+                page=page,
+                section=section,
+            ),
+        )
+    ]
+
+
+def _from_calendar(path: Path, *, source_file: str, user_id: str) -> list[Triple]:
+    """Read each VEVENT as one fact. The model is not asked to split the calendar."""
+    triples: list[Triple] = []
+    for item in event_triples(path.read_text(encoding="utf-8", errors="replace")):
+        triple = triple_from_llm(item, source_file=source_file, user_id=user_id)
+        if triple is not None:
+            triples.append(triple)
+    if not triples:
+        raise CorruptFileError("Calendar has no events")
+    return triples
+
+
 def distill(
     file_path: str,
     *,
@@ -85,7 +143,7 @@ def distill(
 
     1. Select LangChain loader by MIME type
     2. Load content (text / OCR). A photo or clip with no words is described from its bytes.
-    3. POST that text to LLM Service (base Qwen3.5-4B) for triples
+    3. A photo or clip is saved as one note. Other text goes to the LLM Service for triples.
     4. Enrich metadata and write data/triples/{user_id}/{document_id}.jsonl
     """
     path = Path(file_path)
@@ -102,6 +160,25 @@ def distill(
         "info",
         f"Starting ETL pipeline: {path.name} ({size} bytes) user_id={user_id}",
     )
+
+    if _is_calendar(str(path), mime_type, filename):
+        given_name = Path(filename).name if filename else ""
+        source_file = given_name or path.name
+        triples = _from_calendar(path, source_file=source_file, user_id=user_id)
+        if write_output:
+            target_dir = output_dir or settings.TRIPLES_OUTPUT_DIR
+            output_path = write_triples(
+                triples,
+                user_id=user_id,
+                document_id=document_id,
+                output_dir=target_dir,
+            )
+            log_with_correlation(
+                correlation_id,
+                "info",
+                f"Saved {len(triples)} calendar events to {output_path}",
+            )
+        return triples
 
     try:
         documents, content = _read_content(str(path), mime_type)
@@ -132,28 +209,37 @@ def distill(
     page = first_page(documents)
     section = first_section(documents)
 
-    raw_triples = client.extract_triples(
-        content,
-        user_id=user_id,
-        correlation_id=correlation_id,
-    )
-
-    triples: list[Triple] = []
-    for item in raw_triples:
-        if not isinstance(item, dict):
-            continue
-        triple = triple_from_llm(
-            item,
+    if visual:
+        triples = _one_note(
+            content,
             source_file=source_file,
             user_id=user_id,
             page=page,
             section=section,
         )
-        if triple is not None:
-            triples.append(triple)
+    else:
+        raw_triples = client.extract_triples(
+            content,
+            user_id=user_id,
+            correlation_id=correlation_id,
+        )
 
-    if not triples:
-        raise CorruptFileError("LLM returned no valid subject-predicate-object triples")
+        triples = []
+        for item in raw_triples:
+            if not isinstance(item, dict):
+                continue
+            triple = triple_from_llm(
+                item,
+                source_file=source_file,
+                user_id=user_id,
+                page=page,
+                section=section,
+            )
+            if triple is not None:
+                triples.append(triple)
+
+        if not triples:
+            raise CorruptFileError("LLM returned no valid subject-predicate-object triples")
 
     if write_output:
         target_dir = output_dir or settings.TRIPLES_OUTPUT_DIR

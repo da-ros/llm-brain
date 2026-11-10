@@ -170,6 +170,62 @@ def _fit_dim(values: list[float], dim: int) -> list[float]:
     return _l2_normalize(values + [0.0] * (dim - len(values)))
 
 
+# Function words. They overlap almost every sentence and were outranking the fact
+# that actually answers the question ("cat" lost to "the" and "of").
+_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "of",
+        "to",
+        "and",
+        "or",
+        "my",
+        "your",
+        "me",
+        "i",
+        "what",
+        "who",
+        "how",
+        "when",
+        "where",
+        "why",
+        "do",
+        "does",
+        "did",
+        "can",
+        "you",
+        "about",
+        "in",
+        "on",
+        "for",
+        "from",
+        "with",
+        "this",
+        "that",
+        "it",
+        "be",
+        "am",
+    }
+)
+_EDGE_PUNCTUATION = "?.!,;:\"'()[]"
+
+
+def _content_tokens(text: str) -> list[str]:
+    """Words that can identify a fact. A question made only of function words keeps them."""
+    raw = text.lower().split()
+    kept = [token.strip(_EDGE_PUNCTUATION) for token in raw]
+    content = [token for token in kept if token and token not in _STOPWORDS]
+    if content:
+        return content
+    return [token for token in kept if token]
+
+
 class MockEmbedder:
     """Deterministic 2048-dim embedder for tests (token hashing, cosine-friendly)."""
 
@@ -178,7 +234,7 @@ class MockEmbedder:
 
     def embed_text(self, text: str) -> list[float]:
         vector = [0.0] * self.dim
-        for token in text.lower().split():
+        for token in _content_tokens(text):
             digest = hashlib.md5(token.encode("utf-8")).hexdigest()
             index = int(digest, 16) % self.dim
             vector[index] += 1.0
@@ -193,16 +249,61 @@ class MockEmbedder:
         return embed_sampled_frames(self.embed_image, payload)
 
 
+def _runtime_device() -> str:
+    """Metal on the host, CUDA when present, otherwise CPU inside the container."""
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def _runtime_dtype():
+    """bfloat16 faults on this container's CPU. Float32 is the portable path there."""
+    import torch
+
+    if _runtime_device() == "cpu":
+        return torch.float32
+    return torch.bfloat16
+
+
+_heif_ready = False
+
+
+def _prepare_heif() -> None:
+    """Let Pillow open HEIC photos. Other formats do not need this."""
+    global _heif_ready
+    if _heif_ready:
+        return
+    try:
+        from pi_heif import register_heif_opener
+
+        register_heif_opener()
+    except ImportError:
+        pass
+    _heif_ready = True
+
+
 class QwenVLEmbedder:
     """Qwen3-VL-Embedding-2B via sentence-transformers (multimodal)."""
 
     def __init__(self, model_id: str, dim: int = 2048) -> None:
         from sentence_transformers import SentenceTransformer
 
-        log_with_correlation("no-id", "debug", f"Loading embedding model: {model_id}")
+        device = _runtime_device()
+        log_with_correlation("no-id", "info", f"Loading embedding model: {model_id} on {device}")
         self.dim = dim
-        self._model = SentenceTransformer(model_id, trust_remote_code=True)
-        logger.info("Embedding model loaded (%s dims, multimodal)", dim)
+        self._model = SentenceTransformer(
+            model_id,
+            device=device,
+            trust_remote_code=True,
+            local_files_only=True,
+            model_kwargs={"dtype": _runtime_dtype()},
+        )
+        logger.info("Embedding model loaded (%s dims, %s)", dim, device)
 
     def embed_text(self, text: str) -> list[float]:
         vector = self._model.encode(text, normalize_embeddings=True)
@@ -213,6 +314,7 @@ class QwenVLEmbedder:
 
         from PIL import Image
 
+        _prepare_heif()
         image = Image.open(BytesIO(payload)).convert("RGB")
         vector = self._model.encode(image, normalize_embeddings=True)
         return _fit_dim(vector.tolist(), self.dim)

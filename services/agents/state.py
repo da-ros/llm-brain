@@ -12,8 +12,10 @@ class ReasonState(TypedDict, total=False):
     session_id: str
     correlation_id: str
     query: str
+    search_query: str
     context: str
     sources: list[str]
+    evidence: list[dict[str, str]]
     response: str
     assumptions: list[str]
     tokens_used: int

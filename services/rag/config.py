@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     EMBEDDING_DIM: int = 2048
     EMBEDDING_MOCK: bool = True
 
-    RAG_TOP_K: int = 3
+    RAG_TOP_K: int = 8
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 200
 
