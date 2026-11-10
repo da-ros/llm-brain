@@ -68,6 +68,31 @@ def enrich_metadata(
     return metadata
 
 
+_TYPE_LABELS = {
+    "person",
+    "a person",
+    "place",
+    "a place",
+    "date",
+    "a date",
+    "time",
+    "a time",
+    "thing",
+    "a thing",
+    "things",
+    "organization",
+    "an organization",
+    "organisation",
+    "an organisation",
+}
+
+
+def bare_object(value: str) -> bool:
+    """A type label such as "place" or "thing" names nothing that happened."""
+    words = [word.strip(".,;:").lower() for word in (value or "").split()]
+    return " ".join(word for word in words if word) in _TYPE_LABELS
+
+
 def triple_from_llm(
     payload: dict[str, Any],
     *,
@@ -80,7 +105,7 @@ def triple_from_llm(
     subject = payload.get("subject")
     predicate = payload.get("predicate")
     obj = payload.get("object")
-    if not subject or not predicate or not obj:
+    if not subject or not predicate or not obj or bare_object(str(obj)):
         return None
     raw_meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
     return Triple(

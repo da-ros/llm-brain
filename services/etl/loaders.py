@@ -1,8 +1,9 @@
 """LangChain document loaders wired by MIME type.
 
-Every parser is an out-of-the-box `langchain_community.document_loaders` class
-(or a thin adapter that still exposes `.load()`). No hand-rolled PDF/HTML/EML/OCR
-parsers and no bespoke Tesseract pipeline.
+Documents, mail, and spreadsheets use an out-of-the-box
+`langchain_community.document_loaders` class. Photos and scanned PDFs are
+read with Tesseract in `ocr.py` so Unstructured's partition modules, which
+load the unstructured_inference package at import time, are never loaded.
 
 LangChain is imported inside `.load()` so `select()` stays cheap and testable.
 """
@@ -14,6 +15,7 @@ from typing import Any
 
 from exceptions import CorruptFileError, LoaderError
 from logging_setup import logger
+from ocr import ocr_image, ocr_pdf
 
 IMAGE_MIMES = {
     "image/png",
@@ -23,6 +25,10 @@ IMAGE_MIMES = {
     "image/gif",
     "image/webp",
     "image/bmp",
+    "image/heic",
+    "image/heif",
+    "image/heic-sequence",
+    "image/heif-sequence",
 }
 
 VIDEO_MIMES = {
@@ -38,7 +44,6 @@ HTML_MIMES = {"text/html", "application/xhtml+xml"}
 EMAIL_MIMES = {"message/rfc822", "application/vnd.ms-outlook"}
 DOCX_MIMES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/msword",
 }
 EXCEL_MIMES = {
     "application/vnd.ms-excel",
@@ -46,7 +51,7 @@ EXCEL_MIMES = {
 }
 CSV_MIMES = {"text/csv", "text/tab-separated-values"}
 # Text formats handled by TextLoader (chat attachments: diaries, calendars).
-TEXT_EXTRA_MIMES = {"text/markdown", "text/calendar"}
+TEXT_EXTRA_MIMES = {"text/markdown", "text/calendar", "text/x-vcalendar"}
 
 SUPPORTED_MIMES = (
     {"application/pdf", "text/plain"}
@@ -72,14 +77,10 @@ def _run_loader(loader_cls: Any, file_path: str, label: str, **kwargs: Any) -> l
         raise LoaderError(f"{label} failed: {exc}") from exc
 
 
-def _pdf_loader_classes() -> tuple[Any, Any, Any]:
-    from langchain_community.document_loaders import (
-        PDFPlumberLoader,
-        PyPDFLoader,
-        UnstructuredPDFLoader,
-    )
+def _pdf_text_loaders() -> tuple[Any, Any]:
+    from langchain_community.document_loaders import PDFPlumberLoader, PyPDFLoader
 
-    return PyPDFLoader, PDFPlumberLoader, UnstructuredPDFLoader
+    return PyPDFLoader, PDFPlumberLoader
 
 
 def _text_loader_class() -> Any:
@@ -118,26 +119,14 @@ def _excel_loader_class() -> Any:
     return UnstructuredExcelLoader
 
 
-def _image_loader_class() -> Any:
-    from langchain_community.document_loaders import UnstructuredImageLoader
-
-    return UnstructuredImageLoader
-
-
-def _video_loader_class() -> Any:
-    from langchain_community.document_loaders import UnstructuredFileLoader
-
-    return UnstructuredFileLoader
-
-
 class PdfLoaderAdapter:
-    """PDF strategy: PyPDFLoader → PDFPlumberLoader → UnstructuredPDFLoader (OCR)."""
+    """PDF strategy: PyPDFLoader, then PDFPlumberLoader, then Tesseract on each page."""
 
     def __init__(self, file_path: str) -> None:
         self.file_path = file_path
 
     def load(self) -> list[Any]:
-        pypdf_cls, plumber_cls, unstructured_cls = _pdf_loader_classes()
+        pypdf_cls, plumber_cls = _pdf_text_loaders()
 
         for loader_cls, label in (
             (pypdf_cls, "PyPDFLoader"),
@@ -152,12 +141,11 @@ class PdfLoaderAdapter:
                 logger.info("LangChain loader selected: %s", label)
                 return documents
 
-        try:
-            documents = unstructured_cls(self.file_path).load()
-        except Exception as exc:
-            raise LoaderError(f"PDF loader failed: {exc}") from exc
-        logger.info("LangChain loader selected: UnstructuredPDFLoader (OCR via Unstructured)")
-        return documents
+        pages = ocr_pdf(self.file_path)
+        if not pages:
+            raise LoaderError("PDF loader failed: Tesseract found no text")
+        logger.info("Tesseract OCR selected for scanned PDF")
+        return [_page(text, self.file_path, page) for page, text in pages]
 
 
 class TextLoaderAdapter:
@@ -243,34 +231,27 @@ class ExcelLoaderAdapter:
         return documents
 
 
-class UnstructuredImageLoaderAdapter:
+class ImageLoaderAdapter:
+    """Read words in a photo with Tesseract. An empty result is still a document."""
+
     def __init__(self, file_path: str) -> None:
         self.file_path = file_path
 
     def load(self) -> list[Any]:
-        # ocr_only reads words with Tesseract. The default image strategy is
-        # hi_res, which downloads a layout model before that OCR runs.
-        documents = _run_loader(
-            _image_loader_class(),
-            self.file_path,
-            "UnstructuredImageLoader",
-            strategy="ocr_only",
-            languages=["eng", "spa"],
-        )
-        logger.info("LangChain loader selected: UnstructuredImageLoader (ocr_only)")
-        return documents
+        text = ocr_image(self.file_path)
+        logger.info("Tesseract OCR selected for image")
+        return [_page(text, self.file_path)]
 
 
 class VideoFileLoader:
-    """Local video strategy wrapping UnstructuredFileLoader (LangChain out-of-the-box)."""
+    """A clip has no extracted words, same as a photo Tesseract cannot read."""
 
     def __init__(self, file_path: str) -> None:
         self.file_path = file_path
 
     def load(self) -> list[Any]:
-        documents = _run_loader(_video_loader_class(), self.file_path, "UnstructuredFileLoader")
-        logger.info("LangChain loader selected: UnstructuredFileLoader (video)")
-        return documents
+        logger.info("Video has no extracted text; the model will describe it")
+        return [_page("", self.file_path)]
 
 
 def resolve_loader_class(mime_type: str) -> type | None:
@@ -295,7 +276,7 @@ def resolve_loader_class(mime_type: str) -> type | None:
     if mime in TEXT_EXTRA_MIMES:
         return TextLoaderAdapter
     if mime in IMAGE_MIMES:
-        return UnstructuredImageLoaderAdapter
+        return ImageLoaderAdapter
     if mime in VIDEO_MIMES or mime.startswith("video/"):
         return VideoFileLoader
     return None
@@ -313,8 +294,21 @@ def supported_types_message() -> str:
     return (
         "Supported types: text/plain, text/markdown, text/calendar (ICS), text/csv, TSV, "
         "application/pdf, text/html, message/rfc822, DOCX, Excel (xls/xlsx), "
-        "image (png/jpeg/tiff/gif/webp/bmp), video (mp4/webm/quicktime)"
+        "image (png/jpeg/tiff/gif/webp/bmp/heic), video (mp4/webm/quicktime)"
     )
+
+
+class _Page:
+    def __init__(self, page_content: str, metadata: dict[str, Any]) -> None:
+        self.page_content = page_content
+        self.metadata = metadata
+
+
+def _page(text: str, source: str, page: int | None = None) -> _Page:
+    metadata: dict[str, Any] = {"source": source}
+    if page is not None:
+        metadata["page"] = page
+    return _Page(text, metadata)
 
 
 def documents_to_content(documents: list[Any]) -> str:

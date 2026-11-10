@@ -4,5 +4,9 @@
 transformers==5.18.0
 torch==2.14.1
 torchvision==0.29.1
+# torchvision 0.29 no longer decodes video. PyAV is what Qwen uses to open a clip.
+av==19.0.2
 Pillow==12.3.0
+# iPhone photos are HEIC. Pillow opens them after this registers its opener.
+pi_heif==1.1.1
 accelerate==1.15.0

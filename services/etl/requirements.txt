@@ -12,7 +12,7 @@ pypdf==6.21.2
 pdfplumber==0.11.10
 python-magic==0.4.27
 unstructured==0.18.32
-# UnstructuredImageLoader imports these before Tesseract can read a photo.
+# HEIC opener and the Tesseract binding. OCR does not import unstructured_inference.
 pi_heif==1.1.1
 # Pin the Pillow 12.3.0 CVEs away (pdfplumber needs >=12.2; 13.0.0 fixed)
 Pillow==13.0.0
@@ -24,4 +24,7 @@ opencv-python-headless==4.13.0.92
 pandas==2.3.3
 openpyxl==3.1.5
 xlrd==2.0.2
+# Excel partition imports these even for an unencrypted workbook.
+networkx==3.6.1
+msoffcrypto-tool==6.0.0
 python-docx==1.2.0

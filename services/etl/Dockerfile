@@ -3,8 +3,8 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # libmagic = python-magic MIME detection.
-# tesseract/poppler/ffmpeg = runtime for Unstructured* loaders (OCR/PDF/video).
-# UnstructuredImageLoader OCRs through that Tesseract binary.
+# tesseract/poppler/ffmpeg = photo OCR, scanned-PDF OCR, and video.
+# Photos and scanned pages are read with Tesseract directly.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libmagic1 \
@@ -19,6 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 RUN mkdir -p /app/data/triples

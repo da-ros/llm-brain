@@ -50,11 +50,11 @@ class TestProviderProtocol:
             def apply_chat_template(self, messages, **_kwargs):
                 content = messages[0]["content"]
                 seen["image"] = Path(content[0]["image"]).read_bytes()
-                seen["video"] = Path(content[1]["video"]).read_bytes()
+                seen["video"] = content[1]["video"]
                 seen["image_suffix"] = Path(content[0]["image"]).suffix
-                seen["video_suffix"] = Path(content[1]["video"]).suffix
                 seen["prompt"] = content[2]["text"]
                 seen["thinking"] = _kwargs.get("enable_thinking")
+                seen["sample"] = _kwargs.get("do_sample_frames")
                 return _Inputs(input_ids=[[1, 2, 3]])
 
             def batch_decode(self, _ids, **_kwargs):
@@ -66,19 +66,100 @@ class TestProviderProtocol:
             def generate(self, **_kwargs):
                 return [[1, 2, 3, 9]]
 
+        def _frames(path, **_kwargs):
+            seen["decoded"] = Path(path).read_bytes()
+            seen["backend"] = _kwargs.get("backend")
+            import numpy as np
+
+            return np.zeros((8, 4, 4, 3), dtype="uint8"), None
+
         provider = QwenLocalProvider(mock=False)
-        with patch.object(provider, "_load_visual", return_value=(_Processor(), _Model())):
+        with (
+            patch.object(provider, "_load_visual", return_value=(_Processor(), _Model())),
+            patch("transformers.video_utils.load_video", side_effect=_frames),
+        ):
             result = provider.complete(
                 "What is this?",
                 media=[("image", png, "photo.jpg"), ("video", clip, "clip.mov")],
             )
         assert result.text == "A red receipt on a table."
         assert seen["image"] == png
-        assert seen["video"] == clip
+        assert seen["decoded"] == clip
+        assert seen["backend"] == "pyav"
+        assert seen["video"].shape == (8, 4, 4, 3)
         assert seen["image_suffix"] == ".jpg"
-        assert seen["video_suffix"] == ".mov"
         assert seen["prompt"] == "What is this?"
         assert seen["thinking"] is False
+        assert seen["sample"] is False
+
+    def test_webm_is_shown_to_the_model_as_mp4(self):
+        import subprocess
+
+        from providers.qwen_local import QwenLocalProvider
+
+        clip = b"webm-bytes"
+        seen: dict = {}
+
+        class _Inputs(dict):
+            def to(self, _device):
+                return self
+
+        class _Processor:
+            def apply_chat_template(self, messages, **_kwargs):
+                seen["frames"] = messages[0]["content"][0]["video"]
+                return _Inputs(input_ids=[[1]])
+
+            def batch_decode(self, _ids, **_kwargs):
+                return ["A short clip."]
+
+        class _Model:
+            device = "cpu"
+
+            def generate(self, **_kwargs):
+                return [[1, 2]]
+
+        def _transcode(cmd, **_kwargs):
+            Path(cmd[-1]).write_bytes(b"mp4-bytes")
+            return subprocess.CompletedProcess(cmd, 0)
+
+        def _frames(path, **_kwargs):
+            seen["decoded"] = Path(path).read_bytes()
+            import numpy as np
+
+            return np.zeros((8, 4, 4, 3), dtype="uint8"), None
+
+        provider = QwenLocalProvider(mock=False)
+        with (
+            patch.object(provider, "_load_visual", return_value=(_Processor(), _Model())),
+            patch("providers.qwen_local.shutil.which", return_value="/usr/bin/ffmpeg"),
+            patch("providers.qwen_local.subprocess.run", side_effect=_transcode),
+            patch("transformers.video_utils.load_video", side_effect=_frames),
+        ):
+            result = provider.complete("What happens?", media=[("video", clip, "clip.webm")])
+        assert result.text == "A short clip."
+        assert seen["decoded"] == b"mp4-bytes"
+        assert seen["frames"].shape[0] == 8
+
+    def test_mpeg_is_shown_to_the_model_as_mp4(self, tmp_path):
+        import subprocess
+
+        from providers.qwen_local import _video_for_model
+
+        source = tmp_path / "recap.mpeg"
+        source.write_bytes(b"mpeg-bytes")
+
+        def _transcode(cmd, **_kwargs):
+            Path(cmd[-1]).write_bytes(b"mp4-bytes")
+            return subprocess.CompletedProcess(cmd, 0)
+
+        with (
+            patch("providers.qwen_local.shutil.which", return_value="/usr/bin/ffmpeg"),
+            patch("providers.qwen_local.subprocess.run", side_effect=_transcode) as run,
+        ):
+            shown = _video_for_model(source)
+        assert shown.suffix == ".mp4"
+        assert shown.read_bytes() == b"mp4-bytes"
+        assert run.call_args.args[0][-1].endswith("recap.mp4")
 
     def test_complete_returns_tokens(self):
         from providers.qwen_local import QwenLocalProvider
@@ -136,6 +217,13 @@ class TestProviderProtocol:
         assert encoded not in result.text
         assert "image sha256=" in result.text
 
+    def test_extraction_prompt_asks_for_the_event(self):
+        from providers.qwen_local import TRIPLE_EXTRACTION_PROMPT
+
+        assert "what happened" in TRIPLE_EXTRACTION_PROMPT
+        assert "Do not emit a fact that only says something is a person" in TRIPLE_EXTRACTION_PROMPT
+        assert "Every person, place, date, time, and thing" not in TRIPLE_EXTRACTION_PROMPT
+
     def test_extract_triples_mock(self):
         from providers.qwen_local import QwenLocalProvider
 
@@ -153,6 +241,35 @@ class TestProviderProtocol:
         raw = '[{"subject": "Ibuprofeno", "predicate": "trata", "object": "dolor"}]'
         triples = parse_triples_json(raw)
         assert triples[0]["object"] == "dolor"
+
+    def test_clipped_list_keeps_finished_triples(self):
+        from providers.qwen_local import parse_triples_json
+
+        raw = (
+            '[{"subject": "Nora", "predicate": "lives in", "object": "Bellwater"},'
+            '{"subject": "Pixel", "predicate": "species"'
+        )
+        triples = parse_triples_json(raw)
+        assert len(triples) == 1
+        assert triples[0]["object"] == "Bellwater"
+
+    def test_extract_lets_the_model_finish_the_list(self):
+        from unittest.mock import MagicMock
+
+        from providers.base import LLMResult
+        from providers.qwen_local import QwenLocalProvider
+
+        provider = QwenLocalProvider(mock=False)
+        provider._generate = MagicMock(
+            return_value=LLMResult(
+                text='[{"subject": "Nora", "predicate": "lives in", "object": "Bellwater"}]',
+                tokens_used=12,
+            )
+        )
+        triples, tokens = provider.extract_triples("A note about Nora.")
+        assert provider._generate.call_args.kwargs["max_new_tokens"] is None
+        assert triples[0]["object"] == "Bellwater"
+        assert tokens == 12
 
 
 class TestProviderResolver:
@@ -594,6 +711,7 @@ class TestOllamaProvider:
         with self._fake_ollama(handler):
             triples, tokens = provider.extract_triples("Ibuprofeno trata el dolor.")
         assert captured["body"]["format"] == "json"
+        assert captured["body"]["options"]["num_predict"] == -1
         assert triples[0]["object"] == "dolor"
         assert tokens == 10
 

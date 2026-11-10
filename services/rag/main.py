@@ -6,6 +6,7 @@ LangChain chunking, Fernet, and per-user isolation.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from contextlib import asynccontextmanager
 
@@ -40,6 +41,15 @@ class IngestRequest(BaseModel):
 class IngestResponse(BaseModel):
     triples_count: int
     status: str
+
+
+class ReembedRowsRequest(BaseModel):
+    """Rebuild one file's vectors as one passage per spreadsheet row."""
+
+    user_id: str
+    doc_id: str
+    triples_path: str
+    filename: str = ""
 
 
 class EmbedRequest(BaseModel):
@@ -78,8 +88,23 @@ async def lifespan(_app: FastAPI):
     except Exception:
         logger.exception("MongoDB connection failed at startup (health still 200)")
         conversations.bind(None)
+    warmup: asyncio.Task | None = None
+    if not get_settings().EMBEDDING_MOCK:
+        warmup = asyncio.create_task(asyncio.to_thread(_warm_embedder))
     yield
+    if warmup is not None:
+        warmup.cancel()
     await document_store.close()
+
+
+def _warm_embedder() -> None:
+    """Load Qwen3-VL-Embedding-2B once so the first search does not pay the startup cost."""
+    try:
+        rag_service.embed_text("warmup")
+    except Exception:
+        logger.exception("Embedding model failed to load")
+    else:
+        logger.info("Embedding model is ready")
 
 
 def create_app() -> FastAPI:
@@ -107,7 +132,7 @@ def create_app() -> FastAPI:
         request: Request,
         query: str = Query(..., description="Search query"),
         user_id: str = Query(..., description="User ID for isolation"),
-        k: int = Query(3, description="Top-k"),
+        k: int | None = Query(default=None, ge=1, le=20, description="Top-k"),
     ):
         correlation_id = getattr(request.state, "correlation_id", "no-id")
         log_with_correlation(
@@ -190,6 +215,34 @@ def create_app() -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Ingest error: {exc}",
+            ) from exc
+
+    @application.post("/reembed-rows", response_model=IngestResponse)
+    async def reembed_rows(request: Request, body: ReembedRowsRequest):
+        """Replace sentence vectors for one file. Does not write a new catalog row."""
+        correlation_id = getattr(request.state, "correlation_id", "no-id")
+        log_with_correlation(
+            correlation_id,
+            "info",
+            f"Reembedding rows: user={body.user_id} doc={body.doc_id}",
+        )
+        try:
+            count = await rag_service.replace_row_vectors(
+                user_id=body.user_id,
+                doc_id=body.doc_id,
+                triples_path=body.triples_path,
+                filename=body.filename,
+                correlation_id=correlation_id,
+            )
+            return IngestResponse(
+                triples_count=count,
+                status="success" if count > 0 else "no triples found",
+            )
+        except Exception as exc:
+            log_with_correlation(correlation_id, "error", f"Reembed failed: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Reembed error: {exc}",
             ) from exc
 
     @application.post("/embed", response_model=EmbedResponse)

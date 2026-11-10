@@ -118,12 +118,16 @@ async def delete_chat(user_id: str, chat_id: str) -> bool:
     return True
 
 
-async def create_chat(user_id: str) -> dict[str, Any]:
+async def create_chat(
+    user_id: str, *, memory_id: str = "", memory_name: str = ""
+) -> dict[str, Any]:
     now = datetime.now(UTC)
     row = {
         "_id": str(uuid.uuid4()),
         "user_id": user_id,
         "title": "New chat",
+        "memory_id": memory_id.strip(),
+        "memory_name": " ".join(memory_name.split())[:200],
         "created_at": now,
         "updated_at": now,
     }
@@ -267,11 +271,15 @@ async def put_note(user_id: str, day: str, note: str) -> None:
 
 def _public_chat(row: dict[str, Any]) -> dict[str, Any]:
     updated = row["updated_at"]
-    return {
+    public: dict[str, Any] = {
         "id": row["_id"],
         "title": row["title"],
         "updated_at": updated.isoformat() if hasattr(updated, "isoformat") else str(updated),
     }
+    name = " ".join(str(row.get("memory_name") or "").split())
+    if name:
+        public["memory"] = {"id": str(row.get("memory_id") or ""), "name": name}
+    return public
 
 
 def _public_turn(row: dict[str, Any]) -> dict[str, Any]:
@@ -291,14 +299,25 @@ def _public_turn(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+class CreateChatBody(BaseModel):
+    memory_id: str = ""
+    memory_name: str = Field(default="", max_length=200)
+
+
 @router.get("/chats")
 async def get_chats(user_id: str = Query(...)) -> dict[str, Any]:
     return {"chats": await list_chats(user_id)}
 
 
 @router.post("/chats", status_code=status.HTTP_201_CREATED)
-async def post_chat(user_id: str = Query(...)) -> dict[str, Any]:
-    return await create_chat(user_id)
+async def post_chat(
+    user_id: str = Query(...), body: CreateChatBody | None = None
+) -> dict[str, Any]:
+    return await create_chat(
+        user_id,
+        memory_id=body.memory_id if body else "",
+        memory_name=body.memory_name if body else "",
+    )
 
 
 class RenameBody(BaseModel):

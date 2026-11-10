@@ -11,6 +11,8 @@ import hashlib
 import io
 import json
 import re
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -118,6 +120,8 @@ def flatten_content(content: Any) -> str:
 
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".bmp"}
 _VIDEO_SUFFIXES = {".mp4", ".mov", ".webm", ".avi", ".mkv", ".mpeg", ".mpg"}
+# These containers store a duration and leave the frame count at 0, so the decoder refuses them.
+_MP4_SUFFIXES = {".webm", ".mkv", ".mpeg", ".mpg"}
 
 
 def _media_parts(media: list[tuple] | None) -> list[tuple[str, bytes, str]]:
@@ -126,6 +130,63 @@ def _media_parts(media: list[tuple] | None) -> list[tuple[str, bytes, str]]:
         filename = item[2] if len(item) > 2 else ""
         parts.append((item[0], item[1], filename))
     return parts
+
+
+def _sample_frames(path: Path):
+    """Read a clip with PyAV. The processor's own decoder is torchcodec, which is not installed."""
+    from transformers.video_utils import load_video
+
+    shown = _video_for_model(path)
+    try:
+        try:
+            frames, _metadata = load_video(str(shown), num_frames=8, backend="pyav")
+        except ValueError:
+            frames, _metadata = load_video(str(shown), backend="pyav")
+    except Exception as exc:
+        raise ModelUnavailableError("Could not read that video") from exc
+    count = int(frames.shape[0])
+    if count < 1:
+        raise ModelUnavailableError("Could not read that video")
+    if count < 4:
+        import numpy as np
+
+        frames = np.concatenate([frames, np.repeat(frames[-1:], 4 - count, axis=0)], axis=0)
+        count = int(frames.shape[0])
+    if count % 2 == 1:
+        frames = frames[:-1]
+    return frames
+
+
+def _video_for_model(path: Path) -> Path:
+    """Turn a clip with no frame count into an MP4 the decoder can sample."""
+    if path.suffix.lower() not in _MP4_SUFFIXES:
+        return path
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise ModelUnavailableError("ffmpeg is required to read this video")
+    target = path.with_suffix(".mp4")
+    try:
+        subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                str(path),
+                "-an",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                str(target),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ModelUnavailableError("Could not read that video") from exc
+    return target
 
 
 def _suffix_for(kind: str, filename: str) -> str:
@@ -225,10 +286,26 @@ def extract_inline_media(content: Any) -> tuple[Any, list[tuple[str, bytes, str]
 
 
 _IMAGE_MAX_SIDE = 1280
+_heif_ready = False
+
+
+def _prepare_heif() -> None:
+    """Let Pillow open an iPhone HEIC. Other photos do not need this."""
+    global _heif_ready
+    if _heif_ready:
+        return
+    try:
+        from pi_heif import register_heif_opener
+
+        register_heif_opener()
+    except ImportError:
+        pass
+    _heif_ready = True
 
 
 def _fit_image(payload: bytes, filename: str) -> tuple[bytes, str]:
     """Shrink a large screenshot so the vision tokens stay in context."""
+    _prepare_heif()
     try:
         from PIL import Image
 
@@ -278,50 +355,87 @@ def build_chat_prompt(messages: list[dict], context: str | None = None) -> str:
     return "\n".join(parts)
 
 
-TRIPLE_EXTRACTION_PROMPT = """You extract knowledge triples from documents.
-Return ONLY a JSON array of objects with keys subject, predicate, object, metadata.
-metadata must include source notes when available.
+TRIPLE_EXTRACTION_PROMPT = """You extract what happened in a document.
+Return a JSON array of objects with keys subject, predicate, object, metadata.
+Each item is one event or one stated fact. Keep who, what, when, and where together in that fact.
+metadata must include source notes when a note is available.
+Do not emit a fact that only says something is a person, a place, a date, a time, or a thing.
+When the document states a fact, the array must not be empty.
 
 Document:
 {content}
 """
 
 
-def parse_triples_json(text: str) -> list[dict]:
-    """Parse a JSON array of triples from model output."""
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
-        stripped = re.sub(r"\s*```$", "", stripped)
-    try:
-        data = json.loads(stripped)
-    except json.JSONDecodeError:
-        match = re.search(r"\[.*\]", stripped, re.DOTALL)
-        if not match:
-            return []
-        try:
-            data = json.loads(match.group(0))
-        except json.JSONDecodeError:
-            return []
-    if not isinstance(data, list):
-        return []
+def _triple_from_item(item: dict) -> dict | None:
+    subject = item.get("subject")
+    predicate = item.get("predicate")
+    obj = item.get("object")
+    if not (subject and predicate and obj):
+        return None
+    return {
+        "subject": str(subject),
+        "predicate": str(predicate),
+        "object": str(obj),
+        "metadata": item.get("metadata") or {},
+    }
+
+
+def _triples_from_list(data: list) -> list[dict]:
     triples: list[dict] = []
     for item in data:
         if not isinstance(item, dict):
             continue
-        subject = item.get("subject")
-        predicate = item.get("predicate")
-        obj = item.get("object")
-        if subject and predicate and obj:
-            triples.append(
-                {
-                    "subject": str(subject),
-                    "predicate": str(predicate),
-                    "object": str(obj),
-                    "metadata": item.get("metadata") or {},
-                }
-            )
+        triple = _triple_from_item(item)
+        if triple is not None:
+            triples.append(triple)
     return triples
+
+
+def _complete_triples(text: str) -> list[dict]:
+    """Keep every finished object when the list was cut off mid-item."""
+    decoder = json.JSONDecoder()
+    triples: list[dict] = []
+    index = 0
+    while True:
+        start = text.find("{", index)
+        if start < 0:
+            break
+        try:
+            item, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            index = start + 1
+            continue
+        index = end
+        if isinstance(item, dict):
+            triple = _triple_from_item(item)
+            if triple is not None:
+                triples.append(triple)
+    return triples
+
+
+def parse_triples_json(text: str) -> list[dict]:
+    """Parse triples from model output. A clipped list still keeps finished facts."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
+        stripped = re.sub(r"\s*```$", "", stripped)
+        stripped = stripped.strip()
+    data = None
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError:
+        match = re.search(r"\[.*\]", stripped, re.DOTALL)
+        if match:
+            try:
+                data = json.loads(match.group(0))
+            except json.JSONDecodeError:
+                data = None
+    if isinstance(data, list):
+        triples = _triples_from_list(data)
+        if triples:
+            return triples
+    return _complete_triples(stripped)
 
 
 class QwenLocalProvider:
@@ -377,14 +491,16 @@ class QwenLocalProvider:
         """Run Qwen3.5-4B on the prompt plus the image or video bytes."""
         processor, model = self._load_visual()
         with tempfile.TemporaryDirectory() as tmp:
-            content: list[dict[str, str]] = []
+            content: list[dict] = []
+            has_video = False
             for index, (kind, payload, filename) in enumerate(media):
                 if kind != "video":
                     payload, filename = _fit_image(payload, filename)
                 path = Path(tmp) / f"media-{index}{_suffix_for(kind, filename)}"
                 path.write_bytes(payload)
                 if kind == "video":
-                    content.append({"type": "video", "video": str(path)})
+                    has_video = True
+                    content.append({"type": "video", "video": _sample_frames(path)})
                 else:
                     content.append({"type": "image", "image": str(path)})
             content.append({"type": "text", "text": prompt})
@@ -394,6 +510,7 @@ class QwenLocalProvider:
                 [{"role": "user", "content": content}],
                 prompt,
                 max_new_tokens,
+                do_sample_frames=False if has_video else None,
             )
 
     def _decode(
@@ -403,9 +520,13 @@ class QwenLocalProvider:
         messages: list[dict],
         prompt: str,
         max_new_tokens: int | None = None,
+        do_sample_frames: bool | None = None,
     ) -> LLMResult:
         """Generate from chat messages already shaped for the processor."""
         try:
+            template_kwargs = {}
+            if do_sample_frames is not None:
+                template_kwargs["do_sample_frames"] = do_sample_frames
             inputs = processor.apply_chat_template(
                 messages,
                 tokenize=True,
@@ -413,6 +534,7 @@ class QwenLocalProvider:
                 return_dict=True,
                 return_tensors="pt",
                 enable_thinking=False,
+                **template_kwargs,
             )
             device = getattr(model, "device", None) or self._device
             if hasattr(inputs, "to") and device is not None:
@@ -463,11 +585,18 @@ class QwenLocalProvider:
             ]
             tokens = _count_tokens(prompt, json.dumps(triples))
             return triples, tokens
-        result = self._generate(prompt)
+        # 256 is the short-answer default on _generate. A fact list is longer,
+        # and a cut-off list used to parse as nothing. None means the model
+        # stops when the list ends, still inside the context window.
+        result = self._generate(prompt, max_new_tokens=None)
         return parse_triples_json(result.text), result.tokens_used
 
     def _generate(self, prompt: str, max_new_tokens: int | None = 256) -> LLMResult:
-        """Run text on the same bfloat16 checkpoint used for images and video."""
+        """Run text on the same bfloat16 checkpoint used for images and video.
+
+        Omitting the budget keeps a short answer to 256 tokens. Callers that
+        need the whole answer pass None.
+        """
         processor, model = self._load_visual()
         messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
         return self._decode(processor, model, messages, prompt, max_new_tokens)

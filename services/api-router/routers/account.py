@@ -89,12 +89,10 @@ def _plan(value: str) -> str:
 
 def _token(user_id: str, plan: str) -> str:
     settings = get_settings()
-    expires = datetime.now(UTC) + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
-    return encode(
-        {"sub": user_id, "subscription_tier": plan, "exp": expires},
-        settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
-    )
+    payload: dict[str, Any] = {"sub": user_id, "subscription_tier": plan}
+    if settings.JWT_EXPIRATION_MINUTES > 0:
+        payload["exp"] = datetime.now(UTC) + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
+    return encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
 def _session(account: dict[str, str]) -> dict[str, Any]:

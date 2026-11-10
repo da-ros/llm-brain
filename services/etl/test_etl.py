@@ -101,6 +101,33 @@ class TestTriple:
         assert built.metadata["source_file"] == "receta.pdf"
         assert built.metadata["page"] == 1
 
+    def test_thing_object_is_not_stored(self):
+        from triples import triple_from_llm
+
+        assert (
+            triple_from_llm(
+                {"subject": "weekly review", "predicate": "is", "object": "thing"},
+                source_file="journal_2026.docx",
+                user_id="u",
+            )
+            is None
+        )
+        assert (
+            triple_from_llm(
+                {"subject": "North Room", "predicate": "is a", "object": "place"},
+                source_file="nora_calendar.ics",
+                user_id="u",
+            )
+            is None
+        )
+        kept = triple_from_llm(
+            {"subject": "Pixel", "predicate": "is", "object": "orange cat"},
+            source_file="about_nora.md",
+            user_id="u",
+        )
+        assert kept is not None
+        assert kept.object == "orange cat"
+
 
 # --- Loader selection ---
 
@@ -170,21 +197,27 @@ class TestLoaderWrappers:
         fake.return_value.load.return_value = docs
         plumber = MagicMock()
         plumber.return_value.load.return_value = [FakeDoc("")]
-        ocr = MagicMock()
-        with patch("loaders._pdf_loader_classes", return_value=(fake, plumber, ocr)):
+        with (
+            patch("loaders._pdf_text_loaders", return_value=(fake, plumber)),
+            patch("loaders.ocr_pdf") as ocr,
+        ):
             loaded = PdfLoaderAdapter("receta.pdf").load()
         assert loaded[0].page_content.startswith("Patient")
+        ocr.assert_not_called()
 
-    def test_pdf_falls_back_to_unstructured_ocr_when_empty(self):
+    def test_pdf_falls_back_to_tesseract_when_empty(self):
         from loaders import PdfLoaderAdapter
 
         empty = MagicMock()
         empty.return_value.load.return_value = [FakeDoc("   ", {"page": 0})]
-        ocr = MagicMock()
-        ocr.return_value.load.return_value = [FakeDoc("scanned recipe", {"page": 0})]
-        with patch("loaders._pdf_loader_classes", return_value=(empty, empty, ocr)):
+        with (
+            patch("loaders._pdf_text_loaders", return_value=(empty, empty)),
+            patch("loaders.ocr_pdf", return_value=[(1, "scanned recipe")]) as ocr,
+        ):
             loaded = PdfLoaderAdapter("scan.pdf").load()
+        ocr.assert_called_once_with("scan.pdf")
         assert loaded[0].page_content == "scanned recipe"
+        assert loaded[0].metadata["page"] == 1
 
     def test_text_loader_reads_file(self, tmp_path):
         from base import load
@@ -205,27 +238,123 @@ class TestLoaderWrappers:
         assert loaded[0].page_content == "body text"
 
     def test_image_loader_uses_tesseract_ocr(self):
-        from loaders import UnstructuredImageLoaderAdapter
+        from loaders import ImageLoaderAdapter
 
-        fake = MagicMock()
-        fake.return_value.load.return_value = [FakeDoc("Invoice 42")]
-        with patch("loaders._image_loader_class", return_value=fake):
-            loaded = UnstructuredImageLoaderAdapter("/tmp/photo.png").load()
-        fake.assert_called_once_with(
-            "/tmp/photo.png",
-            strategy="ocr_only",
-            languages=["eng", "spa"],
-        )
+        with patch("loaders.ocr_image", return_value="Invoice 42") as ocr:
+            loaded = ImageLoaderAdapter("/tmp/photo.png").load()
+        ocr.assert_called_once_with("/tmp/photo.png")
         assert loaded[0].page_content == "Invoice 42"
+        assert loaded[0].metadata["source"] == "/tmp/photo.png"
 
-    def test_video_loader_wraps_unstructured_file_loader(self):
-        from loaders import VideoFileLoader
+    def test_ocr_image_asks_tesseract_for_english_and_spanish(self, tmp_path):
+        import sys
 
-        fake = MagicMock()
-        fake.return_value.load.return_value = [FakeDoc("video transcript")]
-        with patch("loaders._video_loader_class", return_value=fake):
-            loaded = VideoFileLoader("clip.mp4").load()
-        assert loaded[0].page_content == "video transcript"
+        from ocr import ocr_image
+
+        photo = tmp_path / "photo.png"
+        photo.write_bytes(b"png")
+        image = MagicMock()
+        opener = MagicMock()
+        opener.__enter__.return_value = image
+        pil_image = MagicMock()
+        pil_image.open.return_value = opener
+        tesseract = MagicMock()
+        tesseract.image_to_string.return_value = " Invoice 42 "
+        with (
+            patch("ocr._prepare_heif"),
+            patch.dict(
+                sys.modules,
+                {"PIL": MagicMock(Image=pil_image), "unstructured_pytesseract": tesseract},
+            ),
+        ):
+            assert ocr_image(str(photo)) == "Invoice 42"
+        tesseract.image_to_string.assert_called_once_with(image, lang="eng+spa")
+
+    def test_gif_ocr_keeps_every_frame(self, tmp_path):
+        import sys
+
+        from ocr import ocr_image
+
+        photo = tmp_path / "history.gif"
+        photo.write_bytes(b"gif")
+        image = MagicMock()
+        image.n_frames = 3
+        image.format = "GIF"
+        opener = MagicMock()
+        opener.__enter__.return_value = image
+        pil_image = MagicMock()
+        pil_image.open.return_value = opener
+        tesseract = MagicMock()
+        tesseract.image_to_string.side_effect = [
+            "June 8 reported",
+            "June 9 review",
+            "June 10 resolved",
+        ]
+        with (
+            patch("ocr._prepare_heif"),
+            patch.dict(
+                sys.modules,
+                {"PIL": MagicMock(Image=pil_image), "unstructured_pytesseract": tesseract},
+            ),
+        ):
+            text = ocr_image(str(photo))
+        assert text == "June 8 reported\n\nJune 9 review\n\nJune 10 resolved"
+        assert tesseract.image_to_string.call_count == 3
+
+    def test_heif_is_handed_to_tesseract_as_png(self, tmp_path):
+        import sys
+
+        from ocr import ocr_image
+
+        photo = tmp_path / "photo.heic"
+        photo.write_bytes(b"heic")
+        image = MagicMock()
+        image.format = "HEIF"
+        image.mode = "RGBA"
+        png = MagicMock()
+        png.format = None
+        image.convert.return_value = png
+        opener = MagicMock()
+        opener.__enter__.return_value = image
+        pil_image = MagicMock()
+        pil_image.open.return_value = opener
+        tesseract = MagicMock()
+        tesseract.image_to_string.return_value = "Invoice 42"
+        with (
+            patch("ocr._prepare_heif"),
+            patch.dict(
+                sys.modules,
+                {"PIL": MagicMock(Image=pil_image), "unstructured_pytesseract": tesseract},
+            ),
+        ):
+            assert ocr_image(str(photo)) == "Invoice 42"
+        assert png.format == "PNG"
+        tesseract.image_to_string.assert_called_once_with(png, lang="eng+spa")
+
+    def test_ocr_modules_do_not_load_unstructured_inference(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent
+        text = (root / "loaders.py").read_text(encoding="utf-8")
+        text += (root / "ocr.py").read_text(encoding="utf-8")
+        assert "import unstructured_inference" not in text
+        assert "UnstructuredImageLoader" not in text
+        assert "UnstructuredPDFLoader" not in text
+        assert "UnstructuredFileLoader" not in text
+
+    def test_video_loader_returns_no_words(self):
+        from loaders import VideoFileLoader, resolve_loader_class
+
+        for mime in (
+            "video/mp4",
+            "video/quicktime",
+            "video/webm",
+            "video/x-msvideo",
+            "video/x-matroska",
+        ):
+            assert resolve_loader_class(mime) is VideoFileLoader
+        loaded = VideoFileLoader("clip.mp4").load()
+        assert loaded[0].page_content == ""
 
 
 # --- LLM client ---
@@ -316,6 +445,61 @@ class TestLLMClient:
 # --- Pipeline ---
 
 
+_CALENDAR = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:retrieval-review-20261021@calendar.lanternlog.team
+DTSTART:20261021T200000Z
+DTEND:20261021T204500Z
+SUMMARY:Lantern Log retrieval design review
+LOCATION:North Room\\, Bellwater Workshop House
+DESCRIPTION:Discuss retrieval changes with Nora Vega\\, Iris Cole\\, and Theo Park.
+ATTENDEE;CN=Iris Cole:mailto:iris@lanternlog.team
+ATTENDEE;CN=Theo Park:mailto:theo@lanternlog.team
+END:VEVENT
+BEGIN:VEVENT
+UID:cedar-train-20260614@calendar.lanternlog.team
+DTSTART:20260614T114000Z
+DTEND:20260614T123000Z
+SUMMARY:Cedar Cove outbound train
+LOCATION:Bellwater train station
+DESCRIPTION:07:40 departure. Nora has blue backpack; Iris has sketchbook.
+END:VEVENT
+END:VCALENDAR
+"""
+
+
+class TestCalendarEvents:
+    def test_a_calendar_event_keeps_the_new_york_time_and_the_place(self, tmp_path):
+        from pipeline import distill
+
+        source = tmp_path / "upload.bin"
+        source.write_text(_CALENDAR, encoding="utf-8")
+        extractor = FakeExtractor()
+        triples = distill(
+            str(source),
+            user_id="user-a",
+            document_id="cal-1",
+            mime_type="text/calendar",
+            filename="nora_calendar.ics",
+            llm_client=extractor,
+            output_dir=str(tmp_path / "triples"),
+        )
+        assert extractor.calls == []
+        assert len(triples) == 2
+        review = triples[0]
+        assert review.subject == "Lantern Log retrieval design review"
+        assert "October 21, 2026, 16:00–16:45 New York time" in review.object
+        assert "North Room, Bellwater Workshop House" in review.object
+        assert "Invited: Iris Cole, Theo Park" in review.object
+        assert "20:00" not in review.object
+        train = triples[1]
+        assert "June 14, 2026, 07:40–08:30 New York time" in train.object
+        assert "blue backpack" in train.object
+        assert "11:40" not in train.object
+        saved = (tmp_path / "triples" / "user-a" / "cal-1.jsonl").read_text(encoding="utf-8")
+        assert saved.count("\n") == 2
+
+
 class TestPipeline:
     def test_distill_writes_jsonl_per_user(self, tmp_path):
         from pipeline import distill
@@ -375,7 +559,7 @@ class TestPipeline:
 
         extractor.describe_media = describe_media
         with patch("pipeline.load", return_value=[FakeDoc("Invoice 42")]):
-            distill(
+            triples = distill(
                 str(source),
                 user_id="user-a",
                 document_id="doc-img",
@@ -383,7 +567,10 @@ class TestPipeline:
                 llm_client=extractor,
                 output_dir=str(tmp_path / "triples"),
             )
-        assert extractor.calls == ["Invoice 42"]
+        assert extractor.calls == []
+        assert len(triples) == 1
+        assert triples[0].object == "Invoice 42"
+        assert triples[0].metadata["source_file"] == "photo.png"
 
     def test_image_without_ocr_is_described_then_extracted(self, tmp_path):
         from exceptions import CorruptFileError
@@ -417,8 +604,9 @@ class TestPipeline:
         assert seen["payload"] == png
         assert seen["kind"] == "image"
         assert seen["filename"] == "photo.png"
-        assert extractor.calls == ["A red receipt on a wooden table."]
-        assert len(triples) == 2
+        assert extractor.calls == []
+        assert len(triples) == 1
+        assert triples[0].object == "A red receipt on a wooden table."
         out = tmp_path / "triples" / "user-a" / "doc-img.jsonl"
         assert out.exists()
 
@@ -456,8 +644,50 @@ class TestPipeline:
             "kind": "video",
             "filename": "clip.mov",
         }
-        assert extractor.calls == ["A person sets a receipt on a table."]
-        assert len(triples) == 2
+        assert extractor.calls == []
+        assert len(triples) == 1
+        assert triples[0].object == "A person sets a receipt on a table."
+
+    @pytest.mark.parametrize(
+        ("name", "mime"),
+        [
+            ("clip.mp4", "video/mp4"),
+            ("clip.mov", "video/quicktime"),
+            ("clip.webm", "video/webm"),
+            ("clip.avi", "video/x-msvideo"),
+            ("clip.mkv", "video/x-matroska"),
+        ],
+    )
+    def test_each_video_type_is_described_like_a_photo_with_no_text(self, tmp_path, name, mime):
+        from pipeline import distill
+
+        clip = b"\x00\x00\x00\x18ftypmp42"
+        source = tmp_path / name
+        source.write_bytes(clip)
+        extractor = FakeExtractor()
+        seen: dict = {}
+
+        def describe_media(payload, *, kind, filename="", user_id=None, correlation_id="no-id"):
+            seen["payload"] = payload
+            seen["kind"] = kind
+            seen["filename"] = filename
+            return "A person sets a receipt on a table."
+
+        extractor.describe_media = describe_media
+        triples = distill(
+            str(source),
+            user_id="user-a",
+            document_id="doc-clip",
+            mime_type=mime,
+            llm_client=extractor,
+            output_dir=str(tmp_path / "triples"),
+            filename=name,
+            write_output=False,
+        )
+        assert seen == {"payload": clip, "kind": "video", "filename": name}
+        assert extractor.calls == []
+        assert triples[0].object == "A person sets a receipt on a table."
+        assert triples[0].metadata["source_file"] == name
 
     def test_video_with_transcript_is_extracted_without_a_description(self, tmp_path):
         from pipeline import distill
@@ -471,7 +701,7 @@ class TestPipeline:
 
         extractor.describe_media = describe_media
         with patch("pipeline.load", return_value=[FakeDoc("The speaker says invoice 42")]):
-            distill(
+            triples = distill(
                 str(source),
                 user_id="user-a",
                 document_id="doc-clip",
@@ -479,7 +709,8 @@ class TestPipeline:
                 llm_client=extractor,
                 output_dir=str(tmp_path / "triples"),
             )
-        assert extractor.calls == ["The speaker says invoice 42"]
+        assert extractor.calls == []
+        assert triples[0].object == "The speaker says invoice 42"
 
     def test_text_file_without_words_still_fails(self, tmp_path):
         from exceptions import CorruptFileError
@@ -568,6 +799,27 @@ class TestPdfIntegration:
 
 
 class TestKafkaJob:
+    def test_summary_separates_triples_and_stops_at_250_characters(self):
+        from types import SimpleNamespace
+
+        from kafka_io import _clip_summary
+
+        triples = [
+            SimpleNamespace(
+                subject="Nora Vega", predicate="occupation", object="interaction designer"
+            ),
+            SimpleNamespace(subject="Nora Vega", predicate="location", object="Bellwater"),
+        ]
+        assert (
+            _clip_summary(triples)
+            == "Nora Vega occupation interaction designer; Nora Vega location Bellwater"
+        )
+        clipped = _clip_summary(
+            [SimpleNamespace(subject="A", predicate="b", object="c" * 300)]
+        )
+        assert len(clipped) == 250
+        assert clipped.endswith("...")
+
     def test_process_file_message_success(self, tmp_path):
         from kafka_io import process_file_message
 
@@ -701,6 +953,12 @@ class TestNewLoaderKinds:
         assert resolve_loader_class("text/tab-separated-values") is TsvLoaderAdapter
         assert resolve_loader_class("text/markdown") is not None
         assert resolve_loader_class("text/calendar") is not None
+        assert resolve_loader_class("text/x-vcalendar") is not None
+        assert resolve_loader_class("application/msword") is None
+        from loaders import ImageLoaderAdapter
+
+        assert resolve_loader_class("image/heic") is ImageLoaderAdapter
+        assert resolve_loader_class("image/heif") is ImageLoaderAdapter
         assert resolve_loader_class("application/vnd.ms-excel") is ExcelLoaderAdapter
         assert (
             resolve_loader_class(
@@ -708,8 +966,15 @@ class TestNewLoaderKinds:
             )
             is ExcelLoaderAdapter
         )
-        for mime in ("text/csv", "text/calendar", "text/markdown", "application/vnd.ms-excel"):
+        for mime in (
+            "text/csv",
+            "text/calendar",
+            "text/x-vcalendar",
+            "text/markdown",
+            "application/vnd.ms-excel",
+        ):
             assert is_supported_mime(mime)
+        assert not is_supported_mime("application/msword")
 
     def test_csv_adapter_passes_comma_delimiter(self):
         from loaders import CsvLoaderAdapter
@@ -839,11 +1104,42 @@ class TestParseEndpoint:
         assert body["mime"] == "video/mp4"
         assert body["show_bytes"] is True
 
+    def test_each_video_type_asks_to_show_the_bytes(self):
+        from main import app
+
+        clip = b"\x00\x00\x00\x18ftypmp42"
+        with TestClient(app) as client:
+            for name in ("clip.mp4", "clip.mov", "clip.webm", "clip.avi", "clip.mkv"):
+                response = client.post("/parse", params={"filename": name}, content=clip)
+                assert response.status_code == 200
+                body = response.json()
+                assert body["text"] == ""
+                assert body["show_bytes"] is True
+                assert body["mime"].startswith("video/")
+
     def test_unsupported_type_is_422(self):
         from main import app
 
         with TestClient(app) as client:
             response = client.post("/parse", params={"filename": "data.zip"}, content=b"PK\x03\x04")
+        assert response.status_code == 422
+
+    def test_heic_is_accepted(self):
+        from main import app
+
+        with TestClient(app) as client:
+            heic = client.post("/parse", params={"filename": "photo.heic"}, content=b"heic")
+            heif = client.post("/parse", params={"filename": "photo.heif"}, content=b"heif")
+        assert heic.status_code == 200
+        assert heic.json()["mime"] == "image/heic"
+        assert heif.status_code == 200
+        assert heif.json()["mime"] == "image/heif"
+
+    def test_old_doc_is_422(self):
+        from main import app
+
+        with TestClient(app) as client:
+            response = client.post("/parse", params={"filename": "letter.doc"}, content=b"doc")
         assert response.status_code == 422
 
     def test_loader_crash_is_clean_422(self):

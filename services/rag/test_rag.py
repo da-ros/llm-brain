@@ -254,8 +254,314 @@ class TestEmbeddings:
         embedder = create_embedder()
         assert isinstance(embedder, MockEmbedder)
 
+    def test_content_words_outrank_function_words(self):
+        from embeddings import MockEmbedder
+
+        embedder = MockEmbedder(dim=2048)
+        question = embedder.embed_text("What is the name of my cat?")
+        cat = embedder.embed_text("Pixel species cat")
+        slide = embedder.embed_text("May is the month of the beta launch")
+
+        def cosine(left: list[float], right: list[float]) -> float:
+            return sum(a * b for a, b in zip(left, right, strict=True))
+
+        assert cosine(question, cat) > cosine(question, slide)
+
 
 # --- RAG service ---
+
+
+class TestSameNote:
+    def test_reimbursement_travels_with_the_rental(self):
+        from rag_service import expand_same_note
+
+        expense = {"source notes": "date: 2026-04-15, type: expense"}
+        rows = [
+            {
+                "subject": "weekly review",
+                "predicate": "is",
+                "object": "thing",
+                "metadata": expense,
+            },
+            {
+                "subject": "Nora Vega",
+                "predicate": "incurred expense",
+                "object": "Studio rental",
+                "metadata": expense,
+            },
+            {
+                "subject": "Nora Vega",
+                "predicate": "attended",
+                "object": "Alder Studio",
+                "metadata": expense,
+            },
+            {
+                "subject": "Nora Vega",
+                "predicate": "reimbursed",
+                "object": "Apr 18",
+                "metadata": expense,
+            },
+            {
+                "subject": "Nora Vega",
+                "predicate": "celebrated",
+                "object": "Pixel birthday",
+                "metadata": {"source notes": "date: 2026-04-27, type: personal"},
+            },
+        ]
+        results = [
+            {
+                "id": "hit",
+                "document": "Nora Vega incurred expense Studio rental",
+                "distance": 0.31,
+                "metadata": {
+                    "user_id": "user",
+                    "doc_id": "timeline",
+                    "source": "personal_timeline.csv",
+                    "triple_index": 1,
+                },
+            }
+        ]
+        expanded = expand_same_note(results, lambda _user, _doc: rows)
+        texts = [item["document"] for item in expanded]
+        assert texts == [
+            "Nora Vega incurred expense Studio rental",
+            "Nora Vega attended Alder Studio",
+            "Nora Vega reimbursed Apr 18",
+        ]
+
+    def test_a_thing_line_does_not_shift_a_newer_index(self):
+        from rag_service import expand_same_note
+
+        note = {"source notes": "date: 2026-04-15, type: expense"}
+        rows = [
+            {"subject": "weekly review", "predicate": "is", "object": "thing", "metadata": note},
+            {
+                "subject": "Nora Vega",
+                "predicate": "incurred expense",
+                "object": "Studio rental",
+                "metadata": note,
+            },
+            {
+                "subject": "Nora Vega",
+                "predicate": "reimbursed",
+                "object": "Apr 18",
+                "metadata": note,
+            },
+        ]
+        results = [
+            {
+                "id": "hit",
+                "document": "Nora Vega incurred expense Studio rental",
+                "metadata": {
+                    "user_id": "user",
+                    "doc_id": "timeline",
+                    "source": "personal_timeline.csv",
+                    "triple_index": 0,
+                },
+            }
+        ]
+        texts = [
+            item["document"] for item in expand_same_note(results, lambda _user, _doc: rows)
+        ]
+        assert "Nora Vega reimbursed Apr 18" in texts
+
+    def test_a_repeated_sentence_without_an_index_stays_alone(self):
+        from rag_service import expand_same_note
+
+        rows = [
+            {
+                "subject": "Nora Vega",
+                "predicate": "attended",
+                "object": "Alder Studio",
+                "metadata": {"source notes": "date: 2026-03-15, type: booking"},
+            },
+            {
+                "subject": "Nora Vega",
+                "predicate": "booked",
+                "object": "workshop",
+                "metadata": {"source notes": "date: 2026-03-15, type: booking"},
+            },
+            {
+                "subject": "Nora Vega",
+                "predicate": "attended",
+                "object": "Alder Studio",
+                "metadata": {"source notes": "date: 2026-04-02, type: learning"},
+            },
+            {
+                "subject": "Nora Vega",
+                "predicate": "used",
+                "object": "Memory box approach",
+                "metadata": {"source notes": "date: 2026-04-02, type: learning"},
+            },
+        ]
+        results = [
+            {
+                "id": "hit",
+                "document": "Nora Vega attended Alder Studio",
+                "metadata": {"user_id": "user", "doc_id": "timeline", "source": "personal_timeline.csv"},
+            }
+        ]
+        expanded = expand_same_note(results, lambda _user, _doc: rows)
+        assert [item["document"] for item in expanded] == ["Nora Vega attended Alder Studio"]
+
+    def test_a_picture_vector_does_not_pull_the_whole_file(self):
+        from rag_service import expand_same_note
+
+        rows = [
+            {
+                "subject": "Alder Studio",
+                "predicate": "charges",
+                "object": "$85.00",
+                "metadata": {"source notes": "Document states 'Studio rental $85.00'."},
+            },
+            {
+                "subject": "April 18, 2026",
+                "predicate": "is",
+                "object": "date",
+                "metadata": {"source notes": "Document states 'Reimbursed April 18, 2026'."},
+            },
+        ]
+        results = [
+            {
+                "id": "picture",
+                "document": "Alder Studio charges $85.00",
+                "metadata": {
+                    "user_id": "user",
+                    "doc_id": "receipt",
+                    "source": "alder_studio_receipt.png",
+                    "triple_index": -1,
+                },
+            }
+        ]
+        expanded = expand_same_note(results, lambda _user, _doc: rows)
+        assert [item["document"] for item in expanded] == ["Alder Studio charges $85.00"]
+
+    def test_a_table_note_stays_on_the_matching_line(self):
+        from rag_service import expand_same_note
+
+        table = {"source notes": "Date Event Outcome table"}
+        rows = [
+            {
+                "subject": "Categorization fix",
+                "predicate": "affected",
+                "object": "Bike ride",
+                "metadata": table,
+            },
+            {
+                "subject": "2026-06-10",
+                "predicate": "is",
+                "object": "Categorization fix",
+                "metadata": table,
+            },
+            {
+                "subject": "2026-05-20",
+                "predicate": "is",
+                "object": "Beta launch",
+                "metadata": table,
+            },
+            {
+                "subject": "June 10",
+                "predicate": "resolved",
+                "object": "the wrongly tagged bike ride entry",
+                "metadata": {"source notes": "Page 0, Engineering section"},
+            },
+        ]
+        results = [
+            {
+                "id": "dashboard",
+                "document": "Categorization fix affected Bike ride",
+                "metadata": {
+                    "user_id": "user",
+                    "doc_id": "dashboard",
+                    "source": "lantern_log_dashboard.xlsx",
+                    "triple_index": 0,
+                },
+            },
+            {
+                "id": "pdf",
+                "document": "June 10 resolved the wrongly tagged bike ride entry",
+                "metadata": {
+                    "user_id": "user",
+                    "doc_id": "pdf",
+                    "source": "lantern_log_project_decisions.pdf",
+                    "triple_index": 2,
+                },
+            },
+        ]
+        texts = [item["document"] for item in expand_same_note(results, lambda _user, _doc: rows)]
+        assert texts == [
+            "Categorization fix affected Bike ride",
+            "June 10 resolved the wrongly tagged bike ride entry",
+        ]
+
+
+class TestRowPassages:
+    def test_issue_row_keeps_october_14_together(self):
+        from rag_service import row_passages
+
+        def record(day, status, observation):
+            note = {"source_notes": "Extracted from issue log", "source_file": "qa_issue_history.tsv"}
+            return [
+                {"subject": "ISSUE-31", "predicate": "has_date", "object": day, "metadata": note},
+                {"subject": "ISSUE-31", "predicate": "has_owner", "object": "Theo Park", "metadata": note},
+                {"subject": "ISSUE-31", "predicate": "has_component", "object": "Offline export", "metadata": note},
+                {"subject": "ISSUE-31", "predicate": "has_observation", "object": observation, "metadata": note},
+                {"subject": "ISSUE-31", "predicate": "has_status", "object": status, "metadata": note},
+            ]
+
+        rows = record("2026-10-12", "open", "Photo captions missing from exported ZIP")
+        rows += record("2026-10-14", "resolved", "Included photo captions; regression checks passed")
+        passages = row_passages(rows)
+        assert len(passages) == 2
+        assert "2026-10-14" in passages[1]
+        assert "resolved" in passages[1]
+        assert "Included photo captions" in passages[1]
+        assert "2026-10-12" not in passages[1]
+
+    def test_timeline_row_keeps_the_reimbursement_with_the_rental(self):
+        from rag_service import row_passages
+
+        def fact(subject, predicate, obj, note):
+            return {
+                "subject": subject,
+                "predicate": predicate,
+                "object": obj,
+                "metadata": {"source notes": note, "source_file": "personal_timeline.csv"},
+            }
+
+        expense = "date: 2026-04-15, type: expense"
+        passages = row_passages(
+            [
+                fact("Nora Vega", "incurred expense", "Studio rental", expense),
+                fact("Nora Vega", "reimbursed", "Apr 18", expense),
+                fact("Nora Vega", "celebrated", "Pixel birthday", "date: 2026-04-27, type: personal"),
+            ]
+        )
+        assert len(passages) == 2
+        assert "Studio rental" in passages[0] and "Apr 18" in passages[0]
+        assert "Pixel birthday" not in passages[0]
+
+    def test_event_table_row_stops_at_the_next_date(self):
+        from rag_service import row_passages
+
+        note = {"source notes": "Date Event Outcome table", "source_file": "lantern_log_dashboard.xlsx"}
+
+        def fact(subject, predicate, obj):
+            return {"subject": subject, "predicate": predicate, "object": obj, "metadata": note}
+
+        passages = row_passages(
+            [
+                fact("2026-06-10", "is", "Categorization fix"),
+                fact("Categorization fix", "affected", "Bike ride"),
+                fact("Bike ride", "is no longer classified as", "work"),
+                fact("2026-08-11", "is", "Offline retrieval"),
+                fact("Offline retrieval", "selected", "Keyword fallback"),
+            ]
+        )
+        assert len(passages) == 2
+        assert "2026-06-10" in passages[0] and "Bike ride" in passages[0]
+        assert "2026-08-11" not in passages[0]
+        assert passages[1].startswith("2026-08-11")
 
 
 class TestRAGService:
@@ -278,7 +584,9 @@ class TestRAGService:
         path.write_text(
             json.dumps({"subject": "Patient", "predicate": "has", "object": "diabetes"})
             + "\n"
-            + json.dumps({"subject": "Patient", "predicate": "takes", "object": "metformin"})
+            +             json.dumps({"subject": "Patient", "predicate": "takes", "object": "metformin"})
+            + "\n"
+            + json.dumps({"subject": "weekly review", "predicate": "is", "object": "thing"})
             + "\n",
             encoding="utf-8",
         )
@@ -294,6 +602,10 @@ class TestRAGService:
         assert all(item["metadata"]["gridfs_id"] == "grid-1" for item in memory.items)
         assert all(item["metadata"]["user_id"] == "user1" for item in memory.items)
         service.documents.insert_document.assert_awaited()
+        assert (
+            service.documents.insert_document.await_args.kwargs["summary"]
+            == "Patient has diabetes; Patient takes metformin"
+        )
 
     @pytest.mark.asyncio
     async def test_context_injection_empty(self):
@@ -624,6 +936,66 @@ class TestEmbeddingsCoverage:
         embedder = MockEmbedder(dim=2048)
         vector = embedder.embed_image(b"fake image bytes")
         assert len(vector) == 2048
+
+    def test_image_embed_registers_heif_before_opening(self):
+        from embeddings import QwenVLEmbedder
+
+        embedder = QwenVLEmbedder.__new__(QwenVLEmbedder)
+        embedder.dim = 4
+        embedder._model = MagicMock()
+
+        class _Vector:
+            def tolist(self):
+                return [1.0, 0.0, 0.0, 0.0]
+
+        embedder._model.encode.return_value = _Vector()
+        order: list[str] = []
+        image = MagicMock()
+        image.convert.return_value = image
+
+        def prepare() -> None:
+            order.append("heif")
+
+        def open_image(_payload):
+            order.append("open")
+            return image
+
+        with (
+            patch("embeddings._prepare_heif", side_effect=prepare),
+            patch("PIL.Image.open", side_effect=open_image),
+        ):
+            vector = embedder.embed_image(b"heic")
+        assert order == ["heif", "open"]
+        assert len(vector) == 4
+
+    def test_heif_opener_registers_once(self):
+        import sys
+
+        import embeddings
+
+        previous = embeddings._heif_ready
+        embeddings._heif_ready = False
+        opener = MagicMock()
+        try:
+            with patch.dict(sys.modules, {"pi_heif": MagicMock(register_heif_opener=opener)}):
+                embeddings._prepare_heif()
+                embeddings._prepare_heif()
+        finally:
+            embeddings._heif_ready = previous
+        opener.assert_called_once()
+
+    def test_missing_heif_opener_still_lets_other_pictures_open(self):
+        import sys
+
+        import embeddings
+
+        previous = embeddings._heif_ready
+        embeddings._heif_ready = False
+        try:
+            with patch.dict(sys.modules, {"pi_heif": None}):
+                embeddings._prepare_heif()
+        finally:
+            embeddings._heif_ready = previous
 
     def test_mock_embedder_video_averages_sampled_frames(self):
         from embeddings import MockEmbedder, _average_vectors

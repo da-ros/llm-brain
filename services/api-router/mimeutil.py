@@ -12,6 +12,10 @@ IMAGE_MIMES = {
     "image/gif",
     "image/webp",
     "image/bmp",
+    "image/heic",
+    "image/heif",
+    "image/heic-sequence",
+    "image/heif-sequence",
 }
 
 VIDEO_MIMES = {
@@ -27,12 +31,16 @@ ALLOWED_MIMES = (
     {
         "application/pdf",
         "text/plain",
+        "text/csv",
+        "text/calendar",
+        "text/x-vcalendar",
         "text/html",
         "application/xhtml+xml",
         "message/rfc822",
         "application/vnd.ms-outlook",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/msword",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }
     | IMAGE_MIMES
     | VIDEO_MIMES
@@ -66,6 +74,7 @@ def is_allowed_upload_mime(mime_type: str) -> bool:
 
 def supported_types_message() -> str:
     return (
-        "Supported types: text/plain, application/pdf, text/html, message/rfc822, "
-        "DOCX, image (png/jpeg/tiff/gif/webp/bmp), video (mp4/webm/quicktime)"
+        "Supported types: text/plain, text/csv, text/calendar (ICS), application/pdf, "
+        "text/html, message/rfc822, DOCX, Excel (xls/xlsx), "
+        "image (png/jpeg/tiff/gif/webp/bmp/heic), video (mp4/webm/quicktime)"
     )
