@@ -69,7 +69,7 @@ def _next_model_version(base_model_id: str) -> str:
 
 
 def _jsonl_files(dataset_path: str) -> list[Path]:
-    path = Path(dataset_path)
+    path = Path(_host_dataset_path(dataset_path))
     if path.is_file():
         return [path]
     if path.is_dir():
@@ -77,6 +77,19 @@ def _jsonl_files(dataset_path: str) -> list[Path]:
         if files:
             return files
     raise FileNotFoundError(f"Dataset not found: {dataset_path}")
+
+
+def _host_dataset_path(dataset_path: str) -> str:
+    """Agents write /app/data inside the container. The host copy is ./data."""
+    path = Path(dataset_path)
+    if path.exists():
+        return str(path)
+    marker = "/app/data/"
+    if dataset_path.startswith(marker):
+        local = Path(__file__).resolve().parents[2] / "data" / dataset_path[len(marker) :]
+        if local.exists():
+            return str(local)
+    return dataset_path
 
 
 def convert_triples_to_training_format(dataset_path: str) -> list[dict]:
@@ -103,6 +116,19 @@ def convert_triples_to_training_format(dataset_path: str) -> list[dict]:
                 predicate = triple.get("predicate")
                 obj = triple.get("object")
                 if not subject or not predicate or not obj:
+                    continue
+                if predicate == "was_answered":
+                    examples.append(
+                        {
+                            "instruction": (
+                                "Answer from this person's own record. "
+                                "Use only the facts that record states."
+                            ),
+                            "input": str(subject),
+                            "output": str(obj),
+                            "metadata": triple.get("metadata") or {},
+                        }
+                    )
                     continue
                 examples.append(
                     {

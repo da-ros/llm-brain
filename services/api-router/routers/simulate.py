@@ -5,7 +5,7 @@ from typing import Annotated, Any
 import httpx
 from auth import require_premium
 from config import get_settings
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from logging_setup import log_with_correlation
 from pydantic import BaseModel
 from rate_limit import rate_limit_simulate
@@ -63,6 +63,8 @@ async def _simulator(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Simulator service error",
         )
+    if response.status_code == status.HTTP_204_NO_CONTENT:
+        return None
     if response.status_code >= 400:
         detail = "Simulator service error"
         try:
@@ -146,3 +148,29 @@ async def get_simulation(
         correlation_id=correlation_id,
         params={"user_id": user["user_id"], "subscription_tier": "premium"},
     )
+
+
+@router.delete(
+    "/simulations/{simulation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_simulation(
+    simulation_id: str,
+    request: Request,
+    user: Annotated[dict, Depends(require_premium)],
+):
+    """Premium delete. Another user's id is 404 from Simulator and is forwarded."""
+    correlation_id = request.state.correlation_id
+    log_with_correlation(
+        correlation_id,
+        "info",
+        f"DELETE /api/simulations/{simulation_id}",
+    )
+    await _simulator(
+        "DELETE",
+        f"/simulations/{simulation_id}",
+        correlation_id=correlation_id,
+        params={"user_id": user["user_id"], "subscription_tier": "premium"},
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

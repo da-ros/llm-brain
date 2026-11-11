@@ -24,12 +24,11 @@ _FOCUS = (
     re.compile(r"(\d+(?:\.\d+)?)\s*(?:hours|hour|h)\s+of\s+focus", re.I),
     re.compile(r"\bfocus\b\D{0,24}(\d+(?:\.\d+)?)", re.I),
 )
-_SPEND = (
-    re.compile(
-        r"\b(?:spend|spent|spending|expense|invoice|budget)\b\D{0,20}\$?(\d+(?:\.\d+)?)",
-        re.I,
-    ),
-    re.compile(r"\$(\d+(?:\.\d+)?)"),
+_CURRENCY = re.compile(r"\$(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?")
+_SPEND_BESIDE = re.compile(
+    r"\b(?:spend|spent|spending|expense|invoice|budget)\b"
+    r"(?:\s+[A-Za-z]+){0,3}\s+\$?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?",
+    re.I,
 )
 _PRESCRIPTIONS = (
     re.compile(r"(\d+)\s+(?:active\s+)?(?:prescriptions?|medications?|medicines?)", re.I),
@@ -59,6 +58,23 @@ def _first_number(patterns: tuple[re.Pattern[str], ...], text: str) -> float | N
     return None
 
 
+def _money(match: re.Match[str]) -> float:
+    whole = match.group(1).replace(",", "")
+    fraction = match.group(2)
+    return float(f"{whole}.{fraction}") if fraction else float(whole)
+
+
+def _spend_amount(text: str) -> float | None:
+    """A currency amount. A nearby date, such as July 22, is not a spend."""
+    money = _CURRENCY.search(text)
+    if money:
+        return _money(money)
+    beside = _SPEND_BESIDE.search(text)
+    if beside:
+        return _money(beside)
+    return None
+
+
 def parse_rag_text(text: str) -> dict[str, float]:
     """Conservative regex extraction. Missing facts stay missing (defaults later)."""
     found: dict[str, float] = {}
@@ -71,7 +87,7 @@ def parse_rag_text(text: str) -> dict[str, float]:
     focus = _first_number(_FOCUS, text)
     if focus is not None:
         found["focus_hours_per_day"] = focus
-    spend = _first_number(_SPEND, text)
+    spend = _spend_amount(text)
     if spend is not None:
         found["monthly_spend"] = spend
     prescriptions = _first_number(_PRESCRIPTIONS, text)

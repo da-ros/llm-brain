@@ -35,6 +35,13 @@ export class RouterApi {
     return this.request(path, {method: 'PATCH', body});
   }
 
+  async delete(path: string): Promise<void> {
+    const response = await this.send(path, {method: 'DELETE'});
+    if (!response.ok) {
+      throw await this.fail(response);
+    }
+  }
+
   async file(path: string): Promise<Uint8Array> {
     const response = await this.send(path, {method: 'GET'});
     if (!response.ok) {

@@ -1132,6 +1132,21 @@ class TestSimulate:
         assert hidden.status_code == 404
         assert other_list.status_code == 200
         assert other_list.json()["simulations"] == []
+
+    def test_delete_forwards_to_the_owner_run(self, client):
+        async def fake(method, path, **kwargs):
+            user_id = (kwargs.get("params") or {}).get("user_id")
+            if method == "DELETE" and path == "/simulations/sim-1":
+                if user_id != "user1":
+                    raise HTTPException(status_code=404, detail="Not found")
+                return None
+            return {}
+
+        with patch("routers.simulate._simulator", new=fake):
+            removed = client.delete("/api/simulations/sim-1", headers=auth_header())
+            hidden = client.delete("/api/simulations/sim-1", headers=auth_header("user2"))
+        assert removed.status_code == 204
+        assert hidden.status_code == 404
         client.publish_turn.assert_not_called()
 
 

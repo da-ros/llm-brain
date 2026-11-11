@@ -7,13 +7,13 @@ Real backends run when LORA_MOCK=false and the extra packages are installed.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from time import perf_counter, sleep
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from config import Settings
 
 SUPPORTED_BACKENDS = ("peft", "ms-swift", "unsloth")
@@ -85,55 +85,99 @@ def run_lora_training(
     return _run_ms_swift(examples, adapter_dir, settings, started)
 
 
+def _train_device() -> str:
+    """Metal on this Mac, CUDA on a GPU machine. CPU cannot run this checkpoint."""
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        return "mps"
+    raise RuntimeError("Qwen3.5-4B LoRA needs Metal or CUDA. This process has neither.")
+
+
+def _prepare_local_weights() -> None:
+    """Use the checkpoint already stored under data/huggingface."""
+    root = Path(__file__).resolve().parents[2]
+    home = Path(os.environ.get("HF_HOME", root / "data" / "huggingface"))
+    os.environ.setdefault("HF_HOME", str(home))
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(home / "hub"))
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
+
 def _run_peft(
     examples: list[dict],
     adapter_dir: Path,
     settings: Settings,
     started: float,
 ) -> TrainingMetrics:
+    """LoRA over the local Qwen3.5-4B checkpoint. The loss is on the answer."""
     try:
         import torch
         from peft import LoraConfig, get_peft_model
-        from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+        from transformers import AutoTokenizer, Qwen3_5ForConditionalGeneration
     except ImportError as exc:
         raise RuntimeError(
             "PEFT backend requires peft, transformers, and torch. "
             "Install services/finetune/requirements-gpu.txt or set LORA_MOCK=true."
         ) from exc
 
-    tokenizer = AutoTokenizer.from_pretrained(settings.BASE_MODEL_ID)
-    model = AutoModelForCausalLM.from_pretrained(settings.BASE_MODEL_ID)
-    lora_config = LoraConfig(r=8, lora_alpha=16, lora_dropout=0.05, task_type="CAUSAL_LM")
-    model = get_peft_model(model, lora_config)
-
-    texts = [f"{ex['instruction']}\n{ex['input']}\n{ex['output']}" for ex in examples]
-    encodings = tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-
-    class _Dataset(torch.utils.data.Dataset):
-        def __len__(self):
-            return encodings["input_ids"].shape[0]
-
-        def __getitem__(self, idx):
-            return {key: value[idx] for key, value in encodings.items()}
-
-    args = TrainingArguments(
-        output_dir=str(adapter_dir),
-        num_train_epochs=settings.TRAINING_EPOCHS,
-        learning_rate=settings.TRAINING_LR,
-        per_device_train_batch_size=1,
-        logging_steps=1,
-        save_strategy="no",
-        report_to=[],
+    _prepare_local_weights()
+    device = _train_device()
+    model_id = settings.QWEN_HF_MODEL_ID or "Qwen/Qwen3.5-4B"
+    tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model = Qwen3_5ForConditionalGeneration.from_pretrained(
+        model_id,
+        dtype=torch.bfloat16,
+        low_cpu_mem_usage=True,
+        local_files_only=True,
     )
-    trainer = Trainer(model=model, args=args, train_dataset=_Dataset())
-    result = trainer.train()
+    model = get_peft_model(
+        model,
+        LoraConfig(
+            r=8,
+            lora_alpha=16,
+            lora_dropout=0.05,
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "v_proj"],
+        ),
+    )
+    model.to(device)
+    model.train()
+    optimizer = torch.optim.AdamW(
+        (param for param in model.parameters() if param.requires_grad),
+        lr=settings.TRAINING_LR,
+    )
+    losses: list[float] = []
+    for _epoch in range(settings.TRAINING_EPOCHS):
+        for example in examples:
+            prompt = f"{example['instruction']}\n{example['input']}\n"
+            full = prompt + str(example["output"])
+            encoded = tokenizer(full, return_tensors="pt", truncation=True, max_length=512)
+            prompt_ids = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+            labels = encoded["input_ids"].clone()
+            prompt_len = min(prompt_ids["input_ids"].shape[1], labels.shape[1])
+            labels[:, :prompt_len] = -100
+            encoded = {key: value.to(device) for key, value in encoded.items()}
+            labels = labels.to(device)
+            optimizer.zero_grad(set_to_none=True)
+            loss = model(**encoded, labels=labels).loss
+            loss.backward()
+            optimizer.step()
+            losses.append(float(loss.detach().float().cpu()))
+    adapter_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(adapter_dir))
     tokenizer.save_pretrained(str(adapter_dir))
     elapsed_hours = (perf_counter() - started) / 3600.0
-    loss = float(result.training_loss) if getattr(result, "training_loss", None) else 0.15
+    final = sum(losses) / len(losses) if losses else 0.0
     return TrainingMetrics(
         epochs=settings.TRAINING_EPOCHS,
-        final_loss=round(loss, 4),
+        final_loss=round(final, 4),
         training_time_hours=round(elapsed_hours, 4),
         backend="peft",
     )

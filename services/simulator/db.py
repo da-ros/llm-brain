@@ -121,6 +121,21 @@ async def list_for_user(user_id: str) -> list[dict[str, Any]]:
     return [_serialize(document) for document in await cursor.to_list(length=200) if document]
 
 
+async def delete_for_user(simulation_id: str, user_id: str) -> bool:
+    """Remove one run when it belongs to user_id. Another user's id deletes nothing."""
+    if use_memory():
+        row = memory().by_id.get(simulation_id)
+        if row is None or row.get("user_id") != user_id:
+            return False
+        memory().by_id.pop(simulation_id, None)
+        correlation_id = row.get("correlation_id")
+        if correlation_id:
+            memory().by_correlation.pop(correlation_id, None)
+        return True
+    result = await _db().simulations.delete_one({"_id": simulation_id, "user_id": user_id})
+    return result.deleted_count == 1
+
+
 async def insert_simulation(document: dict[str, Any]) -> dict[str, Any]:
     """Insert one run. A duplicate correlation_id returns the stored row."""
     correlation_id = document["correlation_id"]

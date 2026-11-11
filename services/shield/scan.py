@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import io
 from typing import Any
 
 import db
@@ -177,6 +178,56 @@ def _looks_like_image(filename: str) -> bool:
     return lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif"))
 
 
+_PREVIEW_EDGE = 1600
+_PREVIEW_BYTES = 1_500_000
+_IMAGE_TYPES = {
+    "PNG": "image/png",
+    "JPEG": "image/jpeg",
+    "WEBP": "image/webp",
+    "GIF": "image/gif",
+}
+
+
+def image_preview(payload: bytes, filename: str = "") -> dict[str, str] | None:
+    """The uploaded image, kept with the scan so it can be opened larger.
+
+    A picture that already fits stays as the original file. A wider or heavier
+    one is reduced to a sharp JPEG. Unreadable bytes produce no preview.
+    """
+    if not payload:
+        return None
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        image = Image.open(io.BytesIO(payload))
+        image.load()
+        keep_original = max(image.size) <= _PREVIEW_EDGE and len(payload) <= _PREVIEW_BYTES
+        if keep_original:
+            encoded_bytes = payload
+            content_type = _IMAGE_TYPES.get(image.format or "", "image/png")
+        else:
+            rgba = image.convert("RGBA")
+            frame = Image.new("RGB", rgba.size, (255, 255, 255))
+            frame.paste(rgba, mask=rgba.getchannel("A"))
+            frame.thumbnail((_PREVIEW_EDGE, _PREVIEW_EDGE))
+            out = io.BytesIO()
+            frame.save(out, format="JPEG", quality=90)
+            encoded_bytes = out.getvalue()
+            content_type = "image/jpeg"
+    except OSError:
+        return None
+    encoded = base64.b64encode(encoded_bytes).decode("ascii")
+    if not encoded:
+        return None
+    preview = {"content_type": content_type, "content_base64": encoded}
+    name = (filename or "").strip()
+    if name:
+        preview["filename"] = name
+    return preview
+
+
 def public_result(document: dict[str, Any]) -> dict[str, Any]:
     """Stored alert → the same JSON a fresh scan would return."""
     stored = document.get("result")
@@ -211,6 +262,8 @@ def list_item(document: dict[str, Any]) -> dict[str, Any]:
         "source": document.get("source"),
         "rationale": rationale,
         "reasons": reasons,
+        "text": str(stored.get("text") or ""),
+        "preview": stored.get("preview") if isinstance(stored.get("preview"), dict) else None,
     }
 
 

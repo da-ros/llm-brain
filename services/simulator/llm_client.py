@@ -317,37 +317,12 @@ async def reason_scenarios(
         correlation_id=correlation_id,
     )
     authored = collect_scenarios(text, leaves)
-    if len(authored) < len(leaves) and not authored:
-        snippet = " ".join(text.split())[:240]
-        log_with_correlation(
-            correlation_id,
-            "warning",
-            f"LLM JSON invalid — retry 1: LLM JSON parse failed | {snippet}",
-        )
-        text = await _post_chat(
-            prompt=(
-                f"{prompt}\nThe previous reply was rejected. "
-                "Return only the JSON object. Every LEAF_IDS value must appear once as id."
-            ),
-            user_id=user_id,
-            excerpts=excerpts,
-            correlation_id=correlation_id,
-        )
-        authored = collect_scenarios(text, leaves)
-        if not authored:
-            snippet = " ".join(text.split())[:240]
-            log_with_correlation(
-                correlation_id,
-                "error",
-                f"LLM JSON invalid after retry | {snippet}",
-            )
-            raise LLMUpstreamError("invalid JSON after retry")
     missing = [leaf for leaf in leaves if leaf["id"] not in authored]
     if missing:
         log_with_correlation(
             correlation_id,
             "warning",
-            "LLM JSON partial — fetching " + ", ".join(leaf["id"] for leaf in missing),
+            "LLM JSON incomplete — fetching " + ", ".join(leaf["id"] for leaf in missing),
         )
     for leaf in missing:
         authored[leaf["id"]] = await _one_scenario(

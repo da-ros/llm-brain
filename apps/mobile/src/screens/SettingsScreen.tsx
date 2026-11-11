@@ -56,7 +56,11 @@ export function SettingsScreen() {
           </View>
           <Text style={[styles.value, {color: theme.muted}]}>{formatBytes(brain.measuredStorage())}</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Clear All Data" onPress={() => brain.askClear()}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Clear All Data"
+          onPress={() => brain.askClear()}
+          style={styles.clearBlock}>
           <View style={styles.titleRow}>
             <Icon.erase size={22} color={theme.text} strokeWidth={2} />
             <Text style={[styles.rowTitle, {color: theme.text}]}>Clear All Data</Text>
@@ -188,7 +192,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   trailing: {flexDirection: 'row', alignItems: 'center', gap: 6},
-  block: {padding: 16, gap: 10},
+  block: {padding: 16, gap: 18},
+  clearBlock: {gap: 10},
   rowBetween: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12},
   titleRow: {flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1},
   rowTitle: {fontSize: scale.body, fontWeight: '600'},

@@ -49,6 +49,7 @@ from engine import detect_families, walk_tree
 from exceptions import InvalidScenarioJSONError
 from llm_client import SCENARIO_MAX_NEW_TOKENS, parse_scenarios
 from main import app
+from rag_client import parse_rag_text
 
 UUID_LEN = 36
 
@@ -283,18 +284,42 @@ class TestSimulate:
         assert response.status_code == 504
         assert db.memory().by_id == {}
 
-    def test_invalid_json_retries_once_then_502(self, client):
+    def test_cut_off_batch_fetches_each_leaf(self, client):
+        def row(leaf_id: str) -> dict:
+            return {
+                "id": leaf_id,
+                "title": f"Title {leaf_id}",
+                "outcome": f"Outcome {leaf_id}",
+                "assumptions": [f"Assumption for {leaf_id}"],
+            }
+
         RecordingClient.llm_payloads = [
-            {"response": "not-json", "tokens_used": 1},
-            {"response": "still-not-json", "tokens_used": 1},
+            {"response": '{"scenarios":[{"id":"optimistic","title":"Cut off', "tokens_used": 1},
+            {"response": json.dumps(row("optimistic")), "tokens_used": 1},
+            {"response": json.dumps(row("baseline")), "tokens_used": 1},
+            {"response": json.dumps(row("pessimistic")), "tokens_used": 1},
         ]
         response = client.post(
             "/simulate",
             headers={"X-Request-ID": "cid-json"},
             json=_premium("what if I sleep less", {"sleep_hours": 5}),
         )
+        assert response.status_code == 200
+        titles = [scenario["title"] for scenario in response.json()["scenarios"]]
+        assert titles == ["Title optimistic", "Title baseline", "Title pessimistic"]
+        assert len(RecordingClient.posts) == 4
+
+    def test_unreadable_leaves_do_not_persist(self, client):
+        RecordingClient.llm_payloads = [
+            {"response": "not-json", "tokens_used": 1} for _ in range(3)
+        ]
+        response = client.post(
+            "/simulate",
+            headers={"X-Request-ID": "cid-json-fail"},
+            json=_premium("what if I sleep less", {"sleep_hours": 5}),
+        )
         assert response.status_code == 502
-        assert len(RecordingClient.posts) == 2
+        assert len(RecordingClient.posts) == 3
         assert db.memory().by_id == {}
 
     def test_partial_batch_fetches_the_missing_leaves(self, client):
@@ -323,6 +348,12 @@ class TestSimulate:
 
 
 class TestHydration:
+    def test_a_date_beside_spending_is_not_the_spend(self):
+        text = (
+            "Nora's Q3 spending plan, dated July 22, 2026, totals $2,400. "
+            "The accessibility allocation is $760."
+        )
+        assert parse_rag_text(text)["monthly_spend"] == 2400.0
     def test_rag_hit_parses_sleep(self, client):
         RecordingClient.rag_results = [
             {"document": "I slept 6 hours last night", "metadata": {"source": "diary-1"}}
@@ -450,6 +481,31 @@ class TestIsolation:
         assert rows[0]["correlation_id"] == "cid-u1"
         assert rows[0]["question"] == "what if I sleep less"
         assert rows[0]["created_at"]
+
+    def test_owner_can_delete_a_run(self, client):
+        created = client.post(
+            "/simulate",
+            headers={"X-Request-ID": "cid-delete"},
+            json=_premium("what if I sleep less", {"sleep_hours": 8}),
+        )
+        simulation_id = created.json()["simulation_id"]
+        hidden = client.delete(
+            f"/simulations/{simulation_id}",
+            params={"user_id": "intruder", "subscription_tier": "premium"},
+        )
+        assert hidden.status_code == 404
+        assert simulation_id in db.memory().by_id
+        removed = client.delete(
+            f"/simulations/{simulation_id}",
+            params={"user_id": "user1", "subscription_tier": "premium"},
+        )
+        assert removed.status_code == 204
+        assert simulation_id not in db.memory().by_id
+        listed = client.get(
+            "/simulations",
+            params={"user_id": "user1", "subscription_tier": "premium"},
+        )
+        assert listed.json()["simulations"] == []
 
 
 _LEAVES = [

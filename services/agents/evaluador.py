@@ -1,4 +1,4 @@
-"""Evaluador nodes — heuristic score, weekly batch, manual Fine-Tune trigger."""
+"""Evaluador nodes — heuristic score, accumulated batch, manual Fine-Tune trigger."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ async def evaluate_turn_node(state: dict[str, Any]) -> dict[str, Any]:
 
 
 async def maybe_append_batch_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Append eligible turns to (user_id, ISO week). Status accumulating/ready."""
+    """Append eligible turns to the open batch. Status accumulating or ready."""
     correlation_id = state.get("correlation_id") or "no-id"
     if not state.get("should_include_in_batch"):
         log_with_correlation(
@@ -67,10 +67,10 @@ def export_batch_jsonl(batch: dict[str, Any]) -> str:
     """Write batch items as ETL-compatible triples JSONL for Fine-Tune."""
     settings = get_settings()
     user_id = batch["user_id"]
-    iso_week = batch.get("iso_week") or "week"
+    iso_week = batch.get("iso_week") or "open"
     directory = Path(settings.BATCH_EXPORT_DIR) / user_id
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{iso_week}.jsonl"
+    path = directory / f"{batch.get('_id') or iso_week}.jsonl"
     with path.open("w", encoding="utf-8") as handle:
         for item in batch.get("items") or []:
             row = {

@@ -50,7 +50,7 @@ export function StatusScreen() {
         <StorageRow label="Model file" value={pack ? `${pack.id} · ${formatBytes(modelBytes)}` : 'Not installed'} />
         <StorageRow label="Cache" value={formatBytes(snapshot.cacheBytes)} />
       </Glass>
-      <Glass radius={22} contentStyle={styles.card}>
+      <Glass radius={22} contentStyle={styles.statusCard}>
         <Text style={[styles.rowTitle, {color: theme.text}]}>Status</Text>
         <StorageRow label="Model ready" value={pack ? 'On Device' : 'Not ready'} />
         <StorageRow label="Offline ready" value={pack ? 'Works without internet' : 'Download the model first'} />
@@ -90,13 +90,14 @@ function StorageRow({label, value}: {label: string; value: string}) {
 const styles = StyleSheet.create({
   content: {paddingHorizontal: 18, paddingTop: 4, paddingBottom: 28, gap: 12},
   card: {padding: 18, gap: 8},
+  statusCard: {padding: 18, gap: 18},
   model: {fontSize: scale.title, fontWeight: '700'},
   meta: {fontSize: scale.caption},
   body: {fontSize: scale.caption, lineHeight: 22},
-  rowBetween: {flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'center'},
+  rowBetween: {flexDirection: 'row', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start'},
   rowTitle: {fontSize: scale.body, fontWeight: '700'},
-  rowLabel: {flex: 1, fontSize: scale.caption},
-  rowValue: {flex: 1, fontSize: scale.caption, textAlign: 'right'},
+  rowLabel: {flex: 1.3, fontSize: scale.caption, lineHeight: 22},
+  rowValue: {flex: 1, fontSize: scale.caption, lineHeight: 22, textAlign: 'right'},
   track: {height: 8, borderRadius: 4, overflow: 'hidden'},
   fill: {height: 8},
 });

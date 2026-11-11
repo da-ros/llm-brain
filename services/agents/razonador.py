@@ -79,8 +79,6 @@ async def extract_assumptions(state: dict[str, Any]) -> dict[str, Any]:
         assumptions.append(NO_PERSONAL_CONTEXT)
     else:
         assumptions.append("The answer is grounded in the user's retrieved personal documents.")
-    if sources:
-        assumptions.append(f"Retrieved {len(sources)} source(s) from RAG Top-k search.")
     if not assumptions:
         assumptions.append(NO_PERSONAL_CONTEXT)
     return {"assumptions": assumptions, "sources": sources}

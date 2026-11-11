@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from rate_limit import rate_limit_shield
 
 router = APIRouter(prefix="/api/shield", tags=["shield"])
+SCAN_TIMEOUT_SECONDS = 60.0
 
 
 class ScanRequest(BaseModel):
@@ -29,11 +30,12 @@ async def _shield(
     correlation_id: str,
     json_body: dict | None = None,
     params: dict | None = None,
+    timeout: float = 30.0,
 ) -> Any:
     settings = get_settings()
     url = f"{settings.SHIELD_SERVICE_URL}{path}"
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.request(
                 method,
                 url,
@@ -104,6 +106,7 @@ async def scan(
         "POST",
         "/scan",
         correlation_id=correlation_id,
+        timeout=SCAN_TIMEOUT_SECONDS,
         json_body={
             "user_id": user_id,
             "subscription_tier": tier,
@@ -137,7 +140,7 @@ async def delete_incident(
     request: Request,
     user: Annotated[dict, Depends(require_premium)],
 ):
-    """Premium delete of one stored scan. The image itself is not kept."""
+    """Premium delete of one stored scan, including its image preview."""
     correlation_id = request.state.correlation_id
     log_with_correlation(correlation_id, "info", f"DELETE /api/shield/incidents/{incident_id}")
     return await _shield(

@@ -1372,14 +1372,13 @@ class TestDbMemory:
         assert len(batch["items"]) == 1
 
     @pytest.mark.asyncio
-    async def test_append_batch_submitted_unchanged(self):
-        from db import _iso_week, append_batch_item, memory
+    async def test_append_batch_submitted_starts_the_next_batch(self):
+        from db import append_batch_item, memory
 
-        current_week = _iso_week()
         memory().batches["b-sub"] = {
             "_id": "b-sub",
             "user_id": "u1",
-            "iso_week": current_week,
+            "iso_week": "1999-W01",
             "items": [{"correlation_id": "x"}],
             "status": "submitted",
         }
@@ -1387,7 +1386,29 @@ class TestDbMemory:
             user_id="u1",
             item={"correlation_id": "new", "query": "q", "response": "r"},
         )
-        assert batch["status"] == "submitted"
+        assert batch["status"] == "ready"
+        assert batch["_id"] != "b-sub"
+        assert memory().batches["b-sub"]["items"] == [{"correlation_id": "x"}]
+        assert len(batch["items"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_open_batch_keeps_turns_from_another_week(self):
+        from db import append_batch_item, memory
+
+        memory().batches["older"] = {
+            "_id": "older",
+            "user_id": "u1",
+            "iso_week": "1999-W01",
+            "items": [{"correlation_id": "old", "query": "q1", "response": "a1"}],
+            "status": "ready",
+            "updated_at": "2026-01-01T00:00:00",
+        }
+        batch = await append_batch_item(
+            user_id="u1",
+            item={"correlation_id": "new", "query": "q2", "response": "a2"},
+        )
+        assert batch["_id"] == "older"
+        assert len(batch["items"]) == 2
 
     @pytest.mark.asyncio
     async def test_find_batch(self):

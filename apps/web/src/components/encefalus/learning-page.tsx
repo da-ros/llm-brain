@@ -284,7 +284,10 @@ function trainingSteps(view: Learning) {
       },
       {
         title: "Eligible turns",
-        note: `${items} of ${needed}`,
+        note:
+          items >= needed
+            ? `${items} collected`
+            : `${items} collected, ${needed} to start`,
         state: items > 0 ? "done" : "wait",
       },
       {

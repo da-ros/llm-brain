@@ -23,7 +23,7 @@ from engine import (
     walk_tree,
 )
 from exceptions import LLMTimeoutError, LLMUpstreamError, RAGTimeoutError, RAGUpstreamError
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from logging_setup import correlation_id_var, log_with_correlation, logger
 from pydantic import BaseModel, Field
 
@@ -254,6 +254,26 @@ def create_app() -> FastAPI:
         ensure_premium(tier)
         document = owned_or_404(await db.find_by_id(simulation_id), user_id)
         return _to_response(document)
+
+    @application.delete("/simulations/{simulation_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_simulation(
+        simulation_id: str,
+        request: Request,
+        user_id: str,
+        subscription_tier: str | None = None,
+    ):
+        correlation_id = request.state.correlation_id
+        tier = subscription_tier or request.headers.get("X-Subscription-Tier") or "free"
+        log_with_correlation(
+            correlation_id,
+            "info",
+            f"DELETE /simulations/{simulation_id} user_id={user_id}",
+        )
+        ensure_premium(tier)
+        deleted = await db.delete_for_user(simulation_id, user_id)
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     logger.info("Simulator Service ready — port=%s", settings.SIMULATOR_PORT)
     return application

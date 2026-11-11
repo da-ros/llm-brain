@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     FINETUNE_PORT: int = 8004
 
     BASE_MODEL_ID: str = "qwen3.5-4b"
+    QWEN_HF_MODEL_ID: str = "Qwen/Qwen3.5-4B"
     LORA_BACKEND: str = "peft"
     LORA_MOCK: bool = True
     LORA_MOCK_DELAY_SECONDS: float = 0.05

@@ -71,6 +71,24 @@ class TestPipeline:
         assert examples[0]["output"] == "dolor"
         assert "instruction" in examples[0]
 
+    def test_a_chat_fact_trains_as_a_question(self, tmp_path):
+        import pipeline
+
+        triples_path = tmp_path / "facts.jsonl"
+        _write_triples(
+            triples_path,
+            [
+                {
+                    "subject": "Who is Theo Park?",
+                    "predicate": "was_answered",
+                    "object": "Theo Park is the engineer.",
+                }
+            ],
+        )
+        examples = pipeline.convert_triples_to_training_format(str(triples_path))
+        assert examples[0]["input"] == "Who is Theo Park?"
+        assert examples[0]["output"] == "Theo Park is the engineer."
+
     def test_convert_directory_of_jsonl(self, tmp_path):
         import pipeline
 

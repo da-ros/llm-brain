@@ -7,7 +7,14 @@ export type Session = {access_token: string; user: User};
 
 export type StoredFile = {filename: string; mime: string; text: string; base64: string};
 
-export type Turn = {role: 'user' | 'assistant' | 'note'; text: string};
+export type SourceCard = {n: number; label: string; origin: string};
+
+export type Turn = {
+  role: 'user' | 'assistant' | 'note';
+  text: string;
+  cards?: SourceCard[];
+  assumptions?: string[];
+};
 
 export type Thread = {
   id: string;
