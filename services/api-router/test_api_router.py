@@ -775,6 +775,54 @@ class TestFineTuneTrigger:
         assert response.status_code == 403
 
 
+class TestOnDevicePack:
+    def test_missing_adapter_is_404(self, client, tmp_path):
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path / "on-device")
+        response = client.post("/api/on-device-pack", headers=auth_header())
+        assert response.status_code == 404
+        status_response = client.get("/api/on-device-pack", headers=auth_header())
+        assert status_response.status_code == 200
+        assert status_response.json()["adapter"] is False
+        assert status_response.json()["ready"] is False
+
+    def test_publish_forwards_when_the_adapter_exists(self, client, tmp_path):
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path / "on-device")
+        adapter = tmp_path / "models" / "user1" / "adapter"
+        adapter.mkdir(parents=True)
+        (adapter / "adapter_config.json").write_text("{}", encoding="utf-8")
+        with patch("routers.finetune.httpx.AsyncClient") as client_cls:
+            instance = AsyncMock()
+            response = MagicMock()
+            response.status_code = 202
+            response.json = MagicMock(return_value={"status": "submitted", "phase": "preparing"})
+            instance.post = AsyncMock(return_value=response)
+            instance.__aenter__.return_value = instance
+            instance.__aexit__.return_value = False
+            client_cls.return_value = instance
+            http_response = client.post("/api/on-device-pack", headers=auth_header())
+        assert http_response.status_code == 202
+        assert http_response.json()["phase"] == "preparing"
+        assert instance.post.call_args.args[0].endswith("/publish")
+
+    def test_ready_pack_reports_the_manifest(self, client, tmp_path):
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path / "on-device")
+        _write_pack(
+            tmp_path / "on-device" / "users" / "user1",
+            "qwen3.5-4b-finetuned-q4",
+            "premium",
+            b"merged",
+            "user1",
+        )
+        response = client.get("/api/on-device-pack", headers=auth_header())
+        assert response.status_code == 200
+        assert response.json()["ready"] is True
+        assert response.json()["status"] == "completed"
+
+    def test_free_publish_forbidden(self, client):
+        response = client.post("/api/on-device-pack", headers=auth_header(tier="free"))
+        assert response.status_code == 403
+
+
 class TestLearning:
     def test_learning_adds_memory_count(self, client):
         with patch("routers.learning.httpx.AsyncClient") as client_cls:

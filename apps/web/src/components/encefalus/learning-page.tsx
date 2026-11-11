@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrainCircuit, Check, Database, MessageSquare, Sparkles } from "lucide-react";
+import { BrainCircuit, Check, Database, MessageSquare, Smartphone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Metric,
@@ -26,6 +26,7 @@ type Learning = {
 };
 
 type StepState = "done" | "active" | "wait";
+type Pack = { status: string; phase: string; error: string; ready: boolean; adapter: boolean };
 
 const EMPTY: Learning = {
   interactions: 0,
@@ -36,6 +37,19 @@ const EMPTY: Learning = {
   job: null,
   learned: [],
   cycles: [],
+};
+
+const EMPTY_PACK: Pack = { status: "idle", phase: "", error: "", ready: false, adapter: false };
+
+const PHASE_LABEL: Record<string, string> = {
+  preparing: "Preparing",
+  tools: "Getting the converter",
+  base: "Getting the base model",
+  converting: "Converting the adapter",
+  merging: "Merging the adapter",
+  quantizing: "Quantizing the merged model",
+  completed: "File is on this Mac",
+  failed: "Merge failed",
 };
 
 function authHeaders(json = false): HeadersInit {
@@ -58,6 +72,7 @@ async function readError(response: Response, fallback: string): Promise<string> 
 export function LearningPage() {
   const account = useAccount();
   const [view, setView] = useState<Learning>(EMPTY);
+  const [pack, setPack] = useState<Pack>(EMPTY_PACK);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -66,11 +81,12 @@ export function LearningPage() {
   }, []);
 
   useEffect(() => {
-    const status = view.job?.status;
-    if (status !== "submitted" && status !== "in_progress") return;
+    const training = view.job?.status === "submitted" || view.job?.status === "in_progress";
+    const publishing = pack.status === "running" || pack.status === "submitted";
+    if (!training && !publishing) return;
     const handle = window.setInterval(() => void load(), 4000);
     return () => window.clearInterval(handle);
-  }, [view.job?.status]);
+  }, [view.job?.status, pack.status]);
 
   async function load() {
     try {
@@ -91,6 +107,17 @@ export function LearningPage() {
         cycles: body.cycles ?? [],
       });
       setError("");
+      const packResponse = await fetch("/api/on-device-pack", { headers: authHeaders() });
+      if (packResponse.ok) {
+        const packBody = await packResponse.json();
+        setPack({
+          status: packBody.status ?? "idle",
+          phase: packBody.phase ?? "",
+          error: packBody.error ?? "",
+          ready: Boolean(packBody.ready),
+          adapter: Boolean(packBody.adapter),
+        });
+      }
     } catch {
       setError("Learning is not reachable. Start the API router and sign in.");
     }
@@ -119,7 +146,32 @@ export function LearningPage() {
   }
 
   const ready = view.batch?.status === "ready";
-  const checks = trainingSteps(view);
+  const training = view.job?.status === "submitted" || view.job?.status === "in_progress";
+  const publishing = pack.status === "running" || pack.status === "submitted";
+
+  async function publish() {
+    if (!pack.adapter || busy || publishing) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/on-device-pack", {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (!response.ok) {
+        setError(await readError(response, "The merge could not be started."));
+        setBusy(false);
+        return;
+      }
+      setPack((current) => ({ ...current, status: "running", phase: "preparing", error: "" }));
+      await load();
+    } catch {
+      setError("Learning is not reachable. Start the API router and sign in.");
+    }
+    setBusy(false);
+  }
+
+  const checks = trainingSteps(view, pack);
   if (account?.plan === "free") return <PremiumNotice title="Your symbiotic learning loop" />;
 
   return (
@@ -129,10 +181,52 @@ export function LearningPage() {
         title="Your symbiotic learning loop"
         description="Encefalus learns from approved signals to become more helpful, personal, and aligned with your goals."
         action={
-          <Button disabled={!ready || busy} onClick={() => void train()}>
-            <BrainCircuit />
-            {busy ? "Starting…" : "Fine-tune my Brain"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                1
+              </span>
+              <Button disabled={!ready || busy || training || publishing} onClick={() => void train()}>
+                <BrainCircuit />
+                {busy && !publishing ? "Starting…" : "Fine-tune my Brain"}
+              </Button>
+            </div>
+            <span className="h-px w-10 bg-border" />
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                2
+              </span>
+              <Button
+                variant="outline"
+                disabled={!pack.adapter || busy || training || publishing}
+                onClick={() => void publish()}
+              >
+                <BrainCircuit />
+                {publishing ? "Merging…" : "Merge into base model"}
+              </Button>
+              {mergeNote(pack) ? (
+                <span className="max-w-36 text-center text-[10px] leading-3 text-muted-foreground">
+                  {mergeNote(pack)}
+                </span>
+              ) : null}
+            </div>
+            <span className="h-px w-10 bg-border" />
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                3
+              </span>
+              <span
+                className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm ${
+                  pack.ready
+                    ? "border-border text-foreground"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                <Smartphone />
+                Reinstall on iPhone
+              </span>
+            </div>
+          </div>
         }
       />
       <div className="p-5 sm:p-7">
@@ -173,6 +267,7 @@ export function LearningPage() {
             <div className="space-y-6 p-5">
               <Checklist title="Batch readiness" steps={checks.ready} />
               <Checklist title="Fine-tune" steps={checks.train} />
+              <Checklist title="Merge" steps={checks.phone} />
             </div>
           </Panel>
           <Panel>
@@ -267,7 +362,15 @@ function Checklist({
   );
 }
 
-function trainingSteps(view: Learning) {
+function mergeNote(pack: Pack) {
+  if (pack.status === "failed") return pack.error || PHASE_LABEL.failed;
+  if (pack.status === "running" || pack.status === "submitted") {
+    return PHASE_LABEL[pack.phase] || "Merging";
+  }
+  return "";
+}
+
+function trainingSteps(view: Learning, pack: Pack) {
   const items = view.batch?.items ?? 0;
   const needed = view.batch?.needed ?? view.needed;
   const status = view.batch?.status ?? "";
@@ -334,6 +437,37 @@ function trainingSteps(view: Learning) {
             ? view.job?.model_version || "Tag written"
             : "Written when training finishes",
         state: phase === "completed" ? "done" : "wait",
+      },
+    ] satisfies { title: string; note: string; state: StepState }[],
+    phone: [
+      {
+        title: "Adapter saved",
+        note: pack.adapter ? "The fine-tune wrote the adapter" : "Written when fine-tune finishes",
+        state: pack.adapter ? "done" : "wait",
+      },
+      {
+        title: "Merged model",
+        note:
+          pack.status === "running" || pack.status === "submitted"
+            ? PHASE_LABEL[pack.phase] || "Merging"
+            : pack.ready
+              ? "One Q4 file is on this Mac"
+              : "Adds the adapter into a copy of the base weights",
+        state:
+          pack.status === "running" || pack.status === "submitted"
+            ? "active"
+            : pack.ready
+              ? "done"
+              : "wait",
+      },
+      {
+        title: "Manifest written",
+        note: pack.ready
+          ? "The iPhone downloads this file when you tap Reinstall Model"
+          : pack.status === "failed"
+            ? pack.error || "The merged file was not written"
+            : "Written beside the merged model",
+        state: pack.ready ? "done" : pack.status === "failed" ? "active" : "wait",
       },
     ] satisfies { title: string; note: string; state: StepState }[],
   };

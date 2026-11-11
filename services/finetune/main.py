@@ -8,7 +8,7 @@ from __future__ import annotations
 from config import get_settings
 from fastapi import FastAPI, Request
 from logging_setup import correlation_id_var, log_with_correlation, logger
-from routers import health, training
+from routers import health, publish, training
 
 
 async def add_correlation_id(request: Request, call_next):
@@ -36,6 +36,7 @@ def create_app() -> FastAPI:
     application.middleware("http")(add_correlation_id)
     application.include_router(health.router)
     application.include_router(training.router)
+    application.include_router(publish.router)
     logger.info(
         "Fine-Tune Service ready — backend=%s model=%s",
         settings.LORA_BACKEND,
