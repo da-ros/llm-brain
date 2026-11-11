@@ -73,6 +73,9 @@ docker-compose.override.yml
 *.log
 logs/
 
+# --- Local samples (not part of the app) ---
+analytics-sample.csv
+
 
 # Models
 Qwen*
