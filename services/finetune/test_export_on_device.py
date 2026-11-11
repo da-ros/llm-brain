@@ -46,6 +46,28 @@ def test_premium_fixture_includes_user_and_leaves_base(tmp_path: Path):
     assert pack_ready(tmp_path / "base")
 
 
+def test_premium_real_writes_the_merged_file_and_manifest(tmp_path: Path, monkeypatch):
+    from export_on_device import export_premium, pack_ready
+
+    adapter = tmp_path / "adapter"
+    adapter.mkdir()
+    (adapter / "adapter_config.json").write_text("{}", encoding="utf-8")
+
+    def fake_merge(adapter_dir: Path, dest: Path, status_path: Path) -> None:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"Q4-MERGED")
+        status_path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr("publish_pack.merge_adapter_to_gguf", fake_merge)
+    manifest = export_premium(tmp_path, "user-a", adapter, fixture=False)
+    assert manifest is not None
+    weight = tmp_path / "users" / "user-a" / manifest["filename"]
+    assert weight.read_bytes() == b"Q4-MERGED"
+    assert manifest["id"] == "qwen3.5-4b-finetuned-q4"
+    assert manifest["user_id"] == "user-a"
+    assert pack_ready(tmp_path / "users" / "user-a")
+
+
 def test_missing_adapter_writes_nothing(tmp_path: Path):
     from export_on_device import export_base, export_premium, pack_ready
 

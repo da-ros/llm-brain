@@ -246,6 +246,31 @@ class TestTrainEndpoint:
         response = client.post("/train", json={"user_id": "u1"})
         assert response.status_code == 400
 
+    def test_publish_requires_an_adapter(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        response = client.post("/publish", json={"user_id": "user-a"})
+        assert response.status_code == 404
+
+    def test_publish_rejects_a_second_pack(self, monkeypatch):
+        from fastapi.testclient import TestClient
+        from config import get_settings
+        from main import app
+
+        adapter = Path(get_settings().ADAPTER_OUTPUT_DIR) / "user-a" / "adapter"
+        adapter.mkdir(parents=True)
+        (adapter / "adapter_config.json").write_text("{}", encoding="utf-8")
+
+        def already(*_args, **_kwargs):
+            raise RuntimeError("A pack is already being published.")
+
+        monkeypatch.setattr("publish_pack.start_publish", already)
+        client = TestClient(app)
+        response = client.post("/publish", json={"user_id": "user-a"})
+        assert response.status_code == 409
+
     def test_status_unknown_returns_404(self):
         from fastapi.testclient import TestClient
         from main import app

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
 
     ADAPTER_OUTPUT_DIR: str = "./data/models"
     TRAINING_LOG_DIR: str = "./data/training_logs"
+    ONDEVICE_MODEL_DIR: str = ""
 
 
 @lru_cache
