@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { BrainCircuit, RotateCcw, Sparkles } from "lucide-react";
+import { BrainCircuit, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Notice,
@@ -136,6 +136,30 @@ export function DecisionsPage() {
     setActiveRun("");
   }
 
+  async function removeRun(simulationId: string) {
+    setError("");
+    let response: Response;
+    try {
+      response = await fetch(`/api/simulations/${simulationId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+    } catch {
+      setError("Decisions is not reachable. Start the API router and sign in.");
+      return;
+    }
+    if (!response.ok) {
+      setError(await readError(response));
+      return;
+    }
+    setRuns((current) => current.filter((run) => run.simulation_id !== simulationId));
+    if (activeRun === simulationId) {
+      setResult(null);
+      setQuestion("");
+      setActiveRun("");
+    }
+  }
+
   if (account?.plan === "free") return <PremiumNotice title="Decision simulator" />;
 
   return (
@@ -179,19 +203,25 @@ export function DecisionsPage() {
               {runs.map((run) => (
                 <li
                   key={run.simulation_id || run.created_at}
-                  className="border-t border-border first:border-0"
+                  className={`grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-t border-border px-4 py-2 first:border-0 ${activeRun === run.simulation_id ? "bg-accent/60" : ""}`}
                 >
                   <button
                     type="button"
                     onClick={() => openRun(run)}
-                    className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left ${activeRun === run.simulation_id ? "bg-accent/60" : "hover:bg-muted/50"}`}
+                    className="min-w-0 truncate py-1 text-left text-sm font-medium"
                   >
-                    <span className="truncate text-sm font-medium">
-                      {run.question || "Simulation"}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {formatWhen(run.created_at)}
-                    </span>
+                    {run.question || "Simulation"}
+                  </button>
+                  <span className="text-[11px] text-muted-foreground">
+                    {formatWhen(run.created_at)}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${run.question || "simulation"}`}
+                    onClick={() => void removeRun(run.simulation_id)}
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" />
                   </button>
                 </li>
               ))}
@@ -201,60 +231,75 @@ export function DecisionsPage() {
         <h2 className="mb-3 mt-6 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">
           Scenarios
         </h2>
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid items-stretch gap-3 lg:grid-cols-3">
           {SLOTS.map((slot) => {
             const scenario = result?.scenarios.find(
               (item) => (item.severity || item.id).toLowerCase() === slot.severity,
             );
+            const assumptions = scenario?.assumptions ?? [];
             return (
-              <Panel key={slot.severity} className={slot.tone}>
-                <div className="p-4">
+              <Panel key={slot.severity} className={`h-full min-w-0 ${slot.tone}`}>
+                <div className="flex h-full min-w-0 flex-col p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     {slot.label}
                   </p>
-                  <h3 className="mt-1 text-sm font-bold">{scenario?.title || slot.label}</h3>
-                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                  <h3 className="mt-1 break-words text-sm font-bold">
+                    {scenario?.title || slot.label}
+                  </h3>
+                  <p className="mt-3 break-words text-xs leading-5 text-muted-foreground">
                     {scenario?.outcome || "Run a simulation to fill this case."}
                   </p>
+                  {assumptions.length > 0 && (
+                    <ul className="mt-3 space-y-2 border-t border-border/70 pt-3 text-xs leading-5 text-muted-foreground">
+                      {assumptions.map((item, index) => (
+                        <li key={`${slot.severity}-${index}`} className="break-words">
+                          • {item}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </Panel>
             );
           })}
         </div>
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          <Panel>
+        <div className="mt-6 grid items-start gap-4 lg:grid-cols-2">
+          <Panel className="min-w-0">
             <PanelTitle title="Key assumptions" />
             <ul className="space-y-2 p-4 text-xs leading-5 text-muted-foreground">
               {(result?.assumptions.length
                 ? result.assumptions
                 : ["Assumptions appear here after a simulation."]
-              ).map((item) => (
-                <li key={item}>• {item}</li>
+              ).map((item, index) => (
+                <li key={`${index}-${item}`} className="break-words">
+                  • {item}
+                </li>
               ))}
             </ul>
           </Panel>
-          <Panel>
+          <Panel className="min-w-0">
             <PanelTitle title="Evidence from your memories" />
-            <div className="grid gap-2 p-4 sm:grid-cols-3">
-              {result?.sources.length ? (
-                result.sources.map((source) => (
-                  <a
-                    key={source}
-                    href={`/memory?file=${encodeURIComponent(source)}`}
-                    className="rounded-md bg-muted p-3 text-left text-xs font-medium hover:bg-accent"
-                  >
-                    {source.split(/[/\\]/).pop()}
-                    <span className="mt-1 block text-[10px] text-muted-foreground">
-                      Open memory
-                    </span>
-                  </a>
-                ))
-              ) : (
-                <p className="col-span-full whitespace-nowrap text-xs text-muted-foreground">
-                  Memory references appear here after a simulation.
-                </p>
-              )}
-            </div>
+            {result?.sources.length ? (
+              <ul className="space-y-2 p-4">
+                {result.sources.map((source) => (
+                  <li key={source} className="min-w-0">
+                    <a
+                      href={`/memory?file=${encodeURIComponent(source)}`}
+                      className="block min-w-0 break-all rounded-md bg-muted px-3 py-2 text-left text-xs font-medium hover:bg-accent"
+                    >
+                      {source.split(/[/\\]/).pop()}
+                      <span className="mt-1 block break-normal text-[10px] text-muted-foreground">
+                        Open memory
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="p-4 text-xs text-muted-foreground">
+                Memory references appear here after a simulation.
+              </p>
+            )}
           </Panel>
         </div>
         <div className="mt-5 flex justify-end gap-2">

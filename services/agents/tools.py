@@ -398,7 +398,7 @@ def heuristic_score(response: str, assumptions: list[str]) -> tuple[float, str, 
 
 
 async def evaluate_turn(arguments: dict[str, Any]) -> dict[str, Any]:
-    """Score + persist feedback, or append the weekly batch. Never POST /train."""
+    """Score + persist feedback, or append the open batch. Never POST /train."""
     import db
 
     op = arguments.get("op") or "score"

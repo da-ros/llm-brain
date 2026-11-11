@@ -27,12 +27,16 @@ const PAIRS = [
     title: "Sleep vs productivity",
     xLabel: "Sleep hours",
     yLabel: "Productivity",
+    xHours: true,
+    yHours: false,
   },
   {
     key: "meetings_focus",
     title: "Meetings vs focus time",
     xLabel: "Meeting hours",
     yLabel: "Focus hours",
+    xHours: true,
+    yHours: true,
   },
 ] as const;
 
@@ -187,13 +191,18 @@ export function AnalyticsPage() {
                   "No reading yet. Import a file and one will be written from that upload."}
               </p>
               {facts.length > 0 && (
-                <ul className="mt-4 space-y-2">
-                  {facts.map((fact) => (
-                    <li key={fact} className="text-xs leading-5 text-muted-foreground">
-                      {fact}
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Also noted
+                  </p>
+                  <ul className="mt-2 list-disc space-y-2 pl-4">
+                    {facts.map((fact) => (
+                      <li key={fact} className="text-xs leading-5 text-muted-foreground">
+                        {fact}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {narrative && (
                 <div className="mt-4">
@@ -227,10 +236,10 @@ export function AnalyticsPage() {
                 <thead>
                   <tr className="border-b border-border text-muted-foreground">
                     <th className="px-4 py-2 font-medium">Date</th>
-                    <th className="px-4 py-2 font-medium">Sleep</th>
-                    <th className="px-4 py-2 font-medium">Productivity</th>
-                    <th className="px-4 py-2 font-medium">Meetings</th>
-                    <th className="px-4 py-2 font-medium">Focus</th>
+                    <th className="px-4 py-2 font-medium">Sleep (h)</th>
+                    <th className="px-4 py-2 font-medium">Productivity (1–10)</th>
+                    <th className="px-4 py-2 font-medium">Meetings (h)</th>
+                    <th className="px-4 py-2 font-medium">Focus (h)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -261,14 +270,37 @@ function PairPanel({ spec, pair }: { spec: (typeof PAIRS)[number]; pair?: Pair }
     <Panel className="p-4">
       <h2 className="text-sm font-semibold">{spec.title}</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        {ready ? `${n} matched days · r = ${formatR(pair.r)}` : `Not enough matched days (${n})`}
+        {ready
+          ? `${n} matched days · r = ${formatR(pair.r)}`
+          : `Not enough matched days (${n}). A chart needs two days that both have these measures.`}
       </p>
-      <Scatter points={pair?.points ?? []} xLabel={spec.xLabel} yLabel={spec.yLabel} />
+      {status === "ok" && pair?.r != null && (
+        <p className="mt-1 text-xs leading-5 text-foreground">{association(pair.r, spec)}</p>
+      )}
+      <Scatter
+        points={pair?.points ?? []}
+        xLabel={spec.xLabel}
+        yLabel={spec.yLabel}
+        xHours={spec.xHours}
+        yHours={spec.yHours}
+      />
     </Panel>
   );
 }
 
-function Scatter({ points, xLabel, yLabel }: { points: Point[]; xLabel: string; yLabel: string }) {
+function Scatter({
+  points,
+  xLabel,
+  yLabel,
+  xHours,
+  yHours,
+}: {
+  points: Point[];
+  xLabel: string;
+  yLabel: string;
+  xHours: boolean;
+  yHours: boolean;
+}) {
   const [active, setActive] = useState<number | null>(null);
   if (points.length === 0) {
     return <p className="mt-8 h-44 text-xs text-muted-foreground">No matched days to plot.</p>;
@@ -282,42 +314,65 @@ function Scatter({ points, xLabel, yLabel }: { points: Point[]; xLabel: string; 
   const spanX = maxX - minX || 1;
   const spanY = maxY - minY || 1;
   return (
-    <div className="relative mt-3 h-52 border-b border-l border-border">
-      <div className="absolute inset-0 grid grid-rows-4">
-        {[1, 2, 3, 4].map((row) => (
-          <span key={row} className="border-t border-border/60" />
-        ))}
+    <div className="mt-4 flex gap-2">
+      <div className="flex w-14 shrink-0 flex-col justify-between text-right text-[10px] leading-4 text-muted-foreground">
+        <span>{tick(maxY, yHours)}</span>
+        <span className="px-1">{yLabel}</span>
+        <span>{tick(minY, yHours)}</span>
       </div>
-      {points.map((point, index) => {
-        const left = 6 + ((point.x - minX) / spanX) * 86;
-        const bottom = 8 + ((point.y - minY) / spanY) * 78;
-        return (
-          <button
-            key={point.date}
-            type="button"
-            aria-label={`${point.date}: ${xLabel} ${point.x}, ${yLabel} ${point.y}`}
-            onMouseEnter={() => setActive(index)}
-            onMouseLeave={() => setActive(null)}
-            onFocus={() => setActive(index)}
-            onBlur={() => setActive(null)}
-            className="absolute size-2.5 rounded-full bg-primary ring-2 ring-card transition-transform hover:scale-150"
-            style={{ left: `${left}%`, bottom: `${bottom}%` }}
-          />
-        );
-      })}
-      {active !== null && (
-        <span className="absolute right-2 top-2 rounded bg-foreground px-2 py-1 text-[10px] text-background">
-          {points[active].date}: {xLabel} {points[active].x}, {yLabel} {points[active].y}
-        </span>
-      )}
-      <span className="absolute -bottom-6 left-0 text-[10px] text-muted-foreground">
-        {points[0].date}
-      </span>
-      <span className="absolute -bottom-6 right-0 text-[10px] text-muted-foreground">
-        {points[points.length - 1].date}
-      </span>
+      <div className="min-w-0 flex-1">
+        <div className="relative h-52 border-b border-l border-border">
+          <div className="absolute inset-0 grid grid-rows-4">
+            {[1, 2, 3, 4].map((row) => (
+              <span key={row} className="border-t border-border/60" />
+            ))}
+          </div>
+          {points.map((point, index) => {
+            const left = 6 + ((point.x - minX) / spanX) * 86;
+            const bottom = 8 + ((point.y - minY) / spanY) * 78;
+            return (
+              <button
+                key={point.date}
+                type="button"
+                aria-label={`${point.date}: ${xLabel} ${tick(point.x, xHours)}, ${yLabel} ${tick(point.y, yHours)}`}
+                onMouseEnter={() => setActive(index)}
+                onMouseLeave={() => setActive(null)}
+                onFocus={() => setActive(index)}
+                onBlur={() => setActive(null)}
+                className="absolute size-2.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-primary ring-2 ring-card transition-transform hover:scale-150"
+                style={{ left: `${left}%`, bottom: `${bottom}%` }}
+              />
+            );
+          })}
+          {active !== null && (
+            <span className="absolute right-2 top-2 rounded bg-foreground px-2 py-1 text-[10px] text-background">
+              {points[active].date}: {xLabel} {tick(points[active].x, xHours)}, {yLabel}{" "}
+              {tick(points[active].y, yHours)}
+            </span>
+          )}
+        </div>
+        <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-2 text-[10px] text-muted-foreground">
+          <span>{tick(minX, xHours)}</span>
+          <span className="text-center">{xLabel}</span>
+          <span>{tick(maxX, xHours)}</span>
+        </div>
+        <p className="mt-1 text-[10px] text-muted-foreground">Each dot is one day.</p>
+      </div>
     </div>
   );
+}
+
+function association(r: number, spec: (typeof PAIRS)[number]) {
+  const x = spec.xLabel.toLowerCase();
+  const y = spec.yLabel.toLowerCase();
+  if (r >= 0.3) return `Higher ${x} lines up with higher ${y}.`;
+  if (r <= -0.3) return `Higher ${x} lines up with lower ${y}.`;
+  return `${spec.xLabel} and ${spec.yLabel} do not rise and fall together.`;
+}
+
+function tick(value: number, hours: boolean) {
+  const shown = Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return hours ? `${shown}h` : shown;
 }
 
 function formatR(value: number | null) {

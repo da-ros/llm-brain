@@ -1,6 +1,17 @@
-import { useEffect, useState, type ClipboardEvent } from "react";
-import { AlertTriangle, CheckCircle2, FileUp, Search, ShieldAlert, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type ClipboardEvent } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileUp,
+  Search,
+  ShieldAlert,
+  Trash2,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Notice,
   PageHeader,
@@ -12,6 +23,11 @@ import {
 import { useAccount } from "@/lib/account";
 
 type Reason = { type?: string; id?: string; detail?: string; label?: string };
+type PreviewImage = {
+  content_base64?: string;
+  content_type?: string;
+  filename?: string;
+};
 type Scan = {
   id: string;
   summary: string;
@@ -19,6 +35,8 @@ type Scan = {
   rationale: string;
   reasons?: Reason[];
   source?: string;
+  text?: string;
+  preview?: PreviewImage | null;
 };
 
 const EVIDENCE: Record<string, string> = {
@@ -79,12 +97,19 @@ export function ShieldPage() {
   const [text, setText] = useState("");
   const [sourceId, setSourceId] = useState<(typeof SOURCES)[number]["id"]>("email");
   const [file, setFile] = useState<File | null>(null);
+  const [localPreview, setLocalPreview] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
   const [scans, setScans] = useState<Scan[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const selected = scans.find((scan) => scan.id === selectedId) ?? null;
+
+  function clearAttachment() {
+    setFile(null);
+    if (fileInput.current) fileInput.current.value = "";
+  }
 
   function takeScreenshot(event: ClipboardEvent) {
     const items = event.clipboardData?.items;
@@ -103,6 +128,16 @@ export function ShieldPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!file || !file.type.startsWith("image/")) {
+      setLocalPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setLocalPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
   async function load() {
     try {
@@ -157,6 +192,8 @@ export function ShieldPage() {
         rationale: body.rationale || "",
         reasons: body.reasons ?? [],
         source: payload.source,
+        text: body.text || pasted,
+        preview: body.preview ?? null,
       };
       if (row.id) {
         setScans((current) => [row, ...current.filter((item) => item.id !== row.id)]);
@@ -208,31 +245,66 @@ export function ShieldPage() {
               <Notice>{error}</Notice>
             </div>
           )}
-          <label className="mt-6 block text-xs font-semibold">
-            Content to scan
+          <div className="mt-6">
+            <div className="flex items-center justify-between">
+              <label htmlFor="shield-text" className="text-xs font-semibold">
+                Content to scan
+              </label>
+              {text && (
+                <button
+                  type="button"
+                  aria-label="Clear text"
+                  onClick={() => setText("")}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
             <textarea
+              id="shield-text"
               value={text}
               onChange={(event) => setText(event.target.value)}
               placeholder="Paste the message here."
               className="mt-2 min-h-44 w-full resize-none rounded-lg border border-input bg-card p-4 text-sm font-normal leading-6 outline-none focus:ring-1 focus:ring-ring"
             />
-          </label>
+          </div>
           <p className="mt-4 text-xs leading-5 text-muted-foreground">
             Paste the message and a picture together, or paste a screenshot on its own.
           </p>
-          <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-input bg-card p-4">
-            <FileUp className="size-5 text-primary" />
-            <span>
-              <b className="block text-xs">{file ? file.name : "Add attachment"}</b>
-              <span className="text-[11px] text-muted-foreground">Image or video · max 20 MB</span>
-            </span>
-            <input
-              type="file"
-              accept="image/*,video/*"
-              className="sr-only"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          <div className="mt-3 flex items-center gap-3 rounded-lg border border-dashed border-input bg-card p-4">
+            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+              <FileUp className="size-5 shrink-0 text-primary" />
+              <span className="min-w-0">
+                <b className="block truncate text-xs">{file ? file.name : "Add attachment"}</b>
+                <span className="text-[11px] text-muted-foreground">Image or video · max 20 MB</span>
+              </span>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*,video/*"
+                className="sr-only"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            {file && (
+              <button
+                type="button"
+                aria-label={`Remove ${file.name}`}
+                onClick={clearAttachment}
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+          {localPreview && (
+            <img
+              src={localPreview}
+              alt={file?.name || "Image to scan"}
+              className="mt-3 max-h-40 w-full rounded-lg border border-border bg-muted object-contain"
             />
-          </label>
+          )}
           <div className="mt-5 grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
             <select
               value={sourceId}
@@ -260,11 +332,14 @@ export function ShieldPage() {
             {scans.length === 0 ? (
               <p className="px-4 py-3 text-xs text-muted-foreground">No scans yet.</p>
             ) : (
-              scans.map((scan) => (
+              scans.map((scan) => {
+                const thumb = previewSrc(scan.preview);
+                return (
                 <div
                   key={scan.id}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-border px-4 py-3 last:border-0 hover:bg-muted/40"
+                  className={`grid w-full items-center gap-2 border-b border-border px-4 py-3 last:border-0 hover:bg-muted/40 ${thumb ? "grid-cols-[auto_minmax(0,1fr)_auto_auto]" : "grid-cols-[minmax(0,1fr)_auto_auto]"}`}
                 >
+                  {thumb && <ScanThumb scan={scan} />}
                   <button
                     type="button"
                     onClick={() => setSelectedId(scan.id)}
@@ -282,7 +357,8 @@ export function ShieldPage() {
                   </button>
                   <StatusDot label={severityLabel(scan.severity)} tone={tone(scan.severity)} />
                 </div>
-              ))
+                );
+              })
             )}
           </Panel>
         </section>
@@ -304,8 +380,20 @@ function Outcome({ scan }: { scan: Scan }) {
   const risk = riskStyle(scan.severity);
   const evidence = evidenceLines(scan.reasons ?? []);
   const Icon = risk.icon;
+  const src = previewSrc(scan.preview);
   return (
     <>
+      {src && <ZoomableImage src={src} filename={scan.preview?.filename || ""} />}
+      {scan.text?.trim() && (
+        <>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">
+            Scanned text
+          </h3>
+          <p className="mb-5 max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-card p-4 text-sm leading-6">
+            {scan.text.trim()}
+          </p>
+        </>
+      )}
       <div className={`rounded-lg border p-4 ${risk.box}`}>
         <div className={`flex items-center gap-2 ${risk.text}`}>
           <Icon className="size-5" />
@@ -418,6 +506,86 @@ function evidenceLines(reasons: Reason[]) {
     }
   }
   return lines;
+}
+
+function previewSrc(preview?: PreviewImage | null): string {
+  if (!preview?.content_base64) return "";
+  const type = preview.content_type || "image/jpeg";
+  return `data:${type};base64,${preview.content_base64}`;
+}
+
+function ScanThumb({ scan }: { scan: Scan }) {
+  const src = previewSrc(scan.preview);
+  if (!src) return <span className="size-10" />;
+  return (
+    <img
+      src={src}
+      alt=""
+      className="size-10 rounded border border-border bg-muted object-cover"
+    />
+  );
+}
+
+function ZoomableImage({ src, filename }: { src: string; filename: string }) {
+  const [open, setOpen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const label = filename || "Uploaded image";
+  return (
+    <figure className="mb-5">
+      <button
+        type="button"
+        onClick={() => {
+          setZoom(1);
+          setOpen(true);
+        }}
+        className="block w-full"
+        aria-label={`Enlarge ${label}`}
+      >
+        <img
+          src={src}
+          alt={label}
+          className="max-h-56 w-full rounded-lg border border-border bg-muted object-contain"
+        />
+      </button>
+      <figcaption className="mt-2 text-[11px] text-muted-foreground">
+        Uploaded image{filename ? ` · ${filename}` : ""} · click to enlarge
+      </figcaption>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[92vh] max-w-[min(96vw,1100px)] overflow-hidden">
+          <DialogTitle className="pr-8 text-sm">{label}</DialogTitle>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Zoom out"
+              disabled={zoom <= 1}
+              onClick={() => setZoom((current) => Math.max(1, current - 0.5))}
+              className="rounded border border-border p-1.5 disabled:opacity-40"
+            >
+              <ZoomOut className="size-4" />
+            </button>
+            <span className="text-xs text-muted-foreground">{Math.round(zoom * 100)}%</span>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              disabled={zoom >= 3}
+              onClick={() => setZoom((current) => Math.min(3, current + 0.5))}
+              className="rounded border border-border p-1.5 disabled:opacity-40"
+            >
+              <ZoomIn className="size-4" />
+            </button>
+          </div>
+          <div className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-muted">
+            <img
+              src={src}
+              alt={label}
+              style={{ width: `${Math.round(zoom * 100)}%`, maxWidth: "none" }}
+              className="h-auto"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </figure>
+  );
 }
 
 function readBase64(file: File): Promise<string> {

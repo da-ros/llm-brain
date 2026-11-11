@@ -1,6 +1,6 @@
 import {NativeModules} from 'react-native';
 
-import {RouterApi} from './api';
+import {ApiError, RouterApi} from './api';
 import {checksum, toBase64} from './bytes';
 import {API_BASE_URL} from './config';
 import {createEngine, type OnDeviceEngine} from './engine';
@@ -37,6 +37,8 @@ export type Snapshot = {
   cacheBytes: number;
   error: string | null;
   notice: string | null;
+  sending: boolean;
+  pending: string | null;
   confirmUpgrade: boolean;
   confirmClear: boolean;
 };
@@ -57,6 +59,8 @@ function emptySnapshot(): Snapshot {
     cacheBytes: 0,
     error: null,
     notice: null,
+    sending: false,
+    pending: null,
     confirmUpgrade: false,
     confirmClear: false,
   };
@@ -145,6 +149,44 @@ export class Brain {
     void this.persistUser();
   }
 
+  openThread(id: string): void {
+    if (!this.snapshot.threads.some(thread => thread.id === id)) {
+      return;
+    }
+    this.snapshot.activeId = id;
+    this.snapshot.error = null;
+    this.commit();
+    void this.persistUser();
+  }
+
+  async deleteThread(id: string): Promise<void> {
+    const thread = this.snapshot.threads.find(item => item.id === id);
+    if (!thread) {
+      return;
+    }
+    const serverChatId = thread.serverChatId;
+    const remaining = this.snapshot.threads.filter(item => item.id !== id);
+    this.snapshot.threads = remaining;
+    if (this.snapshot.activeId === id) {
+      this.snapshot.activeId = remaining[0]?.id ?? null;
+    }
+    this.snapshot.error = null;
+    this.commit();
+    await this.persistUser();
+    if (!serverChatId) {
+      return;
+    }
+    this.syncToken();
+    try {
+      await this.deps.api.delete(`/api/chats/${serverChatId}`);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return;
+      }
+      this.fail(error, 'The chat was removed from this iPhone. The Digital Brain copy could not be deleted.');
+    }
+  }
+
   setTheme(theme: ThemeChoice): void {
     this.snapshot.theme = theme;
     this.commit();
@@ -165,6 +207,7 @@ export class Brain {
     }
     this.snapshot.keepOnDevice = on;
     this.snapshot.notice = null;
+    this.snapshot.error = null;
     this.commit();
     void this.persistUser();
   }
@@ -280,14 +323,32 @@ export class Brain {
 
   async send(text: string): Promise<boolean> {
     const question = text.trim();
-    if (!question) {
+    if (!question || this.snapshot.sending) {
       return false;
     }
-    const thread = this.ensureThread();
-    if (this.onDevice()) {
-      return this.sendOnDevice(thread, question);
+    this.ensureThread();
+    this.snapshot.pending = question;
+    this.snapshot.sending = true;
+    this.snapshot.error = null;
+    this.commit();
+    const thread = this.activeThread();
+    if (!thread) {
+      this.snapshot.pending = null;
+      this.snapshot.sending = false;
+      this.commit();
+      return false;
     }
-    return this.sendCloud(thread, question);
+    let ok = false;
+    try {
+      ok = this.onDevice()
+        ? await this.sendOnDevice(thread, question)
+        : await this.sendCloud(thread, question);
+    } finally {
+      this.snapshot.pending = null;
+      this.snapshot.sending = false;
+      this.commit();
+    }
+    return ok;
   }
 
   async reinstall(): Promise<void> {
@@ -425,14 +486,23 @@ export class Brain {
         filename: file.filename,
         content_base64: file.base64,
       }));
-      const response = await this.deps.api.post<{response: string}>('/api/chat', {
+      const response = await this.deps.api.post<{
+        response: string;
+        source_cards?: {n: number; label: string; origin: string}[];
+        assumptions?: string[];
+      }>('/api/chat', {
         message: question,
         use_rag: true,
         session_id: thread.serverChatId,
         attachments,
       });
       thread.turns.push({role: 'user', text: question});
-      thread.turns.push({role: 'assistant', text: response.response || ''});
+      thread.turns.push({
+        role: 'assistant',
+        text: response.response || '',
+        cards: response.source_cards ?? [],
+        assumptions: response.assumptions ?? [],
+      });
       this.snapshot.error = null;
       this.commit();
       await this.persistUser();

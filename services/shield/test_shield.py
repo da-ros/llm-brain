@@ -199,9 +199,65 @@ class TestScan:
         assert _EVENTS.index("ocr") < _EVENTS.index("heuristics")
         assert response.json()["llm_used"] is True
         assert any(item["id"] == "ocr_text" for item in response.json()["reasons"])
+        assert response.json().get("preview") is None
         assert FakeClient.chat_calls == 1
         content = _CHAT[0]["messages"][0]["content"]
         assert isinstance(content, list)
+
+    def test_image_scan_keeps_a_small_preview(self, client):
+        import io
+
+        from PIL import Image
+
+        picture = io.BytesIO()
+        Image.new("RGB", (900, 400), (18, 92, 140)).save(picture, format="PNG")
+        raw = base64.b64encode(picture.getvalue()).decode()
+        response = _scan(
+            client,
+            source="image",
+            text="",
+            content_base64=raw,
+            filename="proof.png",
+            cid="cid-preview",
+        )
+        assert response.status_code == 200
+        preview = response.json()["preview"]
+        assert preview["content_type"] == "image/png"
+        assert preview["filename"] == "proof.png"
+        opened = Image.open(io.BytesIO(base64.b64decode(preview["content_base64"])))
+        assert opened.size == (900, 400)
+        listed = client.get(
+            "/incidents",
+            params={"user_id": "user1", "subscription_tier": "premium"},
+        )
+        saved = listed.json()["incidents"][0]
+        assert saved["preview"]["content_base64"] == preview["content_base64"]
+
+    def test_a_wide_image_is_stored_sharp_enough_to_enlarge(self):
+        import io
+
+        from PIL import Image
+
+        import scan
+
+        picture = io.BytesIO()
+        Image.new("RGB", (4000, 900), (12, 40, 80)).save(picture, format="PNG")
+        preview = scan.image_preview(picture.getvalue(), "wide.png")
+        assert preview is not None
+        assert preview["content_type"] == "image/jpeg"
+        opened = Image.open(io.BytesIO(base64.b64decode(preview["content_base64"])))
+        assert max(opened.size) == 1600
+
+    def test_text_scan_keeps_the_original_message(self, client):
+        message = "Your account is suspended. Act now and verify password."
+        response = _scan(client, text=message, cid="cid-keep-text")
+        assert response.status_code == 200
+        assert response.json()["text"] == message
+        listed = client.get(
+            "/incidents",
+            params={"user_id": "user1", "subscription_tier": "premium"},
+        )
+        assert listed.json()["incidents"][0]["text"] == message
 
     def test_video_does_not_ocr(self, client):
         raw = base64.b64encode(b"mp4-bytes").decode()

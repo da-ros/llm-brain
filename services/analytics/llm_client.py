@@ -66,12 +66,14 @@ def parse_inference(text: str) -> dict[str, Any]:
 def _prompt(*, text: str, excerpts: str, temperature: float, model_id: str) -> str:
     return (
         f"Model: {model_id} base. Temperature: {temperature}.\n"
-        "Infer daily life facts from the uploaded diary or schedule and from this user's "
-        "other documents. Return JSON only, no markdown:\n"
+        "Describe the uploaded diary or schedule. Return JSON only, no markdown:\n"
         '{"days":[{"date":"YYYY-MM-DD","sleep_hours":0,"productivity_score":1,'
         '"meeting_hours":0,"focus_hours":0}],'
         '"narrative":"...","inferred_facts":["..."]}\n'
-        "Omit a numeric field when the file does not support it. "
+        "Copy dates and numbers from the upload. Omit a numeric field the file does not state. "
+        "The narrative stays on this upload and says which measures rise together. "
+        "Do not say that one measure caused another. "
+        "A fact from the other documents goes in inferred_facts, and that sentence says it is not from this upload. "
         "Hours are 0 to 24. productivity_score is 1 to 10. narrative is English.\n"
         f"Uploaded text:\n{text.strip() or '(image only)'}\n"
         f"RAG excerpts for this user only:\n{excerpts.strip() or '(none)'}\n"

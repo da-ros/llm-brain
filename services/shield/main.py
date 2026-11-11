@@ -23,6 +23,7 @@ from scan import (
     SOURCES,
     collect_evidence,
     decode_file,
+    image_preview,
     list_item,
     persist_alert,
     public_result,
@@ -164,6 +165,7 @@ def create_app() -> FastAPI:
 
         reasons = list(evidence["reasons"])
         reasons.append({"type": "llm", "id": "llm", "detail": verdict["rationale"]})
+        preview = image_preview(file_bytes, payload["filename"]) if source == "image" else None
         result: dict[str, Any] = {
             "alert": verdict["alert"],
             "likelihood": verdict["likelihood"],
@@ -173,6 +175,10 @@ def create_app() -> FastAPI:
             "reasons": reasons,
             "llm_used": True,
         }
+        if text:
+            result["text"] = text
+        if preview:
+            result["preview"] = preview
         stored = await persist_alert(
             user_id=user_id,
             correlation_id=correlation_id,

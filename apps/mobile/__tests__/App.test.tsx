@@ -392,6 +392,43 @@ test('free chat uses the base pack, keeps five local files, and does not call cl
   expect(paths(fetchImpl).some(path => path.startsWith('/api/chat'))).toBe(false);
 });
 
+test('a Digital Brain send shows the question until the reply arrives', async () => {
+  const harness = makeApp();
+  let release: (() => void) | null = null;
+  harness.fetchImpl.mockImplementation(async (url: string) => {
+    const path = new URL(String(url)).pathname;
+    if (path === '/api/auth/signin') {
+      return jsonResponse(200, {access_token: 'tok', user: user('ada', 'premium')});
+    }
+    if (path === '/api/chats') {
+      return jsonResponse(201, {id: 'chat-9'});
+    }
+    if (path === '/api/chat') {
+      return new Promise(resolve => {
+        release = () => resolve(jsonResponse(200, {response: 'from memory'}));
+      });
+    }
+    return jsonResponse(404, {detail: path});
+  });
+  await harness.brain.boot();
+  await harness.brain.signIn('ada@example.com', 'secret123');
+  harness.brain.setKeepOnDevice(false);
+  const flight = harness.brain.send('What do I like to do at the beach?');
+  expect(harness.brain.snapshot.sending).toBe(true);
+  expect(harness.brain.snapshot.pending).toBe('What do I like to do at the beach?');
+  for (let i = 0; i < 8 && !release; i += 1) {
+    await Promise.resolve();
+  }
+  release?.();
+  await flight;
+  expect(harness.brain.snapshot.sending).toBe(false);
+  expect(harness.brain.snapshot.pending).toBeNull();
+  expect(harness.brain.activeThread()?.turns.map(turn => turn.text)).toEqual([
+    'What do I like to do at the beach?',
+    'from memory',
+  ]);
+});
+
 test('a missing base pack does not fall back to cloud chat', async () => {
   const {brain, fetchImpl} = makeApp();
   fetchImpl.mockImplementation(async () => jsonResponse(200, {access_token: 'tok', user: user('ada', 'free')}));
@@ -442,6 +479,8 @@ test('menu reaches status, compare, and settings, and a new thread keeps the old
   await act(async () => {
     press(renderer, 'Menu');
   });
+  expect(collect(renderer)).toContain('Signed in');
+  expect(collect(renderer)).toContain('ada@example.com');
   await act(async () => {
     press(renderer, 'Model & Device Status');
   });
@@ -492,6 +531,90 @@ test('menu reaches status, compare, and settings, and a new thread keeps the old
   });
   expect(renderer.root.findByProps({accessibilityLabel: 'Keep data on device'}).props.value).toBe(true);
   expect(brain.onDevice()).toBe(true);
+});
+
+test('deleting a chat removes it from the menu and from the Digital Brain', async () => {
+  const harness = makeApp({
+    basePack: {id: 'qwen3.5-4b-base-q4', path: 'base.pte', bytes: 20, sha256: 'aa'},
+    loraByUser: {
+      ada: {id: 'qwen3.5-4b-finetuned-q4', path: 'lora.pte', bytes: 30, sha256: 'bb'},
+    },
+  });
+  harness.fetchImpl.mockImplementation(async (url: string, init?: RequestInit) => {
+    const path = new URL(String(url)).pathname;
+    const method = init?.method ?? 'GET';
+    if (path === '/api/auth/signin') {
+      return jsonResponse(200, {access_token: 'tok', user: user('ada', 'premium')});
+    }
+    if (path === '/api/chats' && method === 'POST') {
+      return jsonResponse(201, {id: 'chat-1'});
+    }
+    if (path === '/api/chat') {
+      return jsonResponse(200, {response: 'cloud answer', assumptions: ['No personal context was found.']});
+    }
+    if (path === '/api/chats/chat-1' && method === 'DELETE') {
+      return jsonResponse(204);
+    }
+    return jsonResponse(404, {detail: path});
+  });
+  const renderer = await render(harness.brain);
+  await act(async () => {
+    typeInto(renderer, 'you@company.com', 'ada@example.com');
+    typeInto(renderer, 'Enter your password', 'secret123');
+  });
+  await act(async () => {
+    press(renderer, 'Continue');
+  });
+  await act(async () => {
+    typeInto(renderer, 'Ask anything...', 'keep this one');
+  });
+  await act(async () => {
+    press(renderer, 'Send');
+  });
+  await act(async () => {
+    press(renderer, 'New chat');
+  });
+  const mode = renderer.root.findByProps({accessibilityLabel: 'On Device'});
+  await act(async () => {
+    mode.props.onValueChange(true);
+  });
+  await act(async () => {
+    typeInto(renderer, 'Ask anything...', 'cloud thread');
+  });
+  await act(async () => {
+    press(renderer, 'Send');
+  });
+  await act(async () => {
+    press(renderer, 'Menu');
+  });
+  await act(async () => {
+    press(renderer, 'Delete cloud thread');
+  });
+  expect(collect(renderer)).toContain('Remove this chat?');
+  await act(async () => {
+    press(renderer, 'Cancel delete');
+  });
+  expect(harness.brain.snapshot.threads).toHaveLength(2);
+  await act(async () => {
+    press(renderer, 'Delete cloud thread');
+  });
+  await act(async () => {
+    press(renderer, 'Confirm delete');
+  });
+  expect(harness.brain.snapshot.threads).toHaveLength(1);
+  expect(harness.brain.snapshot.threads[0].turns.some(turn => turn.text === 'keep this one')).toBe(true);
+  expect(collect(renderer)).not.toContain('cloud thread');
+  expect(paths(harness.fetchImpl)).toContain('/api/chats/chat-1');
+  const removed = calls(harness.fetchImpl).find(call => new URL(call.url).pathname === '/api/chats/chat-1');
+  expect(removed?.init?.method).toBe('DELETE');
+  await act(async () => {
+    press(renderer, 'Delete keep this one');
+  });
+  await act(async () => {
+    press(renderer, 'Confirm delete');
+  });
+  expect(harness.brain.snapshot.threads).toHaveLength(0);
+  expect(paths(harness.fetchImpl).filter(path => path.startsWith('/api/chats/'))).toHaveLength(1);
 });
 
 test('theme persists and clear all data stays on the phone', async () => {
@@ -663,8 +786,9 @@ test('premium on device uses the LoRA pack and digital brain uses chat with RAG'
   });
   expect(harness.engine.stats().loadedPackId).toBe('qwen3.5-4b-finetuned-q4');
   expect(paths(harness.fetchImpl)).not.toContain('/api/chat');
+  const mode = renderer.root.findByProps({accessibilityLabel: 'On Device'});
   await act(async () => {
-    press(renderer, 'On Device');
+    mode.props.onValueChange(true);
   });
   expect(collect(renderer)).toContain('Digital Brain');
   expect(collect(renderer)).not.toContain('No cloud required');
@@ -699,8 +823,9 @@ test('premium on device uses the LoRA pack and digital brain uses chat with RAG'
     press(renderer, 'Send');
   });
   expect(paths(harness.fetchImpl).filter(path => path === '/api/chats')).toHaveLength(1);
+  const digital = renderer.root.findByProps({accessibilityLabel: 'Digital Brain'});
   await act(async () => {
-    press(renderer, 'Digital Brain');
+    digital.props.onValueChange(false);
   });
   const cloudCalls = paths(harness.fetchImpl).filter(path => path === '/api/chat').length;
   await act(async () => {

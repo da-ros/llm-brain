@@ -17,7 +17,7 @@ services:
       - LLM_SERVICE_URL=http://host.docker.internal:8003
       - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
       - LLM_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
-      - FINETUNE_SERVICE_URL=http://finetune-service:8004
+      - FINETUNE_SERVICE_URL=http://host.docker.internal:8004
       - ETL_SERVICE_URL=http://etl-service:8001
       - AGENTS_SERVICE_URL=http://agents-service:8006
       - SIMULATOR_SERVICE_URL=http://simulator-service:8007
@@ -55,14 +55,12 @@ services:
 
   finetune-service:
     build: ./services/finetune
-    ports:
-      - "8004:8004"
     environment:
       - BASE_MODEL_ID=${BASE_MODEL_ID:-qwen3.5-4b}
       - LORA_BACKEND=${LORA_BACKEND:-peft}
-      - LORA_MOCK=${LORA_MOCK:-true}
-      - TRAINING_EPOCHS=${TRAINING_EPOCHS:-5}
-      - TRAINING_LR=${TRAINING_LR:-0.001}
+      - LORA_MOCK=${LORA_MOCK:-false}
+      - TRAINING_EPOCHS=${TRAINING_EPOCHS:-3}
+      - TRAINING_LR=${TRAINING_LR:-0.0002}
       - MAX_TRAINING_TIME_HOURS=${MAX_TRAINING_TIME_HOURS:-2}
       - ADAPTER_OUTPUT_DIR=/app/data/models
       - TRAINING_LOG_DIR=/app/data/training_logs
@@ -112,7 +110,7 @@ services:
       - LLM_SERVICE_URL=http://host.docker.internal:8003
       - INFERENCE_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
       - LLM_TIMEOUT_SECONDS=${INFERENCE_TIMEOUT_SECONDS:-600}
-      - FINETUNE_SERVICE_URL=http://finetune-service:8004
+      - FINETUNE_SERVICE_URL=http://host.docker.internal:8004
       - SIMULATOR_SERVICE_URL=http://simulator-service:8007
       - SHIELD_SERVICE_URL=http://shield-service:8009
       - ANALYTICS_SERVICE_URL=http://analytics-service:8008

@@ -1,4 +1,4 @@
-"""MongoDB (or in-memory) store for interactions, feedback, and weekly batches."""
+"""MongoDB (or in-memory) store for interactions, feedback, and fine-tune batches."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ def _db():
 
 
 async def ensure_indexes() -> None:
-    """Unique correlation_id, weekly batch identity, TTL on feedback logs."""
+    """Unique correlation_id, one open batch per user, TTL on feedback logs."""
     if use_memory():
         return
     settings = get_settings()
@@ -93,10 +93,10 @@ async def ensure_indexes() -> None:
     await database.agent_interactions.create_index("correlation_id", unique=True)
     await database.agent_feedback.create_index("correlation_id", unique=True)
     await database.agent_feedback.create_index("expires_at", expireAfterSeconds=0)
-    await database.finetune_batches.create_index(
-        [("user_id", 1), ("iso_week", 1)],
-        unique=True,
-    )
+    info = await database.finetune_batches.index_information()
+    if "user_id_1_iso_week_1" in info:
+        await database.finetune_batches.drop_index("user_id_1_iso_week_1")
+    await database.finetune_batches.create_index([("user_id", 1), ("status", 1)])
     logger.info(
         "Ensured agent indexes (TTL=%s days on agent_feedback)",
         settings.TASK_STATUS_TTL_DAYS,
@@ -208,87 +208,93 @@ async def find_feedback(correlation_id: str, user_id: str | None = None) -> dict
     return _serialize(await _db().agent_feedback.find_one(query))
 
 
+def _newest_open(docs: list[dict[str, Any]], user_id: str) -> dict[str, Any] | None:
+    """The user's accumulating or ready batch. A submitted run stays closed."""
+    opens = [
+        doc
+        for doc in docs
+        if doc.get("user_id") == user_id and doc.get("status") in {"accumulating", "ready"}
+    ]
+    if not opens:
+        return None
+    opens.sort(key=lambda doc: str(doc.get("updated_at") or doc.get("created_at") or ""))
+    return opens[-1]
+
+
+def _new_batch(user_id: str, item: dict[str, Any], threshold: int, now: datetime) -> dict[str, Any]:
+    items = [item]
+    return {
+        "user_id": user_id,
+        "iso_week": _iso_week(now),
+        "items": items,
+        "status": "ready" if len(items) >= threshold else "accumulating",
+        "dataset_path": None,
+        "job_id": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _with_item(batch: dict[str, Any], item: dict[str, Any], threshold: int, now: datetime) -> None:
+    items = list(batch.get("items") or [])
+    correlation_id = item.get("correlation_id")
+    if not any(entry.get("correlation_id") == correlation_id for entry in items):
+        items.append(item)
+    batch["items"] = items
+    batch["status"] = "ready" if len(items) >= threshold else "accumulating"
+    batch["updated_at"] = now
+
+
 async def append_batch_item(
     *,
     user_id: str,
     item: dict[str, Any],
     min_items: int | None = None,
 ) -> dict[str, Any]:
-    """Append an eligible turn to this user's ISO-week batch (no duplicates)."""
+    """Append an eligible turn to the user's open batch.
+
+    The batch keeps growing across weeks until it is submitted. The next
+    turn after a submitted run starts a new batch. Ten items makes it
+    ready; later turns are still added.
+    """
     settings = get_settings()
     threshold = min_items if min_items is not None else settings.BATCH_MIN_ITEMS
-    iso_week = _iso_week()
-    correlation_id = item["correlation_id"]
     now = _now()
 
     if use_memory():
         store = memory()
-        batch = next(
-            (
-                doc
-                for doc in store.batches.values()
-                if doc.get("user_id") == user_id and doc.get("iso_week") == iso_week
-            ),
-            None,
-        )
+        batch = _newest_open(list(store.batches.values()), user_id)
         if batch is None:
             batch_id = str(uuid.uuid4())
-            batch = {
-                "_id": batch_id,
-                "user_id": user_id,
-                "iso_week": iso_week,
-                "items": [],
-                "status": "accumulating",
-                "dataset_path": None,
-                "job_id": None,
-                "created_at": now,
-                "updated_at": now,
-            }
+            batch = _new_batch(user_id, item, threshold, now)
+            batch["_id"] = batch_id
             store.batches[batch_id] = batch
-        if batch["status"] == "submitted":
             return dict(batch)
-        items = list(batch.get("items") or [])
-        if not any(entry.get("correlation_id") == correlation_id for entry in items):
-            items.append(item)
-        batch["items"] = items
-        if batch["status"] != "submitted":
-            batch["status"] = "ready" if len(items) >= threshold else "accumulating"
-        batch["updated_at"] = now
+        _with_item(batch, item, threshold, now)
         return dict(batch)
 
     collection = _db().finetune_batches
-    existing = await collection.find_one({"user_id": user_id, "iso_week": iso_week})
+    opens = await collection.find(
+        {"user_id": user_id, "status": {"$in": ["accumulating", "ready"]}}
+    ).to_list(length=50)
+    existing = _newest_open(opens, user_id)
     if existing is None:
-        doc = {
-            "user_id": user_id,
-            "iso_week": iso_week,
-            "items": [item],
-            "status": "ready" if threshold <= 1 else "accumulating",
-            "dataset_path": None,
-            "job_id": None,
-            "created_at": now,
-            "updated_at": now,
-        }
-        if len(doc["items"]) >= threshold:
-            doc["status"] = "ready"
+        doc = _new_batch(user_id, item, threshold, now)
         result = await collection.insert_one(doc)
         doc["_id"] = result.inserted_id
         return _serialize(doc) or doc
 
-    if existing.get("status") == "submitted":
-        return _serialize(existing) or existing
-
-    items = list(existing.get("items") or [])
-    if not any(entry.get("correlation_id") == correlation_id for entry in items):
-        items.append(item)
-    status = "ready" if len(items) >= threshold else "accumulating"
+    _with_item(existing, item, threshold, now)
     await collection.update_one(
         {"_id": existing["_id"]},
-        {"$set": {"items": items, "status": status, "updated_at": now}},
+        {
+            "$set": {
+                "items": existing["items"],
+                "status": existing["status"],
+                "updated_at": now,
+            }
+        },
     )
-    existing["items"] = items
-    existing["status"] = status
-    existing["updated_at"] = now
     return _serialize(existing) or existing
 
 
