@@ -170,7 +170,12 @@ async def rag_search(arguments: dict[str, Any]) -> dict[str, Any]:
         if source:
             sources.append(str(source))
         if text:
-            statement = _with_source(text, str(source))
+            # Media hits carry a tag so the model can tell them from the same
+            # phrase indexed as text; the tag stays before "(source:" because
+            # /context parses the file name out of that suffix.
+            modality = str(meta.get("modality") or "")
+            tag = f" [{modality}]" if modality in {"video", "image"} else ""
+            statement = _with_source(f"{text}{tag}", str(source))
             parts.append(f"[{len(parts) + 1}] {statement}")
             evidence.append({"source": str(source), "text": text})
     return {

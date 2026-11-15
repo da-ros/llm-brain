@@ -68,6 +68,68 @@ ignore:
           attacker-controlled archives.
         expires: '2027-01-01T00:00:00.000Z'
 
+  # transformers - Arbitrary Code Injection / Deserialization of Untrusted
+  # Data / Incorrect Authorization when loading model weights from an
+  # untrusted source (torch.load/pickle). No fix available in any release
+  # including 5.23.0. The llm service only loads local Qwen weights from
+  # the trusted host directory, never remote repos or user uploads.
+  SNYK-PYTHON-TRANSFORMERS-14560695:
+    - transformers@5.16.1:
+        reason: >-
+          No fix available in any transformers release. Requires loading
+          model weights from an untrusted source; this project only loads
+          local Qwen weights from the trusted host directory.
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-TRANSFORMERS-14563374:
+    - transformers@5.16.1:
+        reason: >-
+          No fix available in any transformers release. Requires loading
+          model weights from an untrusted source; this project only loads
+          local Qwen weights from the trusted host directory.
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-TRANSFORMERS-14564275:
+    - transformers@5.16.1:
+        reason: >-
+          No fix available in any transformers release. Requires loading
+          model weights from an untrusted source; this project only loads
+          local Qwen weights from the trusted host directory.
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-TRANSFORMERS-14564363:
+    - transformers@5.16.1:
+        reason: >-
+          No fix available in any transformers release. Requires loading
+          model weights from an untrusted source; this project only loads
+          local Qwen weights from the trusted host directory.
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-TRANSFORMERS-14564364:
+    - transformers@5.16.1:
+        reason: >-
+          No fix available in any transformers release. Requires loading
+          model weights from an untrusted source; this project only loads
+          local Qwen weights from the trusted host directory.
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-TRANSFORMERS-14564365:
+    - transformers@5.16.1:
+        reason: >-
+          No fix available in any transformers release. Requires loading
+          model weights from an untrusted source; this project only loads
+          local Qwen weights from the trusted host directory.
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-TRANSFORMERS-14564366:
+    - transformers@5.16.1:
+        reason: >-
+          No fix available in any transformers release. Requires loading
+          model weights from an untrusted source; this project only loads
+          local Qwen weights from the trusted host directory.
+        expires: '2027-03-28T00:00:00.000Z'
+  SNYK-PYTHON-TRANSFORMERS-19500670:
+    - transformers@5.16.1:
+        reason: >-
+          No fix available in any transformers release. Requires loading
+          model weights from an untrusted source; this project only loads
+          local Qwen weights from the trusted host directory.
+        expires: '2027-03-28T00:00:00.000Z'
+
   # ============================================================
   # Debian 13 (trixie) Base Image Vulnerabilities
   # ============================================================
