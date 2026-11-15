@@ -16,6 +16,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NITRO_PORT=3000
 RUN apt-get update \
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
         /opt/yarn* \
         /usr/local/lib/node_modules/npm \

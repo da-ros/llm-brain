@@ -314,6 +314,41 @@ ignore:
     - '*':
         reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-EXPAT-21762794:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-EXPAT-21762798:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+
+  # krb5 (libk5crypto3) - latest trixie version 1.21.3-5+deb13u1 still
+  # vulnerable per Debian Security Tracker; fix not yet published
+  SNYK-DEBIAN13-KRB5-22384443:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-KRB5-22384445:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-KRB5-22384446:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-KRB5-22384456:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-KRB5-22398894:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-KRB5-22398919:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
 
   # librsvg
   SNYK-DEBIAN13-LIBRSVG-20079484:

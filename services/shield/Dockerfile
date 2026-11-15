@@ -3,7 +3,7 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # tesseract reads the text on a screenshot. eng+spa matches the OCR call.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
     tesseract-ocr \
     tesseract-ocr-eng \

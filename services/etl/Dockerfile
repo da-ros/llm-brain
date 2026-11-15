@@ -5,7 +5,7 @@ WORKDIR /app
 # libmagic = python-magic MIME detection.
 # tesseract/poppler/ffmpeg = photo OCR, scanned-PDF OCR, and video.
 # Photos and scanned pages are read with Tesseract directly.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
     libmagic1 \
     tesseract-ocr \
