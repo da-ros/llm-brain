@@ -354,6 +354,7 @@ class TestHydration:
             "The accessibility allocation is $760."
         )
         assert parse_rag_text(text)["monthly_spend"] == 2400.0
+
     def test_rag_hit_parses_sleep(self, client):
         RecordingClient.rag_results = [
             {"document": "I slept 6 hours last night", "metadata": {"source": "diary-1"}}

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from base import documents_to_content, first_page, first_section, load, source_name
+from calendar_events import event_triples
 from config import get_settings
 from exceptions import (
     CorruptFileError,
@@ -16,7 +17,6 @@ from exceptions import (
 from jsonl import write_triples
 from llm_client import LLMServiceClient, TripleExtractor
 from logging_setup import log_with_correlation
-from calendar_events import event_triples
 from triples import Triple, enrich_metadata, triple_from_llm
 
 _IMAGE_SUFFIXES = {
