@@ -134,12 +134,6 @@ ignore:
   # Debian 13 (trixie) Base Image Vulnerabilities
   # ============================================================
 
-  # zlib - Out-of-bounds Write (affects all services)
-  SNYK-DEBIAN13-ZLIB-19520500:
-    - '*':
-        reason: No fixed version available for Debian 13 (trixie).
-        expires: '2027-01-01T00:00:00.000Z'
-
   # attr - Link Following (affects all services)
   SNYK-DEBIAN13-ATTR-17678182:
     - '*':
@@ -306,14 +300,6 @@ ignore:
         expires: '2027-01-01T00:00:00.000Z'
 
   # expat
-  SNYK-DEBIAN13-EXPAT-19964593:
-    - '*':
-        reason: No fixed version available for Debian 13.
-        expires: '2027-01-01T00:00:00.000Z'
-  SNYK-DEBIAN13-EXPAT-20514789:
-    - '*':
-        reason: No fixed version available for Debian 13.
-        expires: '2027-01-01T00:00:00.000Z'
   SNYK-DEBIAN13-EXPAT-21762794:
     - '*':
         reason: No fixed version available for Debian 13.
@@ -346,12 +332,6 @@ ignore:
         reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
   SNYK-DEBIAN13-KRB5-22398919:
-    - '*':
-        reason: No fixed version available for Debian 13.
-        expires: '2027-01-01T00:00:00.000Z'
-
-  # librsvg
-  SNYK-DEBIAN13-LIBRSVG-20079484:
     - '*':
         reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
