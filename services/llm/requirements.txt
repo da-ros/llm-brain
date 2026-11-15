@@ -2,3 +2,6 @@ fastapi==0.141.1
 uvicorn==0.54.0
 pydantic-settings==2.15.0
 httpx==0.28.1
+# Visual tests patch transformers.video_utils.load_video; real inference on the
+# host still adds torch/torchvision/Pillow on top of this.
+transformers==5.16.1
