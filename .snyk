@@ -246,6 +246,28 @@ ignore:
     - '*':
         reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
+  # New advisories: image already installs the latest trixie candidate
+  # 7:7.1.5-0+deb13u1 (from trixie-security) and it is still flagged.
+  SNYK-DEBIAN13-FFMPEG-22549958:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22549968:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22550014:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22556224:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22556239:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
 
   # libxml2 - Multiple CVEs
   SNYK-DEBIAN13-LIBXML2-19540211:
