@@ -255,8 +255,8 @@ class TestTrainEndpoint:
         assert response.status_code == 404
 
     def test_publish_rejects_a_second_pack(self, monkeypatch):
-        from config import get_settings
         from fastapi.testclient import TestClient
+        from config import get_settings
         from main import app
 
         adapter = Path(get_settings().ADAPTER_OUTPUT_DIR) / "user-a" / "adapter"

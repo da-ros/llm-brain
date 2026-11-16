@@ -2932,8 +2932,9 @@ class TestAccount:
     def test_an_old_token_still_opens_the_account(self, client, monkeypatch):
         from datetime import timedelta
 
-        from auth import verify_token
         from fastapi.security import HTTPAuthorizationCredentials
+
+        from auth import verify_token
 
         settings = get_settings()
         monkeypatch.setattr(settings, "JWT_EXPIRATION_MINUTES", 0)

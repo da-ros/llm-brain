@@ -213,7 +213,9 @@ async def chat(
         log_with_correlation(correlation_id, "info", "Calling Agents Service POST /reason")
         try:
             data = await _agents_reason(
-                message=_agents_message(history, chat_request.message, chat_request.memory_name),
+                message=_agents_message(
+                    history, chat_request.message, chat_request.memory_name
+                ),
                 search_query=_standalone_search(
                     history, chat_request.message, chat_request.memory_name
                 ),
@@ -286,7 +288,9 @@ async def chat(
         log_with_correlation(correlation_id, "info", "Calling RAG Service for context")
         try:
             context, sources = await _rag_context(
-                message=_standalone_search(history, chat_request.message, chat_request.memory_name),
+                message=_standalone_search(
+                    history, chat_request.message, chat_request.memory_name
+                ),
                 user_id=user_id,
                 correlation_id=correlation_id,
                 rag_url=settings.RAG_SERVICE_URL,
@@ -554,7 +558,9 @@ def _memory_line(name: str) -> str:
     cleaned = _memory_name(name)
     if not cleaned:
         return ""
-    return f"The user is asking about the memory file {cleaned}. Prefer facts from that file."
+    return (
+        f"The user is asking about the memory file {cleaned}. Prefer facts from that file."
+    )
 
 
 def _search_text(message: str, memory_name: str) -> str:

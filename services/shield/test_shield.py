@@ -236,8 +236,9 @@ class TestScan:
     def test_a_wide_image_is_stored_sharp_enough_to_enlarge(self):
         import io
 
-        import scan
         from PIL import Image
+
+        import scan
 
         picture = io.BytesIO()
         Image.new("RGB", (4000, 900), (12, 40, 80)).save(picture, format="PNG")
