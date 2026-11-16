@@ -11,6 +11,8 @@ jobs:
     name: Build Images → Snyk Image Scan
     runs-on: ubuntu-latest
     strategy:
+      # One failing scan must not cancel the rest — every image reports.
+      fail-fast: false
       matrix:
         include:
           - service: api-router
