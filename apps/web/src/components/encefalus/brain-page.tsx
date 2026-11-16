@@ -590,7 +590,9 @@ export function BrainPage() {
           message: text,
           use_rag: premium,
           session_id: chatId,
-          ...(memoryRef ? { memory_id: memoryRef.id, memory_name: memoryRef.name } : {}),
+          ...(memoryRef
+            ? { memory_id: memoryRef.id, memory_name: memoryRef.name }
+            : {}),
           ...(attached.length
             ? {
                 attachments: attached.map((item) => ({

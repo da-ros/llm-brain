@@ -814,7 +814,9 @@ class TestKafkaJob:
             _clip_summary(triples)
             == "Nora Vega occupation interaction designer; Nora Vega location Bellwater"
         )
-        clipped = _clip_summary([SimpleNamespace(subject="A", predicate="b", object="c" * 300)])
+        clipped = _clip_summary(
+            [SimpleNamespace(subject="A", predicate="b", object="c" * 300)]
+        )
         assert len(clipped) == 250
         assert clipped.endswith("...")
 

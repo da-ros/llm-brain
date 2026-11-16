@@ -217,19 +217,12 @@ def expand_same_note(
     """
     loaded: dict[tuple[str, str], list[dict]] = {}
     output: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
 
     def remember(item: dict[str, Any]) -> bool:
         metadata = item.get("metadata") or {}
         text = str(item.get("document") or "")
-        # modality in the key: a photo/video vector and its extracted text share
-        # doc_id, source, and phrase but are separate items the model must see.
-        key = (
-            str(metadata.get("doc_id") or ""),
-            str(metadata.get("source") or ""),
-            str(metadata.get("modality") or ""),
-            text,
-        )
+        key = (str(metadata.get("doc_id") or ""), str(metadata.get("source") or ""), text)
         if not text or key in seen:
             return False
         seen.add(key)
@@ -611,12 +604,7 @@ class RAGService:
             meta = result.get("metadata") or {}
             text = result.get("document") or meta.get("chunk_text") or meta.get("text") or ""
             source = meta.get("source") or meta.get("gridfs_id") or "unknown"
-            # Media hits carry a tag so the model can tell them from the same
-            # phrase indexed as text; the tag stays before "(source:" because
-            # /context parses the file name out of that suffix.
-            modality = str(meta.get("modality") or "")
-            tag = f" [{modality}]" if modality in {"video", "image"} else ""
-            parts.append(f"[{index}] {text}{tag} (source: {source})")
+            parts.append(f"[{index}] {text} (source: {source})")
         return "\n".join(parts)
 
     async def delete_document_embeddings(self, doc_id: str, user_id: str) -> int:

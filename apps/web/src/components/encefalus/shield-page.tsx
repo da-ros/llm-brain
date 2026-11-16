@@ -277,9 +277,7 @@ export function ShieldPage() {
               <FileUp className="size-5 shrink-0 text-primary" />
               <span className="min-w-0">
                 <b className="block truncate text-xs">{file ? file.name : "Add attachment"}</b>
-                <span className="text-[11px] text-muted-foreground">
-                  Image or video · max 20 MB
-                </span>
+                <span className="text-[11px] text-muted-foreground">Image or video · max 20 MB</span>
               </span>
               <input
                 ref={fileInput}
@@ -337,28 +335,28 @@ export function ShieldPage() {
               scans.map((scan) => {
                 const thumb = previewSrc(scan.preview);
                 return (
-                  <div
-                    key={scan.id}
-                    className={`grid w-full items-center gap-2 border-b border-border px-4 py-3 last:border-0 hover:bg-muted/40 ${thumb ? "grid-cols-[auto_minmax(0,1fr)_auto_auto]" : "grid-cols-[minmax(0,1fr)_auto_auto]"}`}
+                <div
+                  key={scan.id}
+                  className={`grid w-full items-center gap-2 border-b border-border px-4 py-3 last:border-0 hover:bg-muted/40 ${thumb ? "grid-cols-[auto_minmax(0,1fr)_auto_auto]" : "grid-cols-[minmax(0,1fr)_auto_auto]"}`}
+                >
+                  {thumb && <ScanThumb scan={scan} />}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(scan.id)}
+                    className="truncate text-left text-xs"
                   >
-                    {thumb && <ScanThumb scan={scan} />}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(scan.id)}
-                      className="truncate text-left text-xs"
-                    >
-                      {scan.summary || "Scan"}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Delete scan"
-                      onClick={() => void remove(scan.id)}
-                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                    <StatusDot label={severityLabel(scan.severity)} tone={tone(scan.severity)} />
-                  </div>
+                    {scan.summary || "Scan"}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete scan"
+                    onClick={() => void remove(scan.id)}
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                  <StatusDot label={severityLabel(scan.severity)} tone={tone(scan.severity)} />
+                </div>
                 );
               })
             )}
@@ -520,7 +518,11 @@ function ScanThumb({ scan }: { scan: Scan }) {
   const src = previewSrc(scan.preview);
   if (!src) return <span className="size-10" />;
   return (
-    <img src={src} alt="" className="size-10 rounded border border-border bg-muted object-cover" />
+    <img
+      src={src}
+      alt=""
+      className="size-10 rounded border border-border bg-muted object-cover"
+    />
   );
 }
 
