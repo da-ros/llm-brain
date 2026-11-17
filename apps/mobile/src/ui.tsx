@@ -1,10 +1,10 @@
-import {Image, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
+import {Animated, Easing, Image, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 
 import {Glass} from './glass';
 import {Icon} from './icons';
 import {typeScale as scale, type Palette} from './theme';
 import {BrainContext, ThemeContext, useBrain, useSnapshot, useTheme} from './context';
-import type {ComponentType, ReactNode} from 'react';
+import {useEffect, useRef, type ComponentType, type ReactNode} from 'react';
 import type {IconProps} from './icons';
 
 const mark = require('./assets/encefalus-mark.png');
@@ -111,18 +111,31 @@ export function MutedButton({
   onPress,
   label,
   icon: Glyph,
+  spinning = false,
+  disabled = false,
 }: {
   title: string;
   subtitle: string;
   onPress: () => void;
   label?: string;
   icon?: ComponentType<IconProps>;
+  spinning?: boolean;
+  disabled?: boolean;
 }) {
   const theme = useTheme();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label ?? title} onPress={onPress}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label ?? title}
+      accessibilityState={{disabled, busy: spinning}}
+      disabled={disabled}
+      onPress={onPress}>
       <Glass radius={20} contentStyle={styles.tile}>
-        {Glyph ? <Glyph size={22} color={theme.text} strokeWidth={2} /> : null}
+        {Glyph ? (
+          <Spinning spinning={spinning}>
+            <Glyph size={22} color={theme.text} strokeWidth={2} />
+          </Spinning>
+        ) : null}
         <View style={styles.tileText}>
           <Text style={[styles.rowTitle, {color: theme.text}]}>{title}</Text>
           <Text style={[styles.rowSub, {color: theme.muted}]}>{subtitle}</Text>
@@ -131,6 +144,31 @@ export function MutedButton({
       </Glass>
     </Pressable>
   );
+}
+
+function Spinning({spinning, children}: {spinning: boolean; children: ReactNode}) {
+  const turn = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!spinning) {
+      turn.setValue(0);
+      return;
+    }
+    const animation = Animated.loop(
+      Animated.timing(turn, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [spinning, turn]);
+  if (!spinning) {
+    return <>{children}</>;
+  }
+  const rotate = turn.interpolate({inputRange: [0, 1], outputRange: ['0deg', '360deg']});
+  return <Animated.View style={{transform: [{rotate}]}}>{children}</Animated.View>;
 }
 
 const styles = StyleSheet.create({

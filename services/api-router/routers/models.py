@@ -40,6 +40,7 @@ def _empty(tier: str) -> dict:
         "filename": "",
         "bytes": 0,
         "sha256": "",
+        "tag": "",
         "ready": False,
     }
 
@@ -78,6 +79,7 @@ def _load(directory: Path) -> tuple[dict, Path] | None:
         "filename": filename,
         "bytes": declared,
         "sha256": digest,
+        "tag": str(manifest.get("tag") or ""),
         "ready": True,
     }
     return body, weight

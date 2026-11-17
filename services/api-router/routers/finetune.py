@@ -69,9 +69,32 @@ async def trigger_finetune(
     }
 
 
+def _adapter_dir(user_id: str) -> Path:
+    return Path(get_settings().ONDEVICE_MODEL_DIR).parent / "models" / user_id / "adapter"
+
+
 def _adapter_ready(user_id: str) -> bool:
-    adapter = Path(get_settings().ONDEVICE_MODEL_DIR).parent / "models" / user_id / "adapter"
-    return (adapter / "adapter_config.json").is_file()
+    return (_adapter_dir(user_id) / "adapter_config.json").is_file()
+
+
+def _adapter_mtime(user_id: str) -> float | None:
+    directory = _adapter_dir(user_id)
+    times = [
+        path.stat().st_mtime
+        for path in (directory / "adapter_model.safetensors", directory / "adapter_config.json")
+        if path.is_file()
+    ]
+    return max(times) if times else None
+
+
+def _already_merged(user_id: str, directory: Path) -> bool:
+    """True when the Q4 file was written after the adapter that is on disk now."""
+    loaded = _load(directory)
+    adapted = _adapter_mtime(user_id)
+    if loaded is None or adapted is None:
+        return False
+    _manifest, weight = loaded
+    return weight.stat().st_mtime >= adapted
 
 
 def _publish_state(user_id: str) -> dict:
@@ -97,6 +120,7 @@ def _publish_state(user_id: str) -> dict:
         "error": body["error"],
         "ready": ready,
         "adapter": _adapter_ready(user_id),
+        "merged": _already_merged(user_id, directory),
     }
 
 
@@ -126,6 +150,11 @@ async def publish_on_device_pack(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Fine-tune this account before publishing the iPhone model.",
+        )
+    if _already_merged(user_id, _directory("premium", user_id)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This adapter is already merged.",
         )
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:

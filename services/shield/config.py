@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     LLM_MODEL_ID: str = "Qwen3.5-4B"
 
     RAG_TIMEOUT_SECONDS: float = 10.0
+    # The vision embedder runs on CPU inside Docker and took ~15s on a screenshot.
+    RAG_IMAGE_TIMEOUT_SECONDS: float = 20.0
+    # Video embeds sample three frames, so they wait longer than one image.
+    RAG_VIDEO_TIMEOUT_SECONDS: float = 60.0
     LLM_TIMEOUT_SECONDS: float = 600.0
 
     MONGODB_URI: str = "mongodb://localhost:27017"

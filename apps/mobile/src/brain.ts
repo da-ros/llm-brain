@@ -1,10 +1,10 @@
-import {NativeModules} from 'react-native';
+import {NativeEventEmitter, NativeModules} from 'react-native';
 
 import {ApiError, RouterApi} from './api';
 import {checksum, toBase64} from './bytes';
 import {API_BASE_URL} from './config';
 import {createEngine, type OnDeviceEngine} from './engine';
-import {buildPrompt, extractText, isImage} from './files';
+import {buildPrompt, extractText, isImage, splitThinking} from './files';
 import {
   emptyPersisted,
   MemoryKeychain,
@@ -36,9 +36,11 @@ export type Snapshot = {
   loraPack: Pack | null;
   cacheBytes: number;
   error: string | null;
+  packError: string | null;
   notice: string | null;
   sending: boolean;
   pending: string | null;
+  downloading: {received: number; total: number} | null;
   confirmUpgrade: boolean;
   confirmClear: boolean;
 };
@@ -58,9 +60,11 @@ function emptySnapshot(): Snapshot {
     loraPack: null,
     cacheBytes: 0,
     error: null,
+    packError: null,
     notice: null,
     sending: false,
     pending: null,
+    downloading: null,
     confirmUpgrade: false,
     confirmClear: false,
   };
@@ -109,6 +113,7 @@ export class Brain {
     }
     this.snapshot.ready = true;
     this.commit();
+    void this.refreshInstalledTag();
   }
 
   async signIn(email: string, password: string): Promise<void> {
@@ -143,8 +148,7 @@ export class Brain {
   newThread(): void {
     const thread = blankThread();
     this.snapshot.threads = [thread, ...this.snapshot.threads];
-    this.snapshot.activeId = thread.id;
-    this.snapshot.error = null;
+    this.activateThread(thread.id);
     this.commit();
     void this.persistUser();
   }
@@ -153,8 +157,7 @@ export class Brain {
     if (!this.snapshot.threads.some(thread => thread.id === id)) {
       return;
     }
-    this.snapshot.activeId = id;
-    this.snapshot.error = null;
+    this.activateThread(id);
     this.commit();
     void this.persistUser();
   }
@@ -168,9 +171,8 @@ export class Brain {
     const remaining = this.snapshot.threads.filter(item => item.id !== id);
     this.snapshot.threads = remaining;
     if (this.snapshot.activeId === id) {
-      this.snapshot.activeId = remaining[0]?.id ?? null;
+      this.activateThread(remaining[0]?.id ?? null);
     }
-    this.snapshot.error = null;
     this.commit();
     await this.persistUser();
     if (!serverChatId) {
@@ -352,27 +354,35 @@ export class Brain {
   }
 
   async reinstall(): Promise<void> {
+    if (this.snapshot.downloading) {
+      return;
+    }
     this.syncToken();
     const previousBase = this.snapshot.basePack;
     const previousLora = this.snapshot.loraPack;
+    this.snapshot.error = null;
+    this.snapshot.packError = null;
+    this.snapshot.notice = null;
     try {
       const meta = await this.deps.api.get<{
         id: string;
         filename: string;
         sha256: string;
         ready: boolean;
+        bytes?: number;
+        tag?: string;
       }>('/api/models/on-device');
       if (!meta.ready || !meta.filename || !meta.sha256) {
-        this.snapshot.error = 'The on-device pack is not ready.';
-        this.commit();
+        this.snapshot.packError = 'The on-device pack is not ready.';
         return;
       }
+      this.snapshot.downloading = {received: 0, total: Number(meta.bytes) || 0};
+      this.commit();
       const pack = await this.fetchPack(meta);
       if (!pack) {
         this.snapshot.basePack = previousBase;
         this.snapshot.loraPack = previousLora;
-        this.snapshot.error = 'The download did not match its checksum. The installed pack was kept.';
-        this.commit();
+        this.snapshot.packError = 'The download did not match its checksum. The installed pack was kept.';
         return;
       }
       if (this.snapshot.user?.plan === 'premium') {
@@ -384,37 +394,73 @@ export class Brain {
         this.snapshot.basePack = pack;
         this.persisted.basePack = pack;
       }
-      this.snapshot.error = null;
+      this.snapshot.packError = null;
       this.snapshot.notice = 'Model installed.';
       await this.deps.store.save(this.persisted);
-      this.commit();
     } catch (error) {
       this.snapshot.basePack = previousBase;
       this.snapshot.loraPack = previousLora;
-      this.fail(error, 'The download failed. The installed pack was kept.');
+      this.snapshot.packError =
+        error instanceof Error && error.message
+          ? error.message
+          : 'The download failed. The installed pack was kept.';
+    } finally {
+      this.snapshot.downloading = null;
+      this.commit();
     }
   }
 
-  private async fetchPack(meta: {id: string; filename: string; sha256: string}): Promise<Pack | null> {
+  async refreshInstalledTag(): Promise<void> {
+    if (!this.snapshot.token) {
+      return;
+    }
+    const pack = this.snapshot.user?.plan === 'premium' ? this.snapshot.loraPack : this.snapshot.basePack;
+    if (!pack) {
+      return;
+    }
+    try {
+      const meta = await this.deps.api.get<{ready?: boolean; sha256?: string; tag?: string}>(
+        '/api/models/on-device',
+      );
+      const tag = meta.tag?.trim() ?? '';
+      if (!meta.ready || !tag || meta.sha256?.toLowerCase() !== pack.sha256.toLowerCase() || pack.tag === tag) {
+        return;
+      }
+      pack.tag = tag;
+      await this.persistUser();
+      this.commit();
+    } catch {
+      // The last saved tag stays on screen when the catalog is unreachable.
+    }
+  }
+
+  private async fetchPack(meta: {id: string; filename: string; sha256: string; tag?: string}): Promise<Pack | null> {
     const expected = meta.sha256.toLowerCase();
     if (this.deps.files.download) {
       const saved = await this.deps.files.download(
         `${API_BASE_URL}/api/models/on-device/file`,
         meta.filename,
         this.snapshot.token,
+        (received, total) => {
+          this.snapshot.downloading = {
+            received,
+            total: total > 0 ? total : this.snapshot.downloading?.total ?? 0,
+          };
+          this.commit();
+        },
       );
       if (saved.sha256.toLowerCase() !== expected) {
         await this.deps.files.remove(saved.path);
         return null;
       }
-      return {id: meta.id, path: saved.path, bytes: saved.bytes, sha256: expected};
+      return {id: meta.id, path: saved.path, bytes: saved.bytes, sha256: expected, tag: packTag(meta.tag)};
     }
     const bytes = await this.deps.api.file('/api/models/on-device/file');
     if (checksum(bytes) !== expected) {
       return null;
     }
     const path = await this.deps.files.write(meta.filename, bytes);
-    return {id: meta.id, path, bytes: bytes.byteLength, sha256: expected};
+    return {id: meta.id, path, bytes: bytes.byteLength, sha256: expected, tag: packTag(meta.tag)};
   }
 
   onDevice(): boolean {
@@ -445,6 +491,15 @@ export class Brain {
     return packs + this.snapshot.cacheBytes + files;
   }
 
+  private activateThread(id: string | null): void {
+    const changed = id !== this.snapshot.activeId;
+    this.snapshot.activeId = id;
+    this.snapshot.error = null;
+    if (changed) {
+      void this.deps.engine.beginChat();
+    }
+  }
+
   private async sendOnDevice(thread: Thread, question: string): Promise<boolean> {
     const choice = this.devicePack();
     if (!choice.pack) {
@@ -454,7 +509,7 @@ export class Brain {
     }
     try {
       await this.deps.engine.load(choice.pack);
-      const result = await this.deps.engine.generate(buildPrompt(question, thread.files));
+      const result = await this.deps.engine.generate(buildPrompt(question, thread.files, thread.turns));
       const correlationId = `mobile-${Date.now().toString(16)}`;
       const timestamp = new Date().toISOString().slice(0, 19);
       console.info(
@@ -464,7 +519,12 @@ export class Brain {
       if (choice.fallback) {
         thread.turns.push({role: 'note', text: PERSONAL_NOTE});
       }
-      thread.turns.push({role: 'assistant', text: result.text});
+      const parts = splitThinking(result.text);
+      thread.turns.push({
+        role: 'assistant',
+        text: parts.answer,
+        ...(parts.thinking ? {thinking: parts.thinking} : {}),
+      });
       this.snapshot.error = null;
       this.commit();
       await this.persistUser();
@@ -560,7 +620,7 @@ export class Brain {
     }
     const thread = blankThread();
     this.snapshot.threads = [thread, ...this.snapshot.threads];
-    this.snapshot.activeId = thread.id;
+    this.activateThread(thread.id);
     return thread;
   }
 
@@ -618,6 +678,11 @@ export function createBrain(overrides: Partial<BrainDeps> = {}): Brain {
   });
 }
 
+function packTag(tag: string | undefined): string | undefined {
+  const trimmed = tag?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 function createKeychain(): Keychain {
   const native = NativeModules.EncefalusKeychain as
     | {get: () => Promise<string>; set: (value: string) => Promise<boolean>; clear: () => Promise<boolean>}
@@ -665,7 +730,11 @@ function createPackFiles(): PackFiles {
     | {
         writePack: (filename: string, base64: string) => Promise<string>;
         remove: (path: string) => Promise<boolean>;
-        downloadPack?: (url: string, filename: string, token: string) => Promise<{path: string; bytes: number; sha256: string}>;
+        downloadPack?: (
+          url: string,
+          filename: string,
+          token: string,
+        ) => Promise<{path: string; bytes: number; sha256: string}>;
       }
     | undefined;
   if (!native?.writePack) {
@@ -679,7 +748,16 @@ function createPackFiles(): PackFiles {
       await native.remove(path);
     },
     download: native.downloadPack
-      ? (url, filename, token) => native.downloadPack!(url, filename, token ?? '')
+      ? (url, filename, token, onProgress) => {
+          const emitter = new NativeEventEmitter(NativeModules.EncefalusSandbox);
+          const subscription = emitter.addListener(
+            'EncefalusPackProgress',
+            (event: {received?: number; total?: number}) => {
+              onProgress?.(Number(event?.received ?? 0), Number(event?.total ?? 0));
+            },
+          );
+          return native.downloadPack!(url, filename, token ?? '').finally(() => subscription.remove());
+        }
       : undefined,
   };
 }

@@ -67,8 +67,14 @@ class EncefalusKeychain: NSObject {
 }
 
 @objc(EncefalusSandbox)
-class EncefalusSandbox: NSObject {
-  @objc static func requiresMainQueueSetup() -> Bool { false }
+class EncefalusSandbox: RCTEventEmitter {
+  private var transfer: PackTransfer?
+
+  override func supportedEvents() -> [String]! {
+    ["EncefalusPackProgress"]
+  }
+
+  @objc override static func requiresMainQueueSetup() -> Bool { false }
 
   private func documents() -> URL {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -145,44 +151,44 @@ class EncefalusSandbox: NSObject {
       reject("pack", "Pack filename was not valid", nil)
       return
     }
+    if transfer != nil {
+      reject("pack", "A download is already running.", nil)
+      return
+    }
     var request = URLRequest(url: url)
+    request.timeoutInterval = 30 * 60
     if !token.isEmpty {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
-    let config = URLSessionConfiguration.ephemeral
-    config.timeoutIntervalForRequest = 120
-    config.timeoutIntervalForResource = 6 * 60 * 60
-    let session = URLSession(configuration: config)
-    let task = session.downloadTask(with: request) { temp, response, error in
-      session.finishTasksAndInvalidate()
-      if let error {
-        reject("pack", "The download failed. The installed pack was kept.", error)
-        return
-      }
-      guard let http = response as? HTTPURLResponse, (200 ... 299).contains(http.statusCode), let temp else {
-        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        reject("pack", "The download failed (\(code)). The installed pack was kept.", nil)
-        return
-      }
-      do {
-        let digest = try Self.sha256File(temp)
-        let dir = self.documents().appendingPathComponent("packs", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let dest = dir.appendingPathComponent(safeName)
-        if FileManager.default.fileExists(atPath: dest.path) {
-          try FileManager.default.removeItem(at: dest)
-        }
-        try FileManager.default.moveItem(at: temp, to: dest)
-        let size = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? NSNumber)?.intValue ?? 0
-        resolve(["path": dest.path, "bytes": size, "sha256": digest])
-      } catch {
-        reject("pack", "Unable to store the pack", error)
-      }
+    let dir = documents().appendingPathComponent("packs", isDirectory: true)
+    do {
+      try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    } catch {
+      reject("pack", "Unable to store the pack", error)
+      return
     }
-    task.resume()
+    let config = URLSessionConfiguration.default
+    config.timeoutIntervalForRequest = 30 * 60
+    config.timeoutIntervalForResource = 6 * 60 * 60
+    config.waitsForConnectivity = true
+    let transfer = PackTransfer(
+      destination: dir.appendingPathComponent(safeName),
+      resolve: resolve,
+      reject: reject,
+      emit: { [weak self] received, total in
+        self?.sendEvent(withName: "EncefalusPackProgress", body: ["received": received, "total": total])
+      },
+      finished: { [weak self] in
+        self?.transfer = nil
+      }
+    )
+    self.transfer = transfer
+    let session = URLSession(configuration: config, delegate: transfer, delegateQueue: nil)
+    transfer.session = session
+    session.downloadTask(with: request).resume()
   }
 
-  private static func sha256File(_ url: URL) throws -> String {
+  static func sha256File(_ url: URL) throws -> String {
     let handle = try FileHandle(forReadingFrom: url)
     defer { try? handle.close() }
     var hasher = SHA256()
@@ -194,6 +200,113 @@ class EncefalusSandbox: NSObject {
       hasher.update(data: chunk)
     }
     return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+  }
+}
+
+/// Keeps the URLSession alive and reports bytes while the GGUF is written.
+private final class PackTransfer: NSObject, URLSessionDownloadDelegate {
+  var session: URLSession?
+  private let destination: URL
+  private let resolve: RCTPromiseResolveBlock
+  private let reject: RCTPromiseRejectBlock
+  private let emit: (Int64, Int64) -> Void
+  private let finished: () -> Void
+  private var partial: URL?
+  private var lastEmit = Date.distantPast
+  private var settled = false
+
+  init(
+    destination: URL,
+    resolve: @escaping RCTPromiseResolveBlock,
+    reject: @escaping RCTPromiseRejectBlock,
+    emit: @escaping (Int64, Int64) -> Void,
+    finished: @escaping () -> Void
+  ) {
+    self.destination = destination
+    self.resolve = resolve
+    self.reject = reject
+    self.emit = emit
+    self.finished = finished
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didWriteData bytesWritten: Int64,
+    totalBytesWritten: Int64,
+    totalBytesExpectedToWrite: Int64
+  ) {
+    let now = Date()
+    let done = totalBytesExpectedToWrite > 0 && totalBytesWritten >= totalBytesExpectedToWrite
+    if !done && now.timeIntervalSince(lastEmit) < 0.25 {
+      return
+    }
+    lastEmit = now
+    let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : 0
+    DispatchQueue.main.async {
+      self.emit(totalBytesWritten, total)
+    }
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didFinishDownloadingTo location: URL
+  ) {
+    let partial = destination.deletingLastPathComponent().appendingPathComponent(".\(destination.lastPathComponent).partial")
+    do {
+      if FileManager.default.fileExists(atPath: partial.path) {
+        try FileManager.default.removeItem(at: partial)
+      }
+      try FileManager.default.moveItem(at: location, to: partial)
+      self.partial = partial
+    } catch {
+      self.partial = nil
+    }
+  }
+
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    session.finishTasksAndInvalidate()
+    DispatchQueue.main.async {
+      self.settle(task: task, error: error)
+    }
+  }
+
+  private func settle(task: URLSessionTask, error: Error?) {
+    if settled {
+      return
+    }
+    settled = true
+    defer { finished() }
+    if let error {
+      removePartial()
+      reject("pack", "The download failed. The installed pack was kept.", error)
+      return
+    }
+    guard let http = task.response as? HTTPURLResponse, (200 ... 299).contains(http.statusCode), let partial else {
+      removePartial()
+      let code = (task.response as? HTTPURLResponse)?.statusCode ?? 0
+      reject("pack", "The download failed (\(code)). The installed pack was kept.", nil)
+      return
+    }
+    do {
+      let digest = try EncefalusSandbox.sha256File(partial)
+      if FileManager.default.fileExists(atPath: destination.path) {
+        try FileManager.default.removeItem(at: destination)
+      }
+      try FileManager.default.moveItem(at: partial, to: destination)
+      let size = (try? FileManager.default.attributesOfItem(atPath: destination.path)[.size] as? NSNumber)?.int64Value ?? 0
+      resolve(["path": destination.path, "bytes": size, "sha256": digest])
+    } catch {
+      removePartial()
+      reject("pack", "Unable to store the pack", error)
+    }
+  }
+
+  private func removePartial() {
+    if let partial, FileManager.default.fileExists(atPath: partial.path) {
+      try? FileManager.default.removeItem(at: partial)
+    }
   }
 }
 

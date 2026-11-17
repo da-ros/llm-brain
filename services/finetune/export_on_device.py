@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import urllib.request
 from pathlib import Path
@@ -69,8 +70,38 @@ def _write_pack(
     }
     if user_id is not None:
         manifest["user_id"] = user_id
+        tag = installed_tag(user_id)
+        if tag:
+            manifest["tag"] = tag
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
+
+
+def installed_tag(user_id: str, log_dir: Path | None = None) -> str:
+    """The newest completed fine-tune tag for this account, such as qwen3.5-4b-lora-v5."""
+    directory = log_dir if log_dir is not None else Path(__file__).resolve().parents[2] / "data" / "training_logs"
+    if not user_id or not directory.is_dir():
+        return ""
+    best_at = ""
+    best = ""
+    for path in directory.glob("ft-job-*.md"):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if _log_field(text, "user_id") != user_id:
+            continue
+        version = _log_field(text, "model_version")
+        completed = _log_field(text, "completed_at")
+        if version and completed >= best_at:
+            best_at = completed
+            best = version
+    return best
+
+
+def _log_field(text: str, name: str) -> str:
+    match = re.search(rf"^- \*\*{re.escape(name)}\*\*: (.+)$", text, re.MULTILINE)
+    return match.group(1).strip() if match else ""
 
 
 def _fetch_base_gguf(dest: Path) -> None:
@@ -144,6 +175,9 @@ def _manifest(
     }
     if user_id is not None:
         manifest["user_id"] = user_id
+        tag = installed_tag(user_id)
+        if tag:
+            manifest["tag"] = tag
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
 

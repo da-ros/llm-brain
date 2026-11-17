@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { BrainCircuit, Check, Database, MessageSquare, Smartphone, Sparkles } from "lucide-react";
+import { BrainCircuit, Check, Database, Loader2, MessageSquare, Smartphone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Metric,
   Notice,
@@ -12,8 +13,24 @@ import {
 import { useAccount } from "@/lib/account";
 
 type Batch = { id: string; status: string; items: number; needed: number };
-type Job = { id: string; status: string; phase: string; model_version: string };
-type Cycle = { id: string; version: string; date: string; signals: number; status: string };
+type RunMetrics = {
+  epoch?: number | null;
+  epochs?: number | null;
+  loss?: number | null;
+  rank?: number | null;
+  max_epochs?: number | null;
+};
+type Job = { id: string; status: string; phase: string; model_version: string; metrics?: RunMetrics };
+type Cycle = {
+  id: string;
+  version: string;
+  date: string;
+  signals: number;
+  status: string;
+  loss?: number | null;
+  rank?: number | null;
+  epochs?: number | null;
+};
 type Learning = {
   interactions: number;
   memories: number;
@@ -26,7 +43,14 @@ type Learning = {
 };
 
 type StepState = "done" | "active" | "wait";
-type Pack = { status: string; phase: string; error: string; ready: boolean; adapter: boolean };
+type Pack = {
+  status: string;
+  phase: string;
+  error: string;
+  ready: boolean;
+  adapter: boolean;
+  merged: boolean;
+};
 
 const EMPTY: Learning = {
   interactions: 0,
@@ -39,14 +63,20 @@ const EMPTY: Learning = {
   cycles: [],
 };
 
-const EMPTY_PACK: Pack = { status: "idle", phase: "", error: "", ready: false, adapter: false };
+const EMPTY_PACK: Pack = {
+  status: "idle",
+  phase: "",
+  error: "",
+  ready: false,
+  adapter: false,
+  merged: false,
+};
 
 const PHASE_LABEL: Record<string, string> = {
   preparing: "Preparing",
   tools: "Getting the converter",
-  base: "Getting the base model",
-  converting: "Converting the adapter",
-  merging: "Merging the adapter",
+  merging: "Merging into the 16-bit weights",
+  converting: "Converting the merged model",
   quantizing: "Quantizing the merged model",
   completed: "File is on this Mac",
   failed: "Merge failed",
@@ -116,6 +146,7 @@ export function LearningPage() {
           error: packBody.error ?? "",
           ready: Boolean(packBody.ready),
           adapter: Boolean(packBody.adapter),
+          merged: Boolean(packBody.merged),
         });
       }
     } catch {
@@ -150,7 +181,7 @@ export function LearningPage() {
   const publishing = pack.status === "running" || pack.status === "submitted";
 
   async function publish() {
-    if (!pack.adapter || busy || publishing) return;
+    if (!pack.adapter || pack.merged || busy || publishing) return;
     setBusy(true);
     setError("");
     try {
@@ -190,6 +221,11 @@ export function LearningPage() {
                 <BrainCircuit />
                 {busy && !publishing ? "Starting…" : "Fine-tune my Brain"}
               </Button>
+              {trainNote(view) ? (
+                <span className="max-w-44 text-center text-[10px] leading-3 text-muted-foreground">
+                  {trainNote(view)}
+                </span>
+              ) : null}
             </div>
             <span className="h-px w-10 bg-border" />
             <div className="flex flex-col items-center gap-1">
@@ -198,7 +234,7 @@ export function LearningPage() {
               </span>
               <Button
                 variant="outline"
-                disabled={!pack.adapter || busy || training || publishing}
+                disabled={!pack.adapter || pack.merged || busy || training || publishing}
                 onClick={() => void publish()}
               >
                 <BrainCircuit />
@@ -296,25 +332,33 @@ export function LearningPage() {
           {view.cycles.length === 0 ? (
             <p className="px-4 py-3 text-xs text-muted-foreground">No fine-tune runs yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <div className="grid min-w-[32rem] grid-cols-4 gap-3 px-4 py-3 text-[10px] font-semibold uppercase text-muted-foreground">
-                <span>Version</span>
-                <span>Date</span>
-                <span>Signals</span>
-                <span>Status</span>
-              </div>
-              {view.cycles.map((cycle) => (
-                <div
-                  key={cycle.id || `${cycle.version}-${cycle.date}`}
-                  className="grid min-w-[32rem] grid-cols-4 gap-3 border-t border-border px-4 py-3 text-xs"
-                >
-                  <span className="truncate font-mono">{cycle.version || "—"}</span>
-                  <span>{formatDate(cycle.date)}</span>
-                  <span>{cycle.signals}</span>
-                  <span>{statusLabel(cycle.status)}</span>
+            <TooltipProvider delayDuration={200}>
+              <div className="overflow-x-auto">
+                <div className="grid min-w-[52rem] grid-cols-[minmax(11rem,1.6fr)_7rem_4.5rem_4.5rem_3.5rem_4.5rem_6rem] gap-3 px-4 py-3 text-[10px] font-semibold uppercase text-muted-foreground">
+                  <span>Version</span>
+                  <span>Date</span>
+                  <span>Signals</span>
+                  <Hint label="Loss" text={LOSS_TIP} />
+                  <Hint label="Rank" text={RANK_TIP} />
+                  <Hint label="Epochs" text={EPOCHS_TIP} />
+                  <span>Status</span>
                 </div>
-              ))}
-            </div>
+                {view.cycles.map((cycle) => (
+                  <div
+                    key={cycle.id || `${cycle.version}-${cycle.date}`}
+                    className="grid min-w-[52rem] grid-cols-[minmax(11rem,1.6fr)_7rem_4.5rem_4.5rem_3.5rem_4.5rem_6rem] gap-3 border-t border-border px-4 py-3 text-xs"
+                  >
+                    <span className="truncate font-mono">{cycle.version || "—"}</span>
+                    <span>{formatDate(cycle.date)}</span>
+                    <span>{cycle.signals}</span>
+                    <Hint label={formatLoss(cycle.loss)} text={LOSS_TIP} />
+                    <Hint label={formatCount(cycle.rank)} text={RANK_TIP} />
+                    <Hint label={formatCount(cycle.epochs)} text={EPOCHS_TIP} />
+                    <span>{statusLabel(cycle.status)}</span>
+                  </div>
+                ))}
+              </div>
+            </TooltipProvider>
           )}
         </Panel>
       </div>
@@ -343,11 +387,12 @@ function Checklist({
                   step.state === "done"
                     ? "border-success bg-success text-primary-foreground"
                     : step.state === "active"
-                      ? "border-warning bg-warning/20"
+                      ? "border-warning bg-warning/20 text-foreground"
                       : "border-border bg-background"
                 }`}
               >
                 {step.state === "done" && <Check className="size-3" />}
+                {step.state === "active" && <Loader2 className="size-3 animate-spin" />}
               </span>
               {index < steps.length - 1 && <span className="h-11 w-px bg-border" />}
             </div>
@@ -367,6 +412,7 @@ function mergeNote(pack: Pack) {
   if (pack.status === "running" || pack.status === "submitted") {
     return PHASE_LABEL[pack.phase] || "Merging";
   }
+  if (pack.merged) return "Already merged";
   return "";
 }
 
@@ -424,10 +470,10 @@ function trainingSteps(view: Learning, pack: Pack) {
         title: "LoRA training",
         note:
           phase === "training"
-            ? "Usually a couple of hours"
+            ? progressText(view) || "Training the adapter"
             : past("training")
               ? "Training finished"
-              : "Usually a couple of hours",
+              : "Waiting to start",
         state: phase === "training" ? "active" : past("training") ? "done" : "wait",
       },
       {
@@ -452,7 +498,7 @@ function trainingSteps(view: Learning, pack: Pack) {
             ? PHASE_LABEL[pack.phase] || "Merging"
             : pack.ready
               ? "One Q4 file is on this Mac"
-              : "Adds the adapter into a copy of the base weights",
+              : "Adds the adapter into a copy of the 16-bit weights on this Mac",
         state:
           pack.status === "running" || pack.status === "submitted"
             ? "active"
@@ -477,6 +523,50 @@ function rank(phase: string) {
   const order = ["", "submitted", "preparing", "training", "tagging", "completed"];
   const index = order.indexOf(phase);
   return index === -1 ? 0 : index;
+}
+
+const LOSS_TIP =
+  "How far the last pass was from the trained sentences. Lower means those sentences were fit more closely.";
+const RANK_TIP = "How wide the adapter is. A higher rank can hold more of the exact wording.";
+const EPOCHS_TIP = "How many full passes through the training set this run finished.";
+
+function Hint({ label, text }: { label: string; text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="w-fit cursor-help underline decoration-dotted underline-offset-2">{label}</span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-56 text-left text-[11px] leading-4">{text}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function trainNote(view: Learning) {
+  const status = view.job?.status;
+  if (status !== "submitted" && status !== "in_progress") return "";
+  const phase = view.job?.phase === "in_progress" ? "training" : view.job?.phase;
+  if (phase === "preparing") return "Reading the examples";
+  if (phase === "training") return progressText(view) || "Training the adapter";
+  return "Starting the run";
+}
+
+function progressText(view: Learning) {
+  const metrics = view.job?.metrics;
+  const epoch = metrics?.epoch ?? metrics?.epochs;
+  if (epoch == null) return "";
+  const cap = metrics?.max_epochs ? ` of ${formatCount(metrics.max_epochs)}` : "";
+  const loss = metrics?.loss == null ? "" : ` · loss ${formatLoss(metrics.loss)}`;
+  return `Pass ${formatCount(epoch)}${cap}${loss}`;
+}
+
+function formatLoss(value: number | null | undefined) {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  return Number(value).toFixed(4);
+}
+
+function formatCount(value: number | null | undefined) {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  return String(Math.round(Number(value)));
 }
 
 function statusLabel(status: string) {

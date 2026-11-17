@@ -8,7 +8,7 @@ import {checksum} from '../src/bytes';
 import {API_BASE_URL} from '../src/config';
 import {createBrain} from '../src/brain';
 import {FakeEngine} from '../src/engine';
-import {extractText} from '../src/files';
+import {extractText, buildPrompt, splitThinking} from '../src/files';
 import {MemoryKeychain, MemoryPackFiles, MemoryStore, type Persisted, type PickedFile, type Picker} from '../src/storage';
 
 type NavState = {stack: string[]; listeners: Set<() => void>; key?: string};
@@ -234,6 +234,67 @@ test('sha256 of abc and a pdf literal string', () => {
   const bytes = new TextEncoder().encode('abc');
   expect(checksum(bytes)).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   expect(extractText('note.pdf', new TextEncoder().encode('%PDF-1.4 (Hello PDF)'))).toBe('Hello PDF');
+});
+
+test('a new chat clears the loaded model state and keeps the pack', async () => {
+  const {brain, engine} = makeApp();
+  await brain.boot();
+  brain.newThread();
+  const nora = brain.snapshot.activeId;
+  brain.newThread();
+  expect(brain.snapshot.activeId).not.toBe(nora);
+  expect(engine.loadedPackId).toBeNull();
+  expect(engine.chatsBegun).toBe(2);
+  brain.openThread(brain.snapshot.activeId!);
+  expect(engine.chatsBegun).toBe(2);
+  brain.openThread(nora!);
+  expect(engine.chatsBegun).toBe(3);
+});
+
+test('on-device questions use the fine-tune lead-in and thinking stays separate', () => {
+  expect(buildPrompt('Who is Theo Park?', [])).toBe(
+    "<|im_start|>system\n" +
+      "When the question is about this person's record, answer with that fact. For any other question, answer normally.<|im_end|>\n" +
+      "<|im_start|>user\n" +
+      "Who is Theo Park?<|im_end|>\n" +
+      "<|im_start|>assistant\n" +
+      "<think>\n",
+  );
+  expect(splitThinking('<think>\nrecall the record\n</think>\n\nTheo Park is the engineer.')).toEqual({
+    thinking: 'recall the record',
+    answer: 'Theo Park is the engineer.',
+  });
+  expect(splitThinking('Just the answer.')).toEqual({thinking: '', answer: 'Just the answer.'});
+  expect(
+    buildPrompt('What about her?', [], [
+      {role: 'user', text: "What is the name of Nora's cat?"},
+      {role: 'assistant', text: "Nora's orange cat is named Pixel.", thinking: 'Pixel.'},
+    ]),
+  ).toBe(
+    "<|im_start|>system\n" +
+      "When the question is about this person's record, answer with that fact. For any other question, answer normally.<|im_end|>\n" +
+      "<|im_start|>user\n" +
+      "What is the name of Nora's cat?<|im_end|>\n" +
+      "<|im_start|>assistant\n" +
+      "<think>\n" +
+      "Pixel.\n" +
+      "</think>\n\n" +
+      "Nora's orange cat is named Pixel.<|im_end|>\n" +
+      "<|im_start|>user\n" +
+      "What about her?<|im_end|>\n" +
+      "<|im_start|>assistant\n" +
+      "<think>\n",
+  );
+  const long = 'word '.repeat(800);
+  const packed = buildPrompt('Latest?', [], [
+    {role: 'user', text: long},
+    {role: 'assistant', text: long},
+    {role: 'user', text: 'Second question'},
+    {role: 'assistant', text: 'Second answer'},
+  ]);
+  expect(packed).not.toContain('word word word');
+  expect(packed).toContain('Second question');
+  expect(packed).toContain('Latest?');
 });
 
 test('no token shows auth and omits Apple, Google, forgot password, and the microphone', async () => {
@@ -745,6 +806,60 @@ test('reinstall swaps only when the checksum matches', async () => {
     expect.objectContaining({Authorization: 'Bearer tok', 'X-Request-ID': expect.any(String)}),
   );
   expect(calls(harness.fetchImpl).every(call => call.url.startsWith(`${API_BASE_URL}/api/`))).toBe(true);
+});
+
+test('status names the installed personal model by its fine-tune tag', async () => {
+  const harness = makeApp({
+    basePack: {id: 'qwen3.5-4b-base-q4', path: 'base.pte', bytes: 20, sha256: 'aa'},
+    loraByUser: {
+      ada: {id: 'qwen3.5-4b-finetuned-q4', path: 'lora.pte', bytes: 30, sha256: 'bb'},
+    },
+  });
+  harness.fetchImpl.mockImplementation(async (url: string) => {
+    const path = new URL(String(url)).pathname;
+    if (path === '/api/auth/signin') {
+      return jsonResponse(200, {access_token: 'tok', user: user('ada', 'premium')});
+    }
+    if (path === '/api/models/on-device') {
+      return jsonResponse(200, {
+        id: 'qwen3.5-4b-finetuned-q4',
+        filename: 'qwen3.5-4b-finetuned-q4.gguf',
+        sha256: 'bb',
+        ready: true,
+        bytes: 30,
+        tag: 'qwen3.5-4b-lora-v5',
+      });
+    }
+    return jsonResponse(404, {detail: 'missing'});
+  });
+  const renderer = await render(harness.brain);
+  await act(async () => {
+    typeInto(renderer, 'you@company.com', 'ada@example.com');
+    typeInto(renderer, 'Enter your password', 'secret123');
+  });
+  await act(async () => {
+    press(renderer, 'Continue');
+  });
+  await act(async () => {
+    press(renderer, 'Menu');
+  });
+  await act(async () => {
+    press(renderer, 'Model & Device Status');
+  });
+  expect(collect(renderer)).toContain('qwen3.5-4b-lora-v5');
+  expect(harness.brain.snapshot.loraPack?.tag).toBe('qwen3.5-4b-lora-v5');
+  harness.fetchImpl.mockImplementation(async () =>
+    jsonResponse(200, {
+      id: 'qwen3.5-4b-finetuned-q4',
+      sha256: 'cc',
+      ready: true,
+      tag: 'qwen3.5-4b-lora-v9',
+    }),
+  );
+  await act(async () => {
+    await harness.brain.refreshInstalledTag();
+  });
+  expect(harness.brain.snapshot.loraPack?.tag).toBe('qwen3.5-4b-lora-v5');
 });
 
 test('premium on device uses the LoRA pack and digital brain uses chat with RAG', async () => {

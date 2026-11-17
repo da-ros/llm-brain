@@ -10,6 +10,16 @@ from exceptions import EmbedTimeoutError, EmbedUpstreamError
 from logging_setup import log_with_correlation
 
 
+def embed_timeout(modality: str) -> float:
+    """Image and video embeds wait longer. Text stays on RAG_TIMEOUT_SECONDS."""
+    settings = get_settings()
+    if modality == "image":
+        return max(settings.RAG_TIMEOUT_SECONDS, settings.RAG_IMAGE_TIMEOUT_SECONDS)
+    if modality == "video":
+        return max(settings.RAG_TIMEOUT_SECONDS, settings.RAG_VIDEO_TIMEOUT_SECONDS)
+    return settings.RAG_TIMEOUT_SECONDS
+
+
 async def embed(
     *,
     modality: str,
@@ -19,6 +29,7 @@ async def embed(
 ) -> list[float]:
     """POST /embed. 5xx → EmbedUpstreamError, timeout → EmbedTimeoutError."""
     settings = get_settings()
+    timeout = embed_timeout(modality)
     url = f"{settings.RAG_SERVICE_URL}/embed"
     body: dict[str, str] = {"modality": modality}
     if modality == "text":
@@ -28,10 +39,10 @@ async def embed(
     log_with_correlation(
         correlation_id,
         "info",
-        f"RAG POST /embed {url} modality={modality}",
+        f"RAG POST /embed {url} modality={modality} timeout={timeout:.0f}s",
     )
     try:
-        async with httpx.AsyncClient(timeout=settings.RAG_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 url,
                 json=body,

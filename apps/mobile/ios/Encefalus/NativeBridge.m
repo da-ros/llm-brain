@@ -1,4 +1,5 @@
 #import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 
 @interface RCT_EXTERN_MODULE(EncefalusKeychain, NSObject)
 RCT_EXTERN_METHOD(get:(RCTPromiseResolveBlock)resolve
@@ -10,7 +11,7 @@ RCT_EXTERN_METHOD(clear:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 @end
 
-@interface RCT_EXTERN_MODULE(EncefalusSandbox, NSObject)
+@interface RCT_EXTERN_MODULE(EncefalusSandbox, RCTEventEmitter)
 RCT_EXTERN_METHOD(load:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(save:(NSString *)json

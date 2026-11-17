@@ -68,6 +68,43 @@ def test_premium_real_writes_the_merged_file_and_manifest(tmp_path: Path, monkey
     assert pack_ready(tmp_path / "users" / "user-a")
 
 
+def test_latest_completed_log_sets_the_pack_tag(tmp_path: Path, monkeypatch):
+    from export_on_device import _manifest, installed_tag
+
+    logs = tmp_path / "training_logs"
+    logs.mkdir()
+    (logs / "ft-job-old.md").write_text(
+        "- **user_id**: user-a\n"
+        "- **model_version**: qwen3.5-4b-lora-v1\n"
+        "- **completed_at**: 2026-11-12T00:00:00+00:00\n",
+        encoding="utf-8",
+    )
+    (logs / "ft-job-new.md").write_text(
+        "- **user_id**: user-a\n"
+        "- **model_version**: qwen3.5-4b-lora-v5\n"
+        "- **completed_at**: 2026-11-16T21:43:47+00:00\n",
+        encoding="utf-8",
+    )
+    (logs / "ft-job-other.md").write_text(
+        "- **user_id**: someone-else\n"
+        "- **model_version**: qwen3.5-4b-lora-v9\n"
+        "- **completed_at**: 2026-11-17T00:00:00+00:00\n",
+        encoding="utf-8",
+    )
+    assert installed_tag("user-a", logs) == "qwen3.5-4b-lora-v5"
+    monkeypatch.setattr("export_on_device.installed_tag", lambda user_id, log_dir=None: installed_tag(user_id, logs))
+    weight = tmp_path / "pack.gguf"
+    weight.write_bytes(b"Q4")
+    manifest = _manifest(
+        tmp_path,
+        weight,
+        pack_id="qwen3.5-4b-finetuned-q4",
+        tier="premium",
+        user_id="user-a",
+    )
+    assert manifest["tag"] == "qwen3.5-4b-lora-v5"
+
+
 def test_missing_adapter_writes_nothing(tmp_path: Path):
     from export_on_device import export_base, export_premium, pack_ready
 

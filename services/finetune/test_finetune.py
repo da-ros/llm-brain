@@ -47,6 +47,9 @@ class TestConfig:
         assert s.BASE_MODEL_ID == "qwen3.5-4b"
         assert s.LORA_BACKEND == "peft"
         assert s.TRAINING_EPOCHS == 5
+        assert s.LORA_RANK == 16
+        assert s.TRAIN_LOSS_TARGET == 0.05
+        assert s.TRAIN_MAX_EPOCHS == 30
         assert s.TRAINING_LR == 0.001
         assert s.MAX_TRAINING_TIME_HOURS == 2
 
@@ -86,8 +89,34 @@ class TestPipeline:
             ],
         )
         examples = pipeline.convert_triples_to_training_format(str(triples_path))
+        assert len(examples) == 1
         assert examples[0]["input"] == "Who is Theo Park?"
         assert examples[0]["output"] == "Theo Park is the engineer."
+        assert examples[0]["instruction"] == (
+            "When the question is about this person's record, answer with that fact. "
+            "For any other question, answer normally."
+        )
+
+    def test_chat_prompt_leaves_thinking_open(self):
+        from lora import THINK_CLOSE, chat_prompt, trained_reply
+
+        instruction = (
+            "When the question is about this person's record, answer with that fact. "
+            "For any other question, answer normally."
+        )
+        text = chat_prompt(instruction, "Who is Theo Park?")
+        assert text == (
+            "<|im_start|>system\n"
+            f"{instruction}<|im_end|>\n"
+            "<|im_start|>user\n"
+            "Who is Theo Park?<|im_end|>\n"
+            "<|im_start|>assistant\n"
+            "<think>\n"
+        )
+        assert trained_reply("Theo Park is the engineer.") == "Theo Park is the engineer.<|im_end|>"
+        assert (text + THINK_CLOSE + trained_reply("Theo Park is the engineer.")).endswith(
+            "<think>\n</think>\n\nTheo Park is the engineer.<|im_end|>"
+        )
 
     def test_convert_directory_of_jsonl(self, tmp_path):
         import pipeline
@@ -138,7 +167,7 @@ class TestPipeline:
 
         assert job is not None
         assert job.status == "completed"
-        assert job.model_version and job.model_version.startswith("qwen3.5-4b-lora-v")
+        assert job.model_version == "qwen3.5-4b-lora-v1"
         assert job.adapter_path
         assert Path(job.adapter_path, "adapter_config.json").exists()
         assert job.metrics.get("epochs") == 5
@@ -147,6 +176,33 @@ class TestPipeline:
         log_text = Path(job.log_path).read_text(encoding="utf-8")
         assert "Hyperparams" in log_text
         assert "peft" in log_text
+
+    def test_model_version_continues_from_the_logs(self, tmp_path):
+        import pipeline
+        from config import get_settings
+
+        log_dir = Path(get_settings().TRAINING_LOG_DIR)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        (log_dir / "ft-job-older.md").write_text(
+            "- **model_version**: qwen3.5-4b-lora-v2\n",
+            encoding="utf-8",
+        )
+        triples_path = tmp_path / "receta.jsonl"
+        _write_triples(
+            triples_path,
+            [{"subject": "test", "predicate": "is", "object": "ok"}],
+        )
+        first = pipeline.submit_training_job("user1", str(triples_path), "cid-v")
+        second = pipeline.submit_training_job("user1", str(triples_path), "cid-v2")
+        deadline = time.time() + 3
+        jobs = []
+        while time.time() < deadline:
+            jobs = [pipeline.get_job_status(first), pipeline.get_job_status(second)]
+            if all(job and job.status in ("completed", "failed") for job in jobs):
+                break
+            time.sleep(0.05)
+        versions = {job.model_version for job in jobs if job}
+        assert versions == {"qwen3.5-4b-lora-v3", "qwen3.5-4b-lora-v4"}
 
     def test_get_nonexistent_job(self):
         import pipeline

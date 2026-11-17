@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import db
@@ -19,23 +21,15 @@ def _stamp(batch: dict[str, Any]) -> str:
     return str(value or "")
 
 
-def _clip(text: str) -> str:
-    cleaned = " ".join((text or "").split())
-    if len(cleaned) <= 140:
-        return cleaned
-    return cleaned[:137] + "..."
-
-
 def _bullets(batch: dict[str, Any] | None) -> list[str]:
+    """Every distinct question the trained batch contained, in order."""
     if not batch:
         return []
     lines: list[str] = []
     for item in batch.get("items") or []:
-        text = _clip(str(item.get("query") or ""))
+        text = " ".join(str(item.get("query") or "").split())
         if text and text not in lines:
             lines.append(text)
-        if len(lines) == 5:
-            break
     return lines
 
 
@@ -62,6 +56,9 @@ async def _refresh_job(batch: dict[str, Any], user_id: str, correlation_id: str)
         updates["job_phase"] = body["phase"]
     if body.get("model_version"):
         updates["model_version"] = body["model_version"]
+    public = _public_metrics(body.get("metrics") or {})
+    if public:
+        updates["train_metrics"] = public
     stored = await db.update_batch(str(batch.get("_id") or ""), updates, user_id=user_id)
     return stored or {**batch, **updates}
 
@@ -91,6 +88,7 @@ async def build_learning(user_id: str, correlation_id: str) -> dict[str, Any]:
     for batch in batches:
         if batch.get("status") not in {"submitted"} and not batch.get("job_id"):
             continue
+        metrics = _cycle_metrics(batch)
         cycles.append(
             {
                 "id": str(batch.get("_id") or ""),
@@ -98,6 +96,9 @@ async def build_learning(user_id: str, correlation_id: str) -> dict[str, Any]:
                 "date": _stamp(batch),
                 "signals": len(batch.get("items") or []),
                 "status": batch.get("job_status") or "submitted",
+                "loss": metrics.get("loss"),
+                "rank": metrics.get("rank"),
+                "epochs": metrics.get("epochs"),
             }
         )
     current = None
@@ -110,11 +111,13 @@ async def build_learning(user_id: str, correlation_id: str) -> dict[str, Any]:
         }
     job = None
     if running is not None:
+        live = _cycle_metrics(running)
         job = {
             "id": running.get("job_id") or "",
             "status": running.get("job_status") or "submitted",
             "phase": running.get("job_phase") or running.get("job_status") or "submitted",
             "model_version": running.get("model_version") or "",
+            "metrics": live,
         }
     return {
         "interactions": interactions,
@@ -125,3 +128,72 @@ async def build_learning(user_id: str, correlation_id: str) -> dict[str, Any]:
         "learned": _bullets(trained[0] if trained else None),
         "cycles": cycles,
     }
+
+
+def _public_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    """The numbers the Learning page shows for one run."""
+    if not metrics:
+        return {}
+    epoch = metrics.get("epoch")
+    if epoch is None:
+        epoch = metrics.get("epochs")
+    loss = metrics.get("final_loss")
+    if loss is None:
+        loss = metrics.get("loss")
+    rank = metrics.get("lora_rank")
+    if rank is None:
+        rank = metrics.get("rank")
+    if epoch is None and loss is None and rank is None:
+        return {}
+    return {
+        "epoch": epoch,
+        "epochs": metrics.get("epochs") if metrics.get("epochs") is not None else epoch,
+        "loss": loss,
+        "rank": rank,
+        "max_epochs": metrics.get("max_epochs"),
+    }
+
+
+def _cycle_metrics(batch: dict[str, Any]) -> dict[str, Any]:
+    stored = _public_metrics(batch.get("train_metrics") or {})
+    if stored.get("loss") is not None or stored.get("epochs") is not None:
+        return stored
+    return _metrics_from_log(str(batch.get("job_id") or ""))
+
+
+def _metrics_from_log(job_id: str) -> dict[str, Any]:
+    if not job_id:
+        return {}
+    settings = get_settings()
+    directory = Path(settings.BATCH_EXPORT_DIR).parent / "training_logs"
+    path = directory / f"{job_id}.md"
+    if not path.is_file():
+        return {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    return _parse_training_log(text)
+
+
+def _parse_training_log(text: str) -> dict[str, Any]:
+    """Read rank from the hyperparams section and the last pass from Metrics."""
+    hyper = ""
+    metrics = ""
+    if "## Hyperparams" in text:
+        hyper = text.split("## Hyperparams", 1)[1].split("##", 1)[0]
+    if "## Metrics" in text:
+        metrics = text.split("## Metrics", 1)[1]
+    rank = _logged_number(hyper, "lora_rank")
+    epochs = _logged_number(metrics, "epochs")
+    loss = _logged_number(metrics, "final_loss")
+    if epochs is None and loss is None and rank is None:
+        return {}
+    return {"epoch": epochs, "epochs": epochs, "loss": loss, "rank": rank, "max_epochs": None}
+
+
+def _logged_number(section: str, name: str) -> float | None:
+    match = re.search(rf"^- {re.escape(name)}:\s*([0-9.]+)\s*$", section, re.MULTILINE)
+    if not match:
+        return None
+    return float(match.group(1))

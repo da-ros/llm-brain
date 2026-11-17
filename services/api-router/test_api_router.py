@@ -817,6 +817,52 @@ class TestOnDevicePack:
         assert response.status_code == 200
         assert response.json()["ready"] is True
         assert response.json()["status"] == "completed"
+        assert response.json()["merged"] is False
+
+    def test_merged_adapter_cannot_be_published_again(self, client, tmp_path):
+        import os
+
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path / "on-device")
+        directory = tmp_path / "on-device" / "users" / "user1"
+        _write_pack(directory, "qwen3.5-4b-finetuned-q4", "premium", b"merged", "user1")
+        adapter = tmp_path / "models" / "user1" / "adapter"
+        adapter.mkdir(parents=True)
+        config = adapter / "adapter_config.json"
+        config.write_text("{}", encoding="utf-8")
+        weight = directory / "qwen3.5-4b-finetuned-q4.pte"
+        os.utime(config, (1_000, 1_000))
+        os.utime(weight, (2_000, 2_000))
+        status_response = client.get("/api/on-device-pack", headers=auth_header())
+        assert status_response.json()["merged"] is True
+        response = client.post("/api/on-device-pack", headers=auth_header())
+        assert response.status_code == 409
+
+    def test_a_newer_adapter_can_be_published(self, client, tmp_path):
+        import os
+
+        get_settings().ONDEVICE_MODEL_DIR = str(tmp_path / "on-device")
+        directory = tmp_path / "on-device" / "users" / "user1"
+        _write_pack(directory, "qwen3.5-4b-finetuned-q4", "premium", b"merged", "user1")
+        adapter = tmp_path / "models" / "user1" / "adapter"
+        adapter.mkdir(parents=True)
+        config = adapter / "adapter_config.json"
+        config.write_text("{}", encoding="utf-8")
+        weight = directory / "qwen3.5-4b-finetuned-q4.pte"
+        os.utime(weight, (1_000, 1_000))
+        os.utime(config, (2_000, 2_000))
+        with patch("routers.finetune.httpx.AsyncClient") as client_cls:
+            instance = AsyncMock()
+            response = MagicMock()
+            response.status_code = 202
+            response.json = MagicMock(return_value={"status": "submitted", "phase": "preparing"})
+            instance.post = AsyncMock(return_value=response)
+            instance.__aenter__.return_value = instance
+            instance.__aexit__.return_value = False
+            client_cls.return_value = instance
+            http_response = client.post("/api/on-device-pack", headers=auth_header())
+        assert http_response.status_code == 202
+        status_response = client.get("/api/on-device-pack", headers=auth_header())
+        assert status_response.json()["merged"] is False
 
     def test_free_publish_forbidden(self, client):
         response = client.post("/api/on-device-pack", headers=auth_header(tier="free"))
@@ -3125,6 +3171,7 @@ class TestOnDeviceModels:
         meta = client.get("/api/models/on-device", headers=auth_header(tier="free"))
         assert meta.json()["ready"] is True
         assert meta.json()["sha256"] == published
+        assert meta.json()["tag"] == ""
         downloaded = client.get("/api/models/on-device/file", headers=auth_header(tier="free"))
         assert downloaded.status_code == 200
         assert downloaded.content == b"base-weights"

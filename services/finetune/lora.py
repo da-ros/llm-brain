@@ -7,6 +7,7 @@ Real backends run when LORA_MOCK=false and the extra packages are installed.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +17,51 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from config import Settings
 
+logger = logging.getLogger("finetune-service")
+
 SUPPORTED_BACKENDS = ("peft", "ms-swift", "unsloth")
+# Attention, the linear-attention input projections, and the feed-forward layers.
+LORA_TARGETS = (
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "in_proj_qkv",
+    "in_proj_a",
+    "in_proj_b",
+    "in_proj_z",
+    "gate_proj",
+    "up_proj",
+    "down_proj",
+)
+
+
+# Shown to the model so the answer follows a closed think block. Not part of the loss.
+THINK_CLOSE = "</think>\n\n"
+
+
+def chat_prompt(instruction: str, question: str) -> str:
+    """Qwen3.5 chat turn with the think block left open.
+
+    The phone sends this same string, so a question can write its own thought.
+    Training does not score anything inside that block.
+    """
+    return (
+        "<|im_start|>system\n"
+        f"{instruction}<|im_end|>\n"
+        "<|im_start|>user\n"
+        f"{question}<|im_end|>\n"
+        "<|im_start|>assistant\n"
+        "<think>\n"
+    )
+
+
+def trained_reply(answer: str, end: str = "<|im_end|>") -> str:
+    """The answer and the stop token. The think block is left out of the loss."""
+    text = answer.strip()
+    if text.endswith(end):
+        text = text[: -len(end)].rstrip()
+    return f"{text}{end}"
 
 
 @dataclass(frozen=True)
@@ -57,6 +102,7 @@ def run_lora_training(
     adapter_dir: Path,
     settings: Settings,
     delay_seconds: float | None = None,
+    on_epoch=None,
 ) -> TrainingMetrics:
     """Run local LoRA over Qwen3.5-4B and return metrics."""
     backend = settings.LORA_BACKEND.lower()
@@ -79,10 +125,10 @@ def run_lora_training(
         )
 
     if backend == "peft":
-        return _run_peft(examples, adapter_dir, settings, started)
+        return _run_peft(examples, adapter_dir, settings, started, on_epoch)
     if backend == "unsloth":
-        return _run_unsloth(examples, adapter_dir, settings, started)
-    return _run_ms_swift(examples, adapter_dir, settings, started)
+        return _run_unsloth(examples, adapter_dir, settings, started, on_epoch)
+    return _run_ms_swift(examples, adapter_dir, settings, started, on_epoch)
 
 
 def _train_device() -> str:
@@ -113,8 +159,12 @@ def _run_peft(
     adapter_dir: Path,
     settings: Settings,
     started: float,
+    on_epoch=None,
 ) -> TrainingMetrics:
-    """LoRA over the local Qwen3.5-4B checkpoint. The loss is on the answer."""
+    """LoRA over the local Qwen3.5-4B checkpoint.
+
+    The loss covers the answer and the stop token. The think block is context.
+    """
     try:
         import torch
         from peft import LoraConfig, get_peft_model
@@ -140,11 +190,11 @@ def _run_peft(
     model = get_peft_model(
         model,
         LoraConfig(
-            r=8,
-            lora_alpha=16,
+            r=settings.LORA_RANK,
+            lora_alpha=settings.LORA_ALPHA,
             lora_dropout=0.05,
             task_type="CAUSAL_LM",
-            target_modules=["q_proj", "v_proj"],
+            target_modules=list(LORA_TARGETS),
         ),
     )
     model.to(device)
@@ -153,51 +203,67 @@ def _run_peft(
         (param for param in model.parameters() if param.requires_grad),
         lr=settings.TRAINING_LR,
     )
-    losses: list[float] = []
-    for _epoch in range(settings.TRAINING_EPOCHS):
+    end = tokenizer.eos_token or "<|im_end|>"
+    epochs_run = 0
+    last_mean = 0.0
+    for epoch in range(1, settings.TRAIN_MAX_EPOCHS + 1):
+        step_losses: list[float] = []
         for example in examples:
-            prompt = f"{example['instruction']}\n{example['input']}\n"
-            full = prompt + str(example["output"])
-            encoded = tokenizer(full, return_tensors="pt", truncation=True, max_length=512)
-            prompt_ids = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+            prompt = chat_prompt(str(example["instruction"]), str(example["input"]))
+            prefix = prompt + THINK_CLOSE
+            full = prefix + trained_reply(str(example["output"]), end)
+            encoded = tokenizer(full, return_tensors="pt", truncation=True, max_length=768)
+            prefix_ids = tokenizer(prefix, return_tensors="pt", truncation=True, max_length=768)
             labels = encoded["input_ids"].clone()
-            prompt_len = min(prompt_ids["input_ids"].shape[1], labels.shape[1])
-            labels[:, :prompt_len] = -100
+            prefix_len = min(prefix_ids["input_ids"].shape[1], labels.shape[1])
+            labels[:, :prefix_len] = -100
             encoded = {key: value.to(device) for key, value in encoded.items()}
             labels = labels.to(device)
             optimizer.zero_grad(set_to_none=True)
             loss = model(**encoded, labels=labels).loss
             loss.backward()
             optimizer.step()
-            losses.append(float(loss.detach().float().cpu()))
+            step_losses.append(float(loss.detach().float().cpu()))
+        epochs_run = epoch
+        last_mean = sum(step_losses) / len(step_losses) if step_losses else 0.0
+        logger.info(
+            "LoRA epoch %s/%s loss %.4f target %.2f",
+            epoch,
+            settings.TRAIN_MAX_EPOCHS,
+            last_mean,
+            settings.TRAIN_LOSS_TARGET,
+        )
+        if on_epoch is not None:
+            on_epoch(epoch, last_mean)
+        if last_mean < settings.TRAIN_LOSS_TARGET:
+            break
     adapter_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(adapter_dir))
     tokenizer.save_pretrained(str(adapter_dir))
     elapsed_hours = (perf_counter() - started) / 3600.0
-    final = sum(losses) / len(losses) if losses else 0.0
     return TrainingMetrics(
-        epochs=settings.TRAINING_EPOCHS,
-        final_loss=round(final, 4),
+        epochs=epochs_run,
+        final_loss=round(last_mean, 4),
         training_time_hours=round(elapsed_hours, 4),
         backend="peft",
     )
 
 
-def _run_unsloth(examples, adapter_dir, settings, started) -> TrainingMetrics:
+def _run_unsloth(examples, adapter_dir, settings, started, on_epoch=None) -> TrainingMetrics:
     try:
         import unsloth  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
             "Unsloth backend requires the unsloth package. Set LORA_MOCK=true for CI."
         ) from exc
-    return _run_peft(examples, adapter_dir, settings, started)
+    return _run_peft(examples, adapter_dir, settings, started, on_epoch)
 
 
-def _run_ms_swift(examples, adapter_dir, settings, started) -> TrainingMetrics:
+def _run_ms_swift(examples, adapter_dir, settings, started, on_epoch=None) -> TrainingMetrics:
     try:
         import ms_swift  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
             "ms-swift backend requires the ms-swift package. Set LORA_MOCK=true for CI."
         ) from exc
-    return _run_peft(examples, adapter_dir, settings, started)
+    return _run_peft(examples, adapter_dir, settings, started, on_epoch)

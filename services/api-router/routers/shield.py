@@ -11,7 +11,10 @@ from pydantic import BaseModel
 from rate_limit import rate_limit_shield
 
 router = APIRouter(prefix="/api/shield", tags=["shield"])
-SCAN_TIMEOUT_SECONDS = 60.0
+# Image embeds are allowed 20s and video embeds 60s. The first scan after a
+# restart also embeds the text corpus. 60s dropped that scan once the image
+# call was allowed to finish.
+SCAN_TIMEOUT_SECONDS = 210.0
 
 
 class ScanRequest(BaseModel):
