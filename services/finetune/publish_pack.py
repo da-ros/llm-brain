@@ -1,15 +1,18 @@
-"""Merge a LoRA adapter into the Q4 GGUF the iPhone downloads.
+"""Merge a LoRA adapter into the local 16-bit weights and write the iPhone Q4.
 
 The converter and the Mac build of llama.cpp are stored under data/llama.cpp
-the first time a pack is published. The base Q4 file is stored under
-data/models/base. Neither path is the model the cloud chat process loaded.
+the first time a pack is published. The merge reads the same 16-bit checkpoint
+chat already uses and writes a new copy with the adapter added. That copy is
+converted once, then quantized to Q4. The original checkpoint is left as it is.
 """
 
 from __future__ import annotations
 
+import gc
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -32,7 +35,6 @@ _active: set[str] = set()
 @dataclass(frozen=True)
 class LlamaTools:
     convert: Path
-    export_lora: Path
     quantize: Path
     source_root: Path
 
@@ -95,28 +97,27 @@ def _publish(user_id: str, adapter_dir: Path) -> None:
 
 
 def merge_adapter_to_gguf(adapter_dir: Path, dest: Path, status_path: Path) -> None:
-    """Convert the PEFT adapter, merge it into the base GGUF, and quantize to Q4."""
+    """Add the adapter to a copy of the local 16-bit weights, then quantize once."""
     write_status(status_path, "running", "tools")
     tools = ensure_tools()
-    write_status(status_path, "running", "base")
-    base = ensure_base_gguf()
     work = dest.parent / ".publish-work"
     work.mkdir(parents=True, exist_ok=True)
-    lora_gguf = work / "adapter-f16.gguf"
+    merged_dir = work / "merged-hf"
     merged = work / "merged-f16.gguf"
     partial = dest.with_name(dest.name + ".partial")
     try:
-        write_status(status_path, "running", "converting")
-        convert_lora(tools, adapter_dir, lora_gguf)
         write_status(status_path, "running", "merging")
-        export_lora(tools, base, lora_gguf, merged)
+        merge_adapter_into_copy(adapter_dir, merged_dir)
+        write_status(status_path, "running", "converting")
+        convert_hf(tools, merged_dir, merged)
         write_status(status_path, "running", "quantizing")
         quantize(tools, merged, partial)
         partial.replace(dest)
     finally:
         partial.unlink(missing_ok=True)
-        lora_gguf.unlink(missing_ok=True)
         merged.unlink(missing_ok=True)
+        if merged_dir.exists():
+            shutil.rmtree(merged_dir, ignore_errors=True)
         if work.exists() and not any(work.iterdir()):
             work.rmdir()
 
@@ -127,41 +128,62 @@ def ensure_tools() -> LlamaTools:
     root = repo_data() / "llama.cpp" / LLAMA_TAG
     source = root / "source"
     binary = root / "bin"
-    convert = _find_optional(source, "convert_lora_to_gguf.py")
-    export_bin = _find_optional(binary, "llama-export-lora")
+    convert = _find_optional(source, "convert_hf_to_gguf.py")
     quantize_bin = _find_optional(binary, "llama-quantize")
     if convert is None:
         archive = root / "source.tar.gz"
         _download(SRC_URL, archive)
         _extract(archive, source)
-        convert = _require(source, "convert_lora_to_gguf.py")
-    if export_bin is None or quantize_bin is None:
+        convert = _require(source, "convert_hf_to_gguf.py")
+    if quantize_bin is None:
         archive = root / "macos-arm64.tar.gz"
         _download(BIN_URL, archive)
         _extract(archive, binary)
-        export_bin = _require(binary, "llama-export-lora")
         quantize_bin = _require(binary, "llama-quantize")
-    export_bin.chmod(export_bin.stat().st_mode | 0o111)
     quantize_bin.chmod(quantize_bin.stat().st_mode | 0o111)
     return LlamaTools(
         convert=convert,
-        export_lora=export_bin,
         quantize=quantize_bin,
         source_root=convert.parent,
     )
 
 
-def ensure_base_gguf() -> Path:
-    dest = repo_data() / "models" / "base" / "Qwen3.5-4B-Q4_K_M.gguf"
-    if dest.is_file() and dest.stat().st_size > 1_000_000:
-        return dest
-    from export_on_device import _fetch_base_gguf
+def merge_adapter_into_copy(adapter_dir: Path, dest_dir: Path) -> None:
+    """Read the on-disk 16-bit checkpoint, add the adapter, and save a new copy."""
+    import torch
+    from peft import PeftModel
+    from transformers import AutoTokenizer, Qwen3_5ForConditionalGeneration
 
-    _fetch_base_gguf(dest)
-    return dest
+    if not (adapter_dir / "adapter_config.json").is_file():
+        raise RuntimeError("No adapter yet.")
+    os.environ.setdefault("HF_HOME", str(repo_data() / "huggingface"))
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    snapshot = _hf_snapshot(os.environ["HF_HOME"])
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    tokenizer = AutoTokenizer.from_pretrained(snapshot, local_files_only=True)
+    # This runs off the server's main thread. Loading the checkpoint onto Metal
+    # from that thread crashes the process, so the addition stays on the CPU.
+    model = Qwen3_5ForConditionalGeneration.from_pretrained(
+        snapshot,
+        dtype=torch.bfloat16,
+        low_cpu_mem_usage=True,
+        local_files_only=True,
+    )
+    merged = None
+    try:
+        merged = PeftModel.from_pretrained(model, adapter_dir).merge_and_unload()
+        merged.save_pretrained(dest_dir, safe_serialization=True)
+        tokenizer.save_pretrained(dest_dir)
+        _copy_checkpoint_metadata(snapshot, dest_dir)
+    finally:
+        del model, merged
+        gc.collect()
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
 
-def convert_lora(tools: LlamaTools, adapter_dir: Path, outfile: Path) -> None:
+def convert_hf(tools: LlamaTools, model_dir: Path, outfile: Path) -> None:
     env = os.environ.copy()
     env["HF_HUB_OFFLINE"] = "1"
     env["TRANSFORMERS_OFFLINE"] = "1"
@@ -170,27 +192,42 @@ def convert_lora(tools: LlamaTools, adapter_dir: Path, outfile: Path) -> None:
         [
             sys.executable,
             str(tools.convert),
-            "--base",
-            str(_hf_snapshot(env["HF_HOME"])),
             "--outfile",
             str(outfile),
             "--outtype",
             "f16",
-            str(adapter_dir),
+            "--no-mtp",
+            str(model_dir),
         ],
         cwd=tools.source_root,
         env=env,
     )
 
 
-def export_lora(tools: LlamaTools, base: Path, lora: Path, outfile: Path) -> None:
-    _run(
-        [str(tools.export_lora), "-m", str(base), "--lora", str(lora), "-o", str(outfile)],
-    )
-
-
 def quantize(tools: LlamaTools, merged: Path, outfile: Path) -> None:
     _run([str(tools.quantize), str(merged), str(outfile), "Q4_K_M"])
+
+
+def _copy_checkpoint_metadata(snapshot: Path, dest_dir: Path) -> None:
+    """Keep the original config beside the merged weights."""
+    names = (
+        "config.json",
+        "generation_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json",
+        "merges.txt",
+        "special_tokens_map.json",
+        "chat_template.jinja",
+        "preprocessor_config.json",
+        "processor_config.json",
+        "video_preprocessor_config.json",
+        "added_tokens.json",
+    )
+    for name in names:
+        source = snapshot / name
+        if source.is_file():
+            shutil.copy2(source, dest_dir / name)
 
 
 def _hf_snapshot(hf_home: str) -> Path:

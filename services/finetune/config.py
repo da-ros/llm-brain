@@ -34,6 +34,10 @@ class Settings(BaseSettings):
 
     TRAINING_EPOCHS: int = 5
     TRAINING_LR: float = 0.001
+    LORA_RANK: int = 16
+    LORA_ALPHA: int = 32
+    TRAIN_LOSS_TARGET: float = 0.05
+    TRAIN_MAX_EPOCHS: int = 30
     MAX_TRAINING_TIME_HOURS: int = 2
 
     ADAPTER_OUTPUT_DIR: str = "./data/models"

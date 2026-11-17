@@ -1,3 +1,4 @@
+import {useEffect} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 
 import {formatBytes, formatDuration} from '../bytes';
@@ -18,18 +19,26 @@ export function StatusScreen() {
       ? snapshot.loraPack ?? snapshot.basePack
       : snapshot.basePack
     : snapshot.basePack;
-  const modelBytes = pack?.bytes ?? 0;
+  const downloading = snapshot.downloading;
+  const modelBytes = downloading ? downloading.received : pack?.bytes ?? 0;
   const used = modelBytes + snapshot.cacheBytes;
   const ratio = Math.min(1, used / STORAGE_BUDGET_BYTES);
   const average = brain.averageShortMs();
-  const personalMissing = snapshot.user?.plan === 'premium' && !snapshot.loraPack;
+  const personalMissing = snapshot.user?.plan === 'premium' && !snapshot.loraPack && !downloading;
+  const total = downloading?.total ?? 0;
+  const tag = pack?.tag?.trim() ?? '';
+  useEffect(() => {
+    void brain.refreshInstalledTag();
+  }, [brain]);
 
   return (
     <ScrollView style={{backgroundColor: theme.bg}} contentContainerStyle={styles.content}>
       <ScreenHeader title="Model & Device Status" onBack={() => navigation.goBack()} />
       <Glass radius={22} contentStyle={styles.card}>
         <Text style={[styles.model, {color: theme.text}]}>Qwen 3.5 4B</Text>
-        <Text style={[styles.meta, {color: theme.muted}]}>Open source LLM · 4.0B parameters</Text>
+        <Text style={[styles.meta, {color: theme.muted}]}>
+          {tag || 'Open source LLM · 4.0B parameters'}
+        </Text>
         <Text style={[styles.body, {color: theme.text}]}>
           A capable, efficient model for everyday questions, writing, and analysis.
         </Text>
@@ -47,22 +56,40 @@ export function StatusScreen() {
         <View style={[styles.track, {backgroundColor: theme.sunken}]}>
           <View style={[styles.fill, {backgroundColor: theme.primary, width: `${ratio * 100}%`}]} />
         </View>
-        <StorageRow label="Model file" value={pack ? `${pack.id} · ${formatBytes(modelBytes)}` : 'Not installed'} />
+        <StorageRow
+          label="Model file"
+          value={
+            downloading
+              ? `${formatBytes(downloading.received)} / ${formatBytes(total)}`
+              : pack
+                ? `${tag || pack.id} · ${formatBytes(pack.bytes)}`
+                : 'Not installed'
+          }
+        />
         <StorageRow label="Cache" value={formatBytes(snapshot.cacheBytes)} />
       </Glass>
       <Glass radius={22} contentStyle={styles.statusCard}>
         <Text style={[styles.rowTitle, {color: theme.text}]}>Status</Text>
-        <StorageRow label="Model ready" value={pack ? 'On Device' : 'Not ready'} />
-        <StorageRow label="Offline ready" value={pack ? 'Works without internet' : 'Download the model first'} />
+        <StorageRow label="Model ready" value={downloading ? 'Downloading' : pack ? 'On Device' : 'Not ready'} />
+        <StorageRow
+          label="Offline ready"
+          value={downloading ? 'Keep Encefalus open' : pack ? 'Works without internet' : 'Download the model first'}
+        />
         <StorageRow
           label="Average response time (short responses)"
           value={average == null ? '—' : formatDuration(average)}
         />
       </Glass>
       <MutedButton
-        title="Reinstall Model"
-        subtitle="Download or update model files"
+        title={downloading ? 'Downloading model' : 'Reinstall Model'}
+        subtitle={
+          downloading
+            ? 'Keep Encefalus open until this finishes'
+            : 'Download or update model files'
+        }
         icon={Icon.reinstall}
+        spinning={Boolean(downloading)}
+        disabled={Boolean(downloading)}
         onPress={() => void brain.reinstall()}
       />
       <MutedButton
@@ -71,6 +98,7 @@ export function StatusScreen() {
         icon={Icon.erase}
         onPress={() => void brain.clearCache()}
       />
+      {snapshot.packError ? <Text style={[styles.body, {color: theme.danger}]}>{snapshot.packError}</Text> : null}
       {snapshot.error ? <Text style={[styles.body, {color: theme.danger}]}>{snapshot.error}</Text> : null}
       {snapshot.notice ? <Text style={[styles.body, {color: theme.muted}]}>{snapshot.notice}</Text> : null}
     </ScrollView>

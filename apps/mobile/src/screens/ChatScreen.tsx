@@ -108,9 +108,12 @@ export function ChatScreen() {
                 <View key={`${index}-${turn.role}`} style={styles.assistantRow}>
                   {turn.role === 'assistant' ? <MarkBadge size={34} /> : <View style={styles.badgeGap} />}
                   <Glass radius={22} style={styles.assistantBubble} contentStyle={styles.bubblePad}>
-                    <Text style={[styles.bubbleText, {color: turn.role === 'note' ? theme.muted : theme.text}]}>
-                      {turn.text}
-                    </Text>
+                    {turn.thinking ? <Thinking text={turn.thinking} openByDefault={!turn.text.trim()} /> : null}
+                    {turn.text.trim() ? (
+                      <Text style={[styles.bubbleText, {color: turn.role === 'note' ? theme.muted : theme.text}]}>
+                        {turn.text}
+                      </Text>
+                    ) : null}
                     {(turn.cards ?? []).length ? (
                       <View style={styles.sourceRow}>
                         {(turn.cards ?? []).map(card => (
@@ -307,6 +310,27 @@ export function ChatScreen() {
   );
 }
 
+function Thinking({text, openByDefault}: {text: string; openByDefault: boolean}) {
+  const theme = useTheme();
+  const [open, setOpen] = useState(openByDefault);
+  return (
+    <View style={styles.thinking}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Thinking"
+        accessibilityState={{expanded: open}}
+        onPress={() => setOpen(current => !current)}
+        style={styles.thinkingButton}>
+        <View style={{transform: [{rotate: open ? '90deg' : '0deg'}]}}>
+          <Icon.next size={16} color={theme.muted} strokeWidth={2.4} />
+        </View>
+        <Text style={[styles.thinkingLabel, {color: theme.muted}]}>Thinking</Text>
+      </Pressable>
+      {open ? <Text style={[styles.thinkingBody, {color: theme.muted}]}>{text}</Text> : null}
+    </View>
+  );
+}
+
 function shownAssumptions(items: string[] | undefined): string[] {
   return (items ?? []).filter(item => !/^Retrieved \d+ source\(s\) from RAG Top-k search\.$/.test(item));
 }
@@ -399,6 +423,10 @@ const styles = StyleSheet.create({
   badgeGap: {width: 34},
   bubblePad: {paddingHorizontal: 16, paddingVertical: 13},
   bubbleText: {fontSize: scale.body, lineHeight: 24},
+  thinking: {marginBottom: 8, gap: 6},
+  thinkingButton: {flexDirection: 'row', alignItems: 'center', gap: 6},
+  thinkingLabel: {fontSize: scale.caption, fontWeight: '600'},
+  thinkingBody: {fontSize: scale.caption, lineHeight: 20},
   evidence: {fontSize: scale.micro, lineHeight: 18, marginTop: 8},
   sourceRow: {flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 4, marginTop: 8},
   source: {fontSize: scale.micro, lineHeight: 18},

@@ -14,6 +14,7 @@ export type Turn = {
   text: string;
   cards?: SourceCard[];
   assumptions?: string[];
+  thinking?: string;
 };
 
 export type Thread = {
@@ -23,7 +24,7 @@ export type Thread = {
   serverChatId: string | null;
 };
 
-export type Pack = {id: string; path: string; bytes: number; sha256: string};
+export type Pack = {id: string; path: string; bytes: number; sha256: string; tag?: string};
 
 export type UserSandbox = {
   threads: Thread[];
@@ -92,7 +93,12 @@ export interface PackFiles {
   write(filename: string, bytes: Uint8Array): Promise<string>;
   remove(path: string): Promise<void>;
   /** Stream a pack to disk. The in-memory write path cannot hold a 2.7 GB GGUF. */
-  download?(url: string, filename: string, token: string | null): Promise<DownloadedPack>;
+  download?(
+    url: string,
+    filename: string,
+    token: string | null,
+    onProgress?: (received: number, total: number) => void,
+  ): Promise<DownloadedPack>;
 }
 
 export class MemoryPackFiles implements PackFiles {

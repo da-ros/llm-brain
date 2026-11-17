@@ -301,6 +301,30 @@ class TestScan:
         assert FakeClient.chat_calls == before
         assert db.memory().by_id == {}
 
+    def test_image_and_video_embeds_wait_longer_than_text(self, monkeypatch):
+        seen: list[float] = []
+
+        class Recording(FakeClient):
+            def __init__(self, *args, timeout=None, **kwargs):
+                seen.append(float(timeout))
+
+        monkeypatch.setattr("rag_client.httpx.AsyncClient", Recording)
+        import asyncio
+
+        from config import get_settings
+        from rag_client import embed
+
+        vector = asyncio.run(
+            embed(modality="image", correlation_id="cid-image-timeout", payload=b"png")
+        )
+        asyncio.run(embed(modality="video", correlation_id="cid-video-timeout", payload=b"mp4"))
+        asyncio.run(embed(modality="text", correlation_id="cid-text-timeout", text="hello"))
+        assert len(vector) == 2048
+        assert seen[0] >= 20
+        assert seen[1] >= 60
+        assert seen[2] == get_settings().RAG_TIMEOUT_SECONDS
+        assert seen[2] < seen[0] < seen[1]
+
     def test_embed_failure_still_calls_llm(self, client):
         FakeClient.embed_status = 500
         import scan

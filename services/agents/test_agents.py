@@ -1670,3 +1670,31 @@ class TestLearning:
         assert body["cycles"][0]["version"] == "qwen3.5-4b-lora-v1"
         assert body["cycles"][0]["status"] == "completed"
         assert body["cycles"][0]["signals"] == 1
+        assert body["cycles"][0]["loss"] is None
+
+    def test_training_log_reads_rank_loss_and_epochs(self):
+        from learning import _parse_training_log
+
+        text = """
+## Hyperparams
+
+- lora_rank: 16
+- max_epochs: 30
+
+## Metrics
+
+- epochs: 7
+- final_loss: 0.0349
+"""
+        parsed = _parse_training_log(text)
+        assert parsed["rank"] == 16
+        assert parsed["epochs"] == 7
+        assert parsed["loss"] == 0.0349
+
+    def test_learned_lists_every_trained_question(self):
+        from learning import _bullets
+
+        batch = {
+            "items": [{"query": f"Question {index}?"} for index in range(8)],
+        }
+        assert _bullets(batch) == [f"Question {index}?" for index in range(8)]

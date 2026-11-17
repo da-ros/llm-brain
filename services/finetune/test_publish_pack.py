@@ -11,14 +11,16 @@ def test_merge_writes_the_quantized_file(tmp_path: Path, monkeypatch):
     status = tmp_path / "pack" / "publish.json"
     tools = publish_pack.LlamaTools(
         convert=tmp_path / "convert.py",
-        export_lora=tmp_path / "export",
         quantize=tmp_path / "quantize",
         source_root=tmp_path,
     )
     monkeypatch.setattr(publish_pack, "ensure_tools", lambda: tools)
-    monkeypatch.setattr(publish_pack, "ensure_base_gguf", lambda: tmp_path / "base.gguf")
-    monkeypatch.setattr(publish_pack, "convert_lora", lambda *_args: None)
-    monkeypatch.setattr(publish_pack, "export_lora", lambda *_args: None)
+
+    def merge_copy(_adapter: Path, dest: Path) -> None:
+        dest.mkdir(parents=True)
+
+    monkeypatch.setattr(publish_pack, "merge_adapter_into_copy", merge_copy)
+    monkeypatch.setattr(publish_pack, "convert_hf", lambda *_args: None)
 
     def quantize(_tools, _merged: Path, outfile: Path) -> None:
         outfile.write_bytes(b"q4")
