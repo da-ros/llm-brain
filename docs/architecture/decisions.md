@@ -1,40 +1,54 @@
-# Architecture decisions — Frame 1
+# Architecture decisions
 
-Scope source of truth: `openspec/input/context.txt`. This record lists where the
-implemented foundation differs from earlier Bedrock/Atlas sketches.
+Scope source of truth: `openspec/input/context.txt`. How the code runs today:
+[current-runtime.md](current-runtime.md).
 
 ## In scope (local MVP)
 
 - Single multimodal family: **Qwen3.5-4B**.
-- Cloud inference = **local Docker container** serving **base** Qwen3.5-4B (not fine-tuned) on port 8003.
-- On-device: React Native on iPhone via Neural Engine / Metal — Free = base Q4; Premium = fine-tuned Q4.
-- MongoDB and Chroma run as local Docker containers (not Atlas / Pinecone / Chroma Cloud).
+- Host inference is a process on port 8003 serving **base** Qwen3.5-4B.
+  Web free and web premium share those weights. Premium chat adds RAG outside
+  the model process. `QWEN_ADAPTER_PATH` is empty, so the LoRA adapter is not
+  loaded there.
+- On-device inference is `llama.rn` (llama.cpp, GGUF Q4_K_M, GPU via Metal).
+  Free loads the base pack. Premium on-device loads that user's pack. The
+  Neural Engine is not used.
+- MongoDB and Chroma run as local Docker containers.
 - Clients call the API Router directly. AWS API Gateway is future only.
+- Fine-tune is a host process on port 8004. Compose builds `finetune-service`
+  and does not publish that port. Callers use `host.docker.internal:8004`.
+- Passwords are PBKDF2-HMAC-SHA256. Earlier frame text says bcrypt.
 
-## Deviations from the first repo sketch
+## What changed from the anteproyecto and the first sketch
 
-| Topic | Original sketch | This implementation |
-|-------|-----------------|---------------------|
-| LLM cloud | AWS Bedrock, Llama 3 8B | Local Qwen3.5-4B base container (`QwenLocalProvider`) |
-| On-device | llama.rn + Llama 3.2 3B | Qwen3.5-4B Q4 in React Native / Neural Engine / Metal (`OnDeviceProvider`) |
-| User store in Frame 1 | Implied Mongo from day one | In-memory store in `apps/api` so JWT tests run without Mongo. Later frames persist users in MongoDB. |
-| API layout | `apps/api` only | Frame 1 foundation is `apps/api`. Frame 1.1 adds `services/api-router` (Kafka, correlation ID, upload/chat). Compose still starts `api-router` on port 8000 for the microservice stack; `apps/api` is the contract + Dockerfile `CMD`. |
-| Embeddings | MiniLM / Pinecone | Qwen3-VL-Embedding-2B (2048-dim) in Chroma (later frames) |
+| Topic | Earlier decision | Current implementation |
+|-------|------------------|------------------------|
+| LLM cloud | AWS Bedrock, Llama 3 8B, then a local container on port 8003 | Host process on port 8003. No LLM image. Containers call `host.docker.internal:8003` |
+| On-device | llama.rn + Llama 3.2 3B, later described as Neural Engine / ExecuTorch / Core ML | Qwen3.5-4B GGUF Q4_K_M through `llama.rn` on the GPU (Metal) |
+| Users | Anteproyecto "one user"; Frame 1 used an in-memory store in `apps/api` | Many accounts in MongoDB. The alpha adapter belongs to one account, Nora Vega |
+| API layout | `apps/api` monolith | `services/api-router` on port 8000. The monolith is gone |
+| Embeddings | MiniLM / Pinecone | Qwen3-VL-Embedding-2B, 2048 dimensions, in local Chroma |
+| Analytics chart | Anteproyecto Chart.js | React scatter in `analytics-page.tsx` |
+| Password hash | Frame 1 spec says bcrypt | PBKDF2-HMAC-SHA256, 200000 iterations, `salt$hash` |
+| Retrieval depth | Thesis metric Precision@3 | The service retrieves `RAG_TOP_K` items, default 8. Precision@3 is computed on the first three |
 
 ## Provider resolution
 
-`LLM_PROVIDER` is `ondevice` or `qwen_local` (`local` is an alias of `qwen_local` for CI).
-Any other value (including `bedrock`) fails at startup.
+`LLM_BACKEND` is `qwen_local` (`local` is an alias) or `ollama`. Any other
+value fails at startup. `QWEN_MOCK=true` wins over both and returns the mock
+provider. `LLM_PROVIDER` still appears in older env examples and in CI. The
+resolver in `services/llm/providers/resolver.py` does not read it.
+
+Web free and web premium both pass `get_provider`. The phone never does for
+an on-device reply.
 
 ## Fine-tuning
 
-Local LoRA output is the **Premium on-device** build only. The cloud container stays base.
+Local LoRA writes `data/models/{user_id}/adapter/` and a Markdown log under
+`data/training_logs/`. The host process on port 8003 stays the base model.
+The premium phone pack is a separate Q4 GGUF produced from that adapter.
 
-## Frame 4 services
-
-- `services/llm` (port 8003): FastAPI + `QwenLocalProvider`. Serves **base** Qwen3.5-4B
-  for Premium chat/RAG and ETL triple extraction. Free tier is rejected (on-device, Frame 10).
-- `services/finetune` (port 8004): manual `POST /train` only. Converts ETL triples JSONL to
-  LoRA instruction format, runs PEFT / ms-swift / Unsloth locally, writes
-  `data/models/{user_id}/adapter/` and a Markdown training log. Does **not** patch the
-  cloud container.
+The alpha round uses `qwen3.5-4b-lora-v5`. Logs for versions 1 through 4 of
+the same account remain in `thesis/evidence/finetune/`. September 2026 logs
+for `user1` under pytest temporary paths are mock runs and are not part of
+the round.

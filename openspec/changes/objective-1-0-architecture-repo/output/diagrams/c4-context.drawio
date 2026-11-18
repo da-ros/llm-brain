@@ -10,7 +10,7 @@
                 <mxCell id="user" value="User&#10;(multi-tenant)" style="shape=mxgraph.basic.smiley;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;html=1;" parent="1" vertex="1">
                     <mxGeometry x="80" y="220" width="170" height="130" as="geometry"/>
                 </mxCell>
-                <mxCell id="user_note" value="Web (Premium)&#10;React Native iPhone (Free + Premium)" style="text;html=1;align=center;verticalAlign=top;fontSize=10;fillColor=none;strokeColor=none;fontColor=#666666;" parent="1" vertex="1">
+                <mxCell id="user_note" value="Web and iPhone&#10;each has Free and Premium" style="text;html=1;align=center;verticalAlign=top;fontSize=10;fillColor=none;strokeColor=none;fontColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="60" y="355" width="210" height="40" as="geometry"/>
                 </mxCell>
                 <mxCell id="admin" value="Admin&#10;(manual LoRA trigger)" style="shape=mxgraph.basic.smiley;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;html=1;" parent="1" vertex="1">
@@ -19,10 +19,10 @@
                 <mxCell id="system" value="llm-brain&#10;AI-Augmented Digital Brain&#10;&#10;Multi-tenant PKM with JWT auth,&#10;per-user isolation, RAG, and a&#10;single multimodal model family:&#10;Qwen3.5-4B." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontStyle=1;strokeWidth=3;" parent="1" vertex="1">
                     <mxGeometry x="480" y="280" width="380" height="200" as="geometry"/>
                 </mxCell>
-                <mxCell id="ondevice" value="On-device LLM&#10;React Native / Neural Engine / Metal&#10;&#10;Free: Qwen3.5-4B base Q4&#10;Premium: Qwen3.5-4B fine-tuned Q4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=12;" parent="1" vertex="1">
+                <mxCell id="ondevice" value="On-device LLM&#10;React Native / llama.rn&#10;GPU via Metal&#10;&#10;Free: Qwen3.5-4B base Q4&#10;Premium: Qwen3.5-4B fine-tuned Q4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=12;" parent="1" vertex="1">
                     <mxGeometry x="1040" y="120" width="320" height="140" as="geometry"/>
                 </mxCell>
-                <mxCell id="llm" value="LLM Service (host process)&#10;Qwen3.5-4B base (not fine-tuned)&#10;Port 8003 — Premium + RAG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=12;" parent="1" vertex="1">
+                <mxCell id="llm" value="LLM Service (host process)&#10;Qwen3.5-4B base (not fine-tuned)&#10;Port 8003 — web free and web premium" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=12;" parent="1" vertex="1">
                     <mxGeometry x="1040" y="290" width="320" height="120" as="geometry"/>
                 </mxCell>
                 <mxCell id="mongo" value="MongoDB (local Docker)&#10;Documents, GridFS, task_status" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontSize=12;size=12;" parent="1" vertex="1">

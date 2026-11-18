@@ -1,0 +1,14 @@
+objective,check,evidence,status,kind,result
+OE1,Architecture prose matches the running system,docs/architecture/current-runtime.md,pass,real,
+OE1,C4 labels name the host LLM and llama.rn,openspec/changes/objective-1-0-architecture-repo/output/diagrams,pass,real,
+OE2,Ingestion success on the alpha corpus,thesis/evidence/runs/ingest.jsonl,pass,real,23/23 archive files already distilled; 196 triples; evaluation key not ingested
+OE3,Precision@3 on paraphrased queries,thesis/evidence/runs/retrieval.jsonl,pass,real,0.6111 on 18 paraphrases; exact training sentences excluded; Q14 control 0.0; exact labeled mean 0.5555
+OE4,Base and base-rag complete-response time,thesis/evidence/runs/generation.jsonl,pass,real,three replies per prompt; text unchanged; path llm-direct; base median 9816 ms (3446-29846, first reply loads the weights); base-rag median 7257 ms; fact_match 0.1364 and 0.9545; grounding KPI on 18 paraphrases 0.9444
+OE4,Adapter v5 training log,thesis/evidence/finetune/logs/ft-job-56f3ab60.md,pass,real,loss 0.0082 is training loss
+OE4,Adapter v5 reproduction on the evaluation questions,thesis/evidence/runs/generation.jsonl,pass,real,host probe; three replies; text unchanged; no RAG; fact_match 0.8636 of 22; misses Q13 Q16 Q18; median 1412 ms
+OE5,learn_graph does not call POST /train,services/agents/test_agents.py,pass,mock,
+OE6,Simulator scenario trace,thesis/evidence/runs/simulator.jsonl,pass,real,3 stored Nora scenarios on 2026-11-10; each has optimistic baseline and pessimistic; model Qwen3.5-4B
+OE7,Analytics correlation matches the labeled series,thesis/evidence/runs/analytics.jsonl,pass,real,stored Nora days n=8; sleep_productivity r=0.9897; meetings_focus r=-0.996; formula matches GET /correlations
+OE8,Shield on labeled examples,thesis/evidence/runs/shield.jsonl,pass,real,30/30; phishing and scam alert; ham does not
+OE9,pytest suite,CI workflow,pass,mock,
+OE9,KPI rows above,thesis/evidence/acceptance-matrix.csv,pass,real,ten screenshots filed; they are figures, not measurements

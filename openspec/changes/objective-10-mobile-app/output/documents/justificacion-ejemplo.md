@@ -1,5 +1,8 @@
 # Justificación — Mobile app (Frame 10)
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 El Frame 10 es la app de iPhone. Free responde siempre con el modelo base
 cuantizado en el teléfono. Premium tiene un interruptor: On device usa el
 LoRA Q4 de esa persona, y Digital Brain llama a `POST /api/chat` con RAG y

@@ -1,5 +1,8 @@
 ## Context
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 See proposal.md — Why. Frames 1 through 6 and Frame 8 already expose
 the product through the API Router. `apps/web/` is the Encefalus user
 interface for those routes. The anteproyecto names objetivo 7 Life

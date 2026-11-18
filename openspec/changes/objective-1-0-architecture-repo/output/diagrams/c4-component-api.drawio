@@ -10,10 +10,10 @@
                 <mxCell id="fastapi_app" value="FastAPI App&#10;services/api-router/main.py&#10;&#10;create_app() · router mounting&#10;CORS · fail-fast config" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;strokeWidth=3;" parent="1" vertex="1">
                     <mxGeometry x="80" y="160" width="250" height="130" as="geometry"/>
                 </mxCell>
-                <mxCell id="config" value="Config&#10;pydantic-settings&#10;&#10;LLM_PROVIDER: ondevice | qwen_local&#10;JWT_SECRET_KEY (required)&#10;LLM_SERVICE_URL :8003" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="config" value="Config&#10;pydantic-settings&#10;&#10;LLM_BACKEND: qwen_local | ollama&#10;JWT_SECRET_KEY (required)&#10;LLM_SERVICE_URL :8003 host process" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="80" y="330" width="250" height="130" as="geometry"/>
                 </mxCell>
-                <mxCell id="auth" value="Auth&#10;JWT + bcrypt&#10;&#10;register · login&#10;verify_token · get_current_user&#10;require_premium" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="auth" value="Auth&#10;JWT + PBKDF2-SHA256&#10;&#10;register · login&#10;verify_token · get_current_user&#10;require_premium" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="80" y="500" width="250" height="130" as="geometry"/>
                 </mxCell>
                 <mxCell id="health" value="GET /health (public)&#10;status: ok · llm_provider&#10;(no secrets)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
@@ -22,7 +22,7 @@
                 <mxCell id="llm_layer" value="LLM Provider Layer&#10;Protocol: LLMProvider&#10;&#10;chat(messages, context)&#10;complete(prompt)&#10;get_provider()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="440" y="150" width="280" height="140" as="geometry"/>
                 </mxCell>
-                <mxCell id="ondevice" value="OnDeviceProvider&#10;Qwen3.5-4B Q4&#10;Free = base · Premium = fine-tuned&#10;React Native / Neural Engine / Metal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="ondevice" value="On-device engine&#10;Qwen3.5-4B Q4 via llama.rn&#10;Free = base · Premium = fine-tuned&#10;GPU via Metal. Not inside the API Router" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="430" y="350" width="280" height="110" as="geometry"/>
                 </mxCell>
                 <mxCell id="qwen" value="QwenLocalProvider&#10;HTTP → LLM Service :8003&#10;Qwen3.5-4B base (not fine-tuned)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
@@ -37,7 +37,7 @@
                 <mxCell id="models" value="Data models&#10;User · Document · Subscription" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="820" y="510" width="280" height="90" as="geometry"/>
                 </mxCell>
-                <mxCell id="ext_ondev" value="iPhone runtime&#10;Neural Engine / Metal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                <mxCell id="ext_ondev" value="iPhone runtime&#10;llama.rn on Metal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="1290" y="290" width="220" height="70" as="geometry"/>
                 </mxCell>
                 <mxCell id="ext_llm" value="LLM Service :8003&#10;Qwen3.5-4B base host process" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
@@ -89,7 +89,7 @@
                 <mxCell id="r_cfg_llm" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;" parent="1" source="config" target="llm_layer" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="r_cfg_llm_l" value="LLM_PROVIDER" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" parent="r_cfg_llm" connectable="0" vertex="1">
+                <mxCell id="r_cfg_llm_l" value="LLM_BACKEND" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" parent="r_cfg_llm" connectable="0" vertex="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="r4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=classic;strokeColor=#82b366;exitX=0.35;exitY=1;exitDx=0;exitDy=0;entryX=0.388;entryY=-0.007;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="llm_layer" target="ondevice" edge="1">
@@ -214,7 +214,7 @@
                 <mxCell id="leg_l4" value="Runtimes (on-device / host process)" style="text;html=1;align=left;verticalAlign=middle;strokeColor=none;fillColor=none;fontSize=11;" parent="1" vertex="1">
                     <mxGeometry x="732" y="800" width="260" height="24" as="geometry"/>
                 </mxCell>
-                <mxCell id="leg_note" value="Unsupported LLM_PROVIDER fails at startup. No Bedrock / llama.rn in this frame." style="text;html=1;align=left;verticalAlign=middle;strokeColor=none;fillColor=none;fontSize=11;fontColor=#666666;" parent="1" vertex="1">
+                <mxCell id="leg_note" value="Unknown LLM_BACKEND fails at startup. The phone runtime is llama.rn. No Bedrock." style="text;html=1;align=left;verticalAlign=middle;strokeColor=none;fillColor=none;fontSize=11;fontColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="100" y="828" width="1300" height="24" as="geometry"/>
                 </mxCell>
             </root>

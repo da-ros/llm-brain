@@ -4,10 +4,11 @@ Frame 1 defense artifacts for Objetivo Específico 1.
 
 | Path | What |
 |------|------|
-| [decisions.md](decisions.md) | Deviations and architecture decisions vs the original sketch |
-| [project-architecture-overview.md](project-architecture-overview.md) | Running microservice map (ports 8000–8004, Frame 4 LLM + LoRA) |
+| [current-runtime.md](current-runtime.md) | How the system runs: host LLM, `llama.rn`, fine-tune, Fernet, CI |
+| [decisions.md](decisions.md) | Earlier decisions and what the implementation does now |
+| [project-architecture-overview.md](project-architecture-overview.md) | Service map, ports, and who calls the model |
 | [stack.md](stack.md) | OSS stack + rationale |
 | [security.md](security.md) | Shift Left (CI) and future Shift Right |
-| [../openspec/changes/objective-1-0-architecture-repo/output/diagrams/](../openspec/changes/objective-1-0-architecture-repo/output/diagrams/) | C4, deployment, MCP diagrams |
+| [../../openspec/changes/objective-1-0-architecture-repo/output/diagrams/](../../openspec/changes/objective-1-0-architecture-repo/output/diagrams/) | C4, deployment, MCP diagrams |
 
-Local MVP: clients → API Router directly. AWS API Gateway / ECS Fargate / Bedrock are **future, out of scope**.
+Local MVP: clients call the API Router directly. The LLM and the fine-tune job are host processes on ports 8003 and 8004. AWS API Gateway, ECS Fargate, and Bedrock are future work, outside this MVP.

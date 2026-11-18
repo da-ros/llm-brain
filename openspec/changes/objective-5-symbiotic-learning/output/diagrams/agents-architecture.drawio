@@ -25,7 +25,7 @@
                 <mxCell id="rag" value="RAG Service :8002&#10;LangChain Top-k + Chroma&#10;GET /search (user_id)&#10;no agent logic here" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="1580" y="160" width="220" height="100" as="geometry"/>
                 </mxCell>
-                <mxCell id="llm" value="LLM Service :8003&#10;base Qwen3.5-4B container&#10;POST /chat (not weights in Agents)&#10;not fine-tuned" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                <mxCell id="llm" value="LLM Service :8003&#10;base Qwen3.5-4B host process&#10;POST /chat (not weights in Agents)&#10;not fine-tuned" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="1580" y="310" width="220" height="100" as="geometry"/>
                 </mxCell>
                 <mxCell id="finetune" value="Fine-Tune Service :8004&#10;local LoRA POST /train&#10;manual only — never auto" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">

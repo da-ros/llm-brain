@@ -26,7 +26,7 @@ AWS (Bedrock, ECS, API Gateway) is future work.
 | 4 | LLM on the Mac (Qwen3.5-4B base) + local LoRA | `services/llm/`, `services/finetune/` |
 | 5 | Symbiotic Learning Loop (MCP: Ingestor/Razonador/Evaluador) | `services/agents/` |
 | 6 | Decision-Support Simulator (what-if) | `services/simulator/` |
-| 7 | Life Analytics (React + Chart.js) | `apps/web/` |
+| 7 | Life Analytics (React scatter) | `apps/web/` |
 | 8 | Privacy & Scam Shield | `services/shield/` |
 | 9 | Alpha validation & KPIs | across modules |
 
@@ -81,6 +81,10 @@ Local stack (MongoDB, Chroma, Kafka, services):
 docker compose up --build
 ```
 
+That command does not start the model. The base Qwen process on port 8003 and the
+fine-tune process on port 8004 run on the host. See `docs/local-execution.md`
+and `docs/architecture/current-runtime.md`.
+
 ### Memory distillation (Frame 2)
 
 `POST /api/upload` on the API Router (port 8000) is async: JWT + python-magic MIME + 10MB
@@ -107,13 +111,13 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/). 
 
 ## Tech stack
 
-Python 3.13 · FastAPI · LangChain / LangGraph · React + Chart.js · React Native (iPhone) ·
-MongoDB (local) · Chroma (local, 2048-dim) · Qwen3.5-4B (Mac process + on-device Q4) ·
+Python 3.13 · FastAPI · LangChain / LangGraph · TanStack Start (React) · React Native (iPhone, `llama.rn`) ·
+MongoDB (local) · Chroma (local, 2048-dim) · Qwen3.5-4B (Mac process + on-device GGUF Q4) ·
 Docker Compose · GitHub Actions.
 
-**Auth:** JWT + bcrypt (register, login, `get_current_user`) with per-user data isolation.
+**Auth:** JWT (HS256) + PBKDF2-HMAC-SHA256 (`services/api-router/accounts.py`) with per-user data isolation.
 
-**LLM_PROVIDER:** `ondevice` | `qwen_local` (alias `local`). Unsupported values fail at startup.
+**LLM_BACKEND:** `qwen_local` (alias `local`) or `ollama`, on the host process at port 8003. `QWEN_MOCK=true` overrides both. The phone does not use this setting; it loads a GGUF pack with `llama.rn`.
 
 ## Security
 
@@ -130,7 +134,7 @@ Docker Compose · GitHub Actions.
 
 ### Data Encryption
 
-- **Application-level**: Fernet for RAG embeddings and chunk text
+- **Application-level**: Fernet for RAG chunk text, plus a ciphertext copy of each vector. The Chroma index keeps the raw floats so search can run (`services/rag/vector_store.py`)
 - **Transport**: TLS when API Gateway exists (future)
 
 ## Budget

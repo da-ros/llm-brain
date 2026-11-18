@@ -1,5 +1,8 @@
 # Justificación — Platform foundation (Frame 1)
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 ## El problema que resuelve
 
 Antes de ETL, RAG o agentes, el repositorio necesita un contrato único:

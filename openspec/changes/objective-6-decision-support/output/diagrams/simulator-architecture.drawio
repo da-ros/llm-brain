@@ -22,7 +22,7 @@
                 <mxCell id="rag" value="RAG Service :8002&#10;GET /search&#10;user_id + X-Request-ID&#10;no Chroma access from here" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="1280" y="300" width="230" height="110" as="geometry"/>
                 </mxCell>
-                <mxCell id="llm" value="LLM Service :8003&#10;base Qwen3.5-4B container&#10;POST /chat&#10;temperature 0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                <mxCell id="llm" value="LLM Service :8003&#10;base Qwen3.5-4B host process&#10;POST /chat&#10;temperature 0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="1280" y="140" width="230" height="110" as="geometry"/>
                 </mxCell>
                 <mxCell id="mongo" value="MongoDB :27017&#10;simulations&#10;unique correlation_id&#10;index user_id" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontStyle=1;" parent="1" vertex="1">

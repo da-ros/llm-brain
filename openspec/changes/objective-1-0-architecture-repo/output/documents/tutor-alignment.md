@@ -1,5 +1,8 @@
 # Tutor alignment — architecture scope (A.7)
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 **Change:** `objective-1-0-architecture-repo`  
 **Tutor:** Ing. Rodolfo Bojorque, PhD · UPS  
 **Authors:** Pedro David Rodas Mantilla, Giovanny Daniel Jácome Cajamarca

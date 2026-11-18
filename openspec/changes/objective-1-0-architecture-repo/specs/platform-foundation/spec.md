@@ -1,5 +1,8 @@
 ## Purpose
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 The platform-foundation capability provides the shared application entry point for the digital
 brain: configuration loading, a health probe, JWT-based authentication with user registration,
 per-user data isolation, and model-agnostic resolution of the active LLM provider, so every

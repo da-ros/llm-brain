@@ -1,5 +1,8 @@
 ## A. Architecture & Design (ANTES de código)
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 > La arquitectura es el artefacto principal de defensa (cuarto nivel).
 > Los diagramas definen QUÉ construimos antes de decidir CÓMO.
 

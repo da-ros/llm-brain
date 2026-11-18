@@ -1,0 +1,12 @@
+{
+  "id": "qwen3.5-4b-finetuned-q4",
+  "family": "Qwen3.5-4B",
+  "tier": "premium",
+  "quantization": "Q4",
+  "parameters": "4.0B",
+  "filename": "qwen3.5-4b-finetuned-q4.gguf",
+  "bytes": 2708804096,
+  "sha256": "2110d3cc8c0db8e17b8f0e259a47f220dae9583f89bec6502b752c0738d6a81d",
+  "user_id": "57eec20b-9ee6-4e75-bc87-1668a8e5f8b6",
+  "tag": "qwen3.5-4b-lora-v5"
+}

@@ -97,7 +97,7 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="f2" value="FLOW 2 — RETRIEVAL (query → shared 2048-dim space → cross-modal Top-k=3 → decrypt → LLM :8003)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" parent="1" vertex="1">
+                <mxCell id="f2" value="FLOW 2 — RETRIEVAL (query → shared 2048-dim space → cross-modal Top-k=8 → decrypt → LLM :8003)" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#6c8ebf" parent="1" vertex="1">
                     <mxGeometry x="36" y="312" width="1300" height="24" as="geometry"/>
                 </mxCell>
                 <mxCell id="r1" value="1. Client query&#10;natural language" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" parent="1" vertex="1">
@@ -109,7 +109,7 @@
                 <mxCell id="r3" value="3. GET /context&#10;embed query&#10;Qwen3-VL 2048-dim" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="440" y="370" width="180" height="70" as="geometry"/>
                 </mxCell>
-                <mxCell id="r4" value="4. Cross-modal&#10;Top-k=3&#10;filter user_id" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="r4" value="4. Cross-modal&#10;Top-k=8&#10;filter user_id" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="650" y="355" width="180" height="100" as="geometry"/>
                 </mxCell>
                 <mxCell id="r5" value="5. Chroma search&#10;text / image / video" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontStyle=1;" parent="1" vertex="1">
@@ -287,7 +287,7 @@
                 <mxCell id="notes" value="KEY DESIGN NOTES" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=14;fontStyle=5;fontColor=#333333" parent="1" vertex="1">
                     <mxGeometry x="36" y="710" width="240" height="24" as="geometry"/>
                 </mxCell>
-                <mxCell id="n1" value="• Upload stays HTTP 202 (Frame 2). RAG /ingest returns 201 with triples_count after distillation.&#10;• Step 5 embeds text, image and video into ONE 2048-dim space — a text query can retrieve an image.&#10;• Fernet ciphertext is stored (metadata.encrypted_vector + document field). Chroma ANN still uses the float vector (HNSW cannot index ciphertext). Dummy-zero embeddings are forbidden.&#10;• Every Chroma query and Mongo Documents read is filtered by user_id. Cross-tenant get is 404.&#10;• LLM is the local Qwen3.5-4B container (:8003), never AWS Bedrock. Vector store is Chroma only (Pinecone = future)." style="text;html=1;align=left;verticalAlign=top;strokeColor=none;fillColor=none;fontSize=12;" parent="1" vertex="1">
+                <mxCell id="n1" value="• Upload stays HTTP 202 (Frame 2). RAG /ingest returns 201 with triples_count after distillation.&#10;• Step 5 embeds text, image and video into ONE 2048-dim space — a text query can retrieve an image.&#10;• Fernet ciphertext is stored (metadata.encrypted_vector + document field). Chroma ANN still uses the float vector (HNSW cannot index ciphertext). Dummy-zero embeddings are forbidden.&#10;• Every Chroma query and Mongo Documents read is filtered by user_id. Cross-tenant get is 404.&#10;• LLM is the local Qwen3.5-4B host process (:8003), never AWS Bedrock. Vector store is Chroma only (Pinecone = future)." style="text;html=1;align=left;verticalAlign=top;strokeColor=none;fillColor=none;fontSize=12;" parent="1" vertex="1">
                     <mxGeometry x="36" y="740" width="1600" height="120" as="geometry"/>
                 </mxCell>
             </root>
