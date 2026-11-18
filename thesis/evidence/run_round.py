@@ -18,7 +18,9 @@ EVIDENCE = Path(__file__).resolve().parent
 ARCHIVE = Path(
     "/Volumes/MicronSSD/U/GenAI/llm-brain-docs/docs-memory/nora-vega/Nora_Vega_Personal_Archive"
 )
-KEY = Path("/Volumes/MicronSSD/U/GenAI/llm-brain-docs/docs-memory/nora-vega/Nora_Vega_Evaluation_Key")
+KEY = Path(
+    "/Volumes/MicronSSD/U/GenAI/llm-brain-docs/docs-memory/nora-vega/Nora_Vega_Evaluation_Key"
+)
 TRIPLES = ROOT / "data/triples/57eec20b-9ee6-4e75-bc87-1668a8e5f8b6"
 USER_ID = "57eec20b-9ee6-4e75-bc87-1668a8e5f8b6"
 RAG = "http://127.0.0.1:8002"
@@ -33,9 +35,7 @@ def _get(url: str, timeout: float = 120) -> dict:
 def _post(url: str, payload: dict, timeout: float = 600) -> tuple[dict, int]:
     started = time.perf_counter()
     data = json.dumps(payload).encode()
-    request = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json"}
-    )
+    request = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         body = json.loads(response.read().decode())
     return body, int((time.perf_counter() - started) * 1000)
@@ -151,8 +151,10 @@ def source_name(item: dict) -> str:
 def run_retrieval(queries: list[dict]) -> None:
     rows = []
     for query in queries:
-        url = RAG + "/search?" + urllib.parse.urlencode(
-            {"query": query["question"], "user_id": USER_ID, "k": 8}
+        url = (
+            RAG
+            + "/search?"
+            + urllib.parse.urlencode({"query": query["question"], "user_id": USER_ID, "k": 8})
         )
         started = time.perf_counter()
         payload = _get(url)
@@ -214,8 +216,12 @@ def run_generation(queries: list[dict], repetitions: int = 1) -> None:
                     context = ""
                     sources: list[str] = []
                     if config == "base-rag":
-                        url = RAG + "/context?" + urllib.parse.urlencode(
-                            {"query": query["question"], "user_id": USER_ID}
+                        url = (
+                            RAG
+                            + "/context?"
+                            + urllib.parse.urlencode(
+                                {"query": query["question"], "user_id": USER_ID}
+                            )
                         )
                         injected = _get(url)
                         context = injected.get("context") or ""
