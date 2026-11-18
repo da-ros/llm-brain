@@ -82,7 +82,11 @@ def main() -> None:
     model.to("mps").eval()
     stop_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
 
-    queries = [json.loads(line) for line in QUERIES.read_text(encoding="utf-8").splitlines() if line.strip()]
+    queries = [
+        json.loads(line)
+        for line in QUERIES.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     done = set()
     if OUT.exists():
         for line in OUT.read_text(encoding="utf-8").splitlines():
