@@ -92,7 +92,9 @@ def test_latest_completed_log_sets_the_pack_tag(tmp_path: Path, monkeypatch):
         encoding="utf-8",
     )
     assert installed_tag("user-a", logs) == "qwen3.5-4b-lora-v5"
-    monkeypatch.setattr("export_on_device.installed_tag", lambda user_id, log_dir=None: installed_tag(user_id, logs))
+    monkeypatch.setattr(
+        "export_on_device.installed_tag", lambda user_id, log_dir=None: installed_tag(user_id, logs)
+    )
     weight = tmp_path / "pack.gguf"
     weight.write_bytes(b"Q4")
     manifest = _manifest(

@@ -79,7 +79,11 @@ def _write_pack(
 
 def installed_tag(user_id: str, log_dir: Path | None = None) -> str:
     """The newest completed fine-tune tag for this account, such as qwen3.5-4b-lora-v5."""
-    directory = log_dir if log_dir is not None else Path(__file__).resolve().parents[2] / "data" / "training_logs"
+    directory = (
+        log_dir
+        if log_dir is not None
+        else Path(__file__).resolve().parents[2] / "data" / "training_logs"
+    )
     if not user_id or not directory.is_dir():
         return ""
     best_at = ""

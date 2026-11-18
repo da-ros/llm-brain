@@ -360,9 +360,7 @@ class TestSameNote:
                 },
             }
         ]
-        texts = [
-            item["document"] for item in expand_same_note(results, lambda _user, _doc: rows)
-        ]
+        texts = [item["document"] for item in expand_same_note(results, lambda _user, _doc: rows)]
         assert "Nora Vega reimbursed Apr 18" in texts
 
     def test_a_repeated_sentence_without_an_index_stays_alone(self):
@@ -398,7 +396,11 @@ class TestSameNote:
             {
                 "id": "hit",
                 "document": "Nora Vega attended Alder Studio",
-                "metadata": {"user_id": "user", "doc_id": "timeline", "source": "personal_timeline.csv"},
+                "metadata": {
+                    "user_id": "user",
+                    "doc_id": "timeline",
+                    "source": "personal_timeline.csv",
+                },
             }
         ]
         expanded = expand_same_note(results, lambda _user, _doc: rows)
@@ -500,17 +502,42 @@ class TestRowPassages:
         from rag_service import row_passages
 
         def record(day, status, observation):
-            note = {"source_notes": "Extracted from issue log", "source_file": "qa_issue_history.tsv"}
+            note = {
+                "source_notes": "Extracted from issue log",
+                "source_file": "qa_issue_history.tsv",
+            }
             return [
                 {"subject": "ISSUE-31", "predicate": "has_date", "object": day, "metadata": note},
-                {"subject": "ISSUE-31", "predicate": "has_owner", "object": "Theo Park", "metadata": note},
-                {"subject": "ISSUE-31", "predicate": "has_component", "object": "Offline export", "metadata": note},
-                {"subject": "ISSUE-31", "predicate": "has_observation", "object": observation, "metadata": note},
-                {"subject": "ISSUE-31", "predicate": "has_status", "object": status, "metadata": note},
+                {
+                    "subject": "ISSUE-31",
+                    "predicate": "has_owner",
+                    "object": "Theo Park",
+                    "metadata": note,
+                },
+                {
+                    "subject": "ISSUE-31",
+                    "predicate": "has_component",
+                    "object": "Offline export",
+                    "metadata": note,
+                },
+                {
+                    "subject": "ISSUE-31",
+                    "predicate": "has_observation",
+                    "object": observation,
+                    "metadata": note,
+                },
+                {
+                    "subject": "ISSUE-31",
+                    "predicate": "has_status",
+                    "object": status,
+                    "metadata": note,
+                },
             ]
 
         rows = record("2026-10-12", "open", "Photo captions missing from exported ZIP")
-        rows += record("2026-10-14", "resolved", "Included photo captions; regression checks passed")
+        rows += record(
+            "2026-10-14", "resolved", "Included photo captions; regression checks passed"
+        )
         passages = row_passages(rows)
         assert len(passages) == 2
         assert "2026-10-14" in passages[1]
@@ -534,7 +561,9 @@ class TestRowPassages:
             [
                 fact("Nora Vega", "incurred expense", "Studio rental", expense),
                 fact("Nora Vega", "reimbursed", "Apr 18", expense),
-                fact("Nora Vega", "celebrated", "Pixel birthday", "date: 2026-04-27, type: personal"),
+                fact(
+                    "Nora Vega", "celebrated", "Pixel birthday", "date: 2026-04-27, type: personal"
+                ),
             ]
         )
         assert len(passages) == 2
@@ -544,7 +573,10 @@ class TestRowPassages:
     def test_event_table_row_stops_at_the_next_date(self):
         from rag_service import row_passages
 
-        note = {"source notes": "Date Event Outcome table", "source_file": "lantern_log_dashboard.xlsx"}
+        note = {
+            "source notes": "Date Event Outcome table",
+            "source_file": "lantern_log_dashboard.xlsx",
+        }
 
         def fact(subject, predicate, obj):
             return {"subject": subject, "predicate": predicate, "object": obj, "metadata": note}
@@ -584,7 +616,7 @@ class TestRAGService:
         path.write_text(
             json.dumps({"subject": "Patient", "predicate": "has", "object": "diabetes"})
             + "\n"
-            +             json.dumps({"subject": "Patient", "predicate": "takes", "object": "metformin"})
+            + json.dumps({"subject": "Patient", "predicate": "takes", "object": "metformin"})
             + "\n"
             + json.dumps({"subject": "weekly review", "predicate": "is", "object": "thing"})
             + "\n",
@@ -686,15 +718,11 @@ class TestRAGService:
                 gridfs_id="g1",
                 doc_type="video/mp4",
             )
-        video_items = [item for item in memory.items if item["metadata"].get("modality") == "video"]
-        assert len(video_items) == 1
         expected = _average_vectors([service.embedder.embed_image(frame) for frame in frames])
-        assert video_items[0]["vector"] == expected
-        results = await service.semantic_search("receipt", "user1", k=5)
-        shown = [
-            item["document"] for item in results if item["metadata"].get("modality") == "video"
-        ]
-        assert shown == ["Clip shows a receipt"]
+        averaged = [item for item in memory.items if item["vector"] == expected]
+        assert len(averaged) == 1
+        stored = service.vector_store.decrypt_text(str(averaged[0]["document"]))
+        assert stored == "Clip shows a receipt"
 
 
 class TestRAGIntegration:

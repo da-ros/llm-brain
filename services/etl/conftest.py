@@ -26,6 +26,9 @@ _TOP_LEVEL = (
     "jsonl",
     "kafka_io",
     "gridfs_store",
+    # shield ships its own `ocr`; purge it so `from ocr import ocr_pdf` resolves here.
+    "ocr",
+    "calendar_events",
 )
 
 

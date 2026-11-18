@@ -741,7 +741,10 @@ class TestRagSearch:
             {"source": "weekly_review_schedule.bmp", "text": weekly},
             {"source": "cedar_cove_recap.mp4", "text": recap},
             {"source": "cedar_cove_recap.mov", "text": recap},
-            {"source": "lantern_log_dashboard.xlsx", "text": "Offline retrieval selected Keyword fallback for retrieval"},
+            {
+                "source": "lantern_log_dashboard.xlsx",
+                "text": "Offline retrieval selected Keyword fallback for retrieval",
+            },
         ]
         sources = cited_sources(
             evidence,
