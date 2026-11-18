@@ -34,7 +34,10 @@ jobs:
         run: |
           pip install uv==0.13.5
           for svc in services/*/requirements.txt; do uv pip install -r "$svc"; done
-          uv pip install pytest pytest-asyncio pytest-cov
+          # CI-only: the visual media tests patch transformers.video_utils.load_video
+          # (no torch — _load_visual is mocked too). Kept out of services/llm
+          # requirements on purpose; host inference installs via requirements-gpu.txt.
+          uv pip install pytest pytest-asyncio pytest-cov transformers==5.16.1
 
       # ── 3. Tests + Coverage (suite is hermetic: db/LLM mocked) ─
       - name: Run tests with coverage

@@ -360,9 +360,7 @@ class TestSameNote:
                 },
             }
         ]
-        texts = [
-            item["document"] for item in expand_same_note(results, lambda _user, _doc: rows)
-        ]
+        texts = [item["document"] for item in expand_same_note(results, lambda _user, _doc: rows)]
         assert "Nora Vega reimbursed Apr 18" in texts
 
     def test_a_repeated_sentence_without_an_index_stays_alone(self):
@@ -398,7 +396,11 @@ class TestSameNote:
             {
                 "id": "hit",
                 "document": "Nora Vega attended Alder Studio",
-                "metadata": {"user_id": "user", "doc_id": "timeline", "source": "personal_timeline.csv"},
+                "metadata": {
+                    "user_id": "user",
+                    "doc_id": "timeline",
+                    "source": "personal_timeline.csv",
+                },
             }
         ]
         expanded = expand_same_note(results, lambda _user, _doc: rows)
@@ -500,17 +502,42 @@ class TestRowPassages:
         from rag_service import row_passages
 
         def record(day, status, observation):
-            note = {"source_notes": "Extracted from issue log", "source_file": "qa_issue_history.tsv"}
+            note = {
+                "source_notes": "Extracted from issue log",
+                "source_file": "qa_issue_history.tsv",
+            }
             return [
                 {"subject": "ISSUE-31", "predicate": "has_date", "object": day, "metadata": note},
-                {"subject": "ISSUE-31", "predicate": "has_owner", "object": "Theo Park", "metadata": note},
-                {"subject": "ISSUE-31", "predicate": "has_component", "object": "Offline export", "metadata": note},
-                {"subject": "ISSUE-31", "predicate": "has_observation", "object": observation, "metadata": note},
-                {"subject": "ISSUE-31", "predicate": "has_status", "object": status, "metadata": note},
+                {
+                    "subject": "ISSUE-31",
+                    "predicate": "has_owner",
+                    "object": "Theo Park",
+                    "metadata": note,
+                },
+                {
+                    "subject": "ISSUE-31",
+                    "predicate": "has_component",
+                    "object": "Offline export",
+                    "metadata": note,
+                },
+                {
+                    "subject": "ISSUE-31",
+                    "predicate": "has_observation",
+                    "object": observation,
+                    "metadata": note,
+                },
+                {
+                    "subject": "ISSUE-31",
+                    "predicate": "has_status",
+                    "object": status,
+                    "metadata": note,
+                },
             ]
 
         rows = record("2026-10-12", "open", "Photo captions missing from exported ZIP")
-        rows += record("2026-10-14", "resolved", "Included photo captions; regression checks passed")
+        rows += record(
+            "2026-10-14", "resolved", "Included photo captions; regression checks passed"
+        )
         passages = row_passages(rows)
         assert len(passages) == 2
         assert "2026-10-14" in passages[1]
@@ -534,7 +561,9 @@ class TestRowPassages:
             [
                 fact("Nora Vega", "incurred expense", "Studio rental", expense),
                 fact("Nora Vega", "reimbursed", "Apr 18", expense),
-                fact("Nora Vega", "celebrated", "Pixel birthday", "date: 2026-04-27, type: personal"),
+                fact(
+                    "Nora Vega", "celebrated", "Pixel birthday", "date: 2026-04-27, type: personal"
+                ),
             ]
         )
         assert len(passages) == 2
@@ -544,7 +573,10 @@ class TestRowPassages:
     def test_event_table_row_stops_at_the_next_date(self):
         from rag_service import row_passages
 
-        note = {"source notes": "Date Event Outcome table", "source_file": "lantern_log_dashboard.xlsx"}
+        note = {
+            "source notes": "Date Event Outcome table",
+            "source_file": "lantern_log_dashboard.xlsx",
+        }
 
         def fact(subject, predicate, obj):
             return {"subject": subject, "predicate": predicate, "object": obj, "metadata": note}
@@ -584,7 +616,7 @@ class TestRAGService:
         path.write_text(
             json.dumps({"subject": "Patient", "predicate": "has", "object": "diabetes"})
             + "\n"
-            +             json.dumps({"subject": "Patient", "predicate": "takes", "object": "metformin"})
+            + json.dumps({"subject": "Patient", "predicate": "takes", "object": "metformin"})
             + "\n"
             + json.dumps({"subject": "weekly review", "predicate": "is", "object": "thing"})
             + "\n",
@@ -686,15 +718,112 @@ class TestRAGService:
                 gridfs_id="g1",
                 doc_type="video/mp4",
             )
-        video_items = [item for item in memory.items if item["metadata"].get("modality") == "video"]
-        assert len(video_items) == 1
         expected = _average_vectors([service.embedder.embed_image(frame) for frame in frames])
-        assert video_items[0]["vector"] == expected
-        results = await service.semantic_search("receipt", "user1", k=5)
-        shown = [
-            item["document"] for item in results if item["metadata"].get("modality") == "video"
+        averaged = [item for item in memory.items if item["vector"] == expected]
+        assert len(averaged) == 1
+        stored = service.vector_store.decrypt_text(str(averaged[0]["document"]))
+        assert stored == "Clip shows a receipt"
+
+    @pytest.mark.asyncio
+    async def test_replace_row_vectors_swaps_sentence_vectors_for_row_passages(self, tmp_path):
+        service, memory = _service()
+        memory.items.append(
+            {
+                "id": "user1_doc1_sentence0",
+                "vector": [1.0] + [0.0] * 2047,
+                "metadata": {"user_id": "user1", "doc_id": "doc1"},
+                "document": "old sentence vector",
+            }
+        )
+        note = {
+            "source_notes": "Extracted from issue log",
+            "source_file": "qa_issue_history.tsv",
+        }
+        triples = [
+            {
+                "subject": "ISSUE-31",
+                "predicate": "has_date",
+                "object": "2026-10-12",
+                "metadata": note,
+            },
+            {
+                "subject": "ISSUE-31",
+                "predicate": "has_status",
+                "object": "open",
+                "metadata": note,
+            },
+            {
+                "subject": "ISSUE-32",
+                "predicate": "has_date",
+                "object": "2026-10-14",
+                "metadata": note,
+            },
+            {
+                "subject": "ISSUE-32",
+                "predicate": "has_status",
+                "object": "resolved",
+                "metadata": note,
+            },
         ]
-        assert shown == ["Clip shows a receipt"]
+        path = tmp_path / "issues.jsonl"
+        path.write_text("\n".join(json.dumps(triple) for triple in triples), encoding="utf-8")
+
+        count = await service.replace_row_vectors("user1", "doc1", str(path))
+
+        assert count == 2
+        assert {item["id"] for item in memory.items} == {
+            "user1_doc1_row0_chunk0",
+            "user1_doc1_row1_chunk0",
+        }
+        assert all(item["metadata"]["source"] == "qa_issue_history.tsv" for item in memory.items)
+        assert "old sentence vector" not in [item["document"] for item in memory.items]
+
+    @pytest.mark.asyncio
+    async def test_replace_row_vectors_without_a_jsonl_returns_zero(self, tmp_path):
+        service, memory = _service()
+
+        count = await service.replace_row_vectors("user1", "doc1", str(tmp_path / "missing.jsonl"))
+
+        assert count == 0
+        assert memory.items == []
+
+    @pytest.mark.asyncio
+    async def test_replace_row_vectors_skips_blank_broken_and_non_dict_lines(self, tmp_path):
+        service, memory = _service()
+        good = {
+            "subject": "Studio",
+            "predicate": "cost",
+            "object": "42 euros",
+            "metadata": {"source_file": "budget.csv"},
+        }
+        path = tmp_path / "dirty.jsonl"
+        path.write_text(
+            "\n".join(
+                [
+                    "",
+                    "not json at all",
+                    json.dumps(["a", "list"]),
+                    json.dumps(good),
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        count = await service.replace_row_vectors("user1", "doc1", str(path), filename="budget.csv")
+
+        assert count == 1
+        assert memory.items[0]["metadata"]["source"] == "budget.csv"
+
+    @pytest.mark.asyncio
+    async def test_replace_row_vectors_with_no_kept_triples_changes_nothing(self, tmp_path):
+        service, memory = _service()
+        path = tmp_path / "broken.jsonl"
+        path.write_text("not json at all\n\n", encoding="utf-8")
+
+        count = await service.replace_row_vectors("user1", "doc1", str(path))
+
+        assert count == 0
+        assert memory.items == []
 
 
 class TestRAGIntegration:

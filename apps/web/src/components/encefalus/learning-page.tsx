@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { BrainCircuit, Check, Database, Loader2, MessageSquare, Smartphone, Sparkles } from "lucide-react";
+import {
+  BrainCircuit,
+  Check,
+  Database,
+  Loader2,
+  MessageSquare,
+  Smartphone,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -20,7 +28,13 @@ type RunMetrics = {
   rank?: number | null;
   max_epochs?: number | null;
 };
-type Job = { id: string; status: string; phase: string; model_version: string; metrics?: RunMetrics };
+type Job = {
+  id: string;
+  status: string;
+  phase: string;
+  model_version: string;
+  metrics?: RunMetrics;
+};
 type Cycle = {
   id: string;
   version: string;
@@ -217,7 +231,10 @@ export function LearningPage() {
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 1
               </span>
-              <Button disabled={!ready || busy || training || publishing} onClick={() => void train()}>
+              <Button
+                disabled={!ready || busy || training || publishing}
+                onClick={() => void train()}
+              >
                 <BrainCircuit />
                 {busy && !publishing ? "Starting…" : "Fine-tune my Brain"}
               </Button>
@@ -433,10 +450,7 @@ function trainingSteps(view: Learning, pack: Pack) {
       },
       {
         title: "Eligible turns",
-        note:
-          items >= needed
-            ? `${items} collected`
-            : `${items} collected, ${needed} to start`,
+        note: items >= needed ? `${items} collected` : `${items} collected, ${needed} to start`,
         state: items > 0 ? "done" : "wait",
       },
       {
@@ -534,7 +548,9 @@ function Hint({ label, text }: { label: string; text: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="w-fit cursor-help underline decoration-dotted underline-offset-2">{label}</span>
+        <span className="w-fit cursor-help underline decoration-dotted underline-offset-2">
+          {label}
+        </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-56 text-left text-[11px] leading-4">{text}</TooltipContent>
     </Tooltip>
