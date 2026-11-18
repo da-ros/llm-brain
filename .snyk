@@ -206,6 +206,114 @@ ignore:
     - '*':
         reason: No fixed version available for Debian 13.
         expires: '2027-01-01T00:00:00.000Z'
+  # Disclosed 9-nov-2026 batch (26 advisories): upstream is fixed in
+  # FFmpeg 8.1.3/9.0.2 but Debian 13 has no fixed package yet; trixie
+  # still ships the latest candidate 7:7.1.5-0+deb13u1 (images run
+  # apt-get upgrade at build time) and it is still flagged.
+  SNYK-DEBIAN13-FFMPEG-22564415:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564430:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564437:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564462:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564464:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564480:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564490:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564499:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564503:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564511:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564521:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564526:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564538:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564554:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564561:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564564:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564576:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564583:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22564595:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22566642:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22566646:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22566653:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22566655:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22566663:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22566669:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
+  SNYK-DEBIAN13-FFMPEG-22566672:
+    - '*':
+        reason: No fixed version available for Debian 13.
+        expires: '2027-01-01T00:00:00.000Z'
 
   # libxml2 - Multiple CVEs
   SNYK-DEBIAN13-LIBXML2-19540211:
