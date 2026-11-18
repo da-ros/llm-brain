@@ -724,6 +724,107 @@ class TestRAGService:
         stored = service.vector_store.decrypt_text(str(averaged[0]["document"]))
         assert stored == "Clip shows a receipt"
 
+    @pytest.mark.asyncio
+    async def test_replace_row_vectors_swaps_sentence_vectors_for_row_passages(self, tmp_path):
+        service, memory = _service()
+        memory.items.append(
+            {
+                "id": "user1_doc1_sentence0",
+                "vector": [1.0] + [0.0] * 2047,
+                "metadata": {"user_id": "user1", "doc_id": "doc1"},
+                "document": "old sentence vector",
+            }
+        )
+        note = {
+            "source_notes": "Extracted from issue log",
+            "source_file": "qa_issue_history.tsv",
+        }
+        triples = [
+            {
+                "subject": "ISSUE-31",
+                "predicate": "has_date",
+                "object": "2026-10-12",
+                "metadata": note,
+            },
+            {
+                "subject": "ISSUE-31",
+                "predicate": "has_status",
+                "object": "open",
+                "metadata": note,
+            },
+            {
+                "subject": "ISSUE-32",
+                "predicate": "has_date",
+                "object": "2026-10-14",
+                "metadata": note,
+            },
+            {
+                "subject": "ISSUE-32",
+                "predicate": "has_status",
+                "object": "resolved",
+                "metadata": note,
+            },
+        ]
+        path = tmp_path / "issues.jsonl"
+        path.write_text("\n".join(json.dumps(triple) for triple in triples), encoding="utf-8")
+
+        count = await service.replace_row_vectors("user1", "doc1", str(path))
+
+        assert count == 2
+        assert {item["id"] for item in memory.items} == {
+            "user1_doc1_row0_chunk0",
+            "user1_doc1_row1_chunk0",
+        }
+        assert all(item["metadata"]["source"] == "qa_issue_history.tsv" for item in memory.items)
+        assert "old sentence vector" not in [item["document"] for item in memory.items]
+
+    @pytest.mark.asyncio
+    async def test_replace_row_vectors_without_a_jsonl_returns_zero(self, tmp_path):
+        service, memory = _service()
+
+        count = await service.replace_row_vectors("user1", "doc1", str(tmp_path / "missing.jsonl"))
+
+        assert count == 0
+        assert memory.items == []
+
+    @pytest.mark.asyncio
+    async def test_replace_row_vectors_skips_blank_broken_and_non_dict_lines(self, tmp_path):
+        service, memory = _service()
+        good = {
+            "subject": "Studio",
+            "predicate": "cost",
+            "object": "42 euros",
+            "metadata": {"source_file": "budget.csv"},
+        }
+        path = tmp_path / "dirty.jsonl"
+        path.write_text(
+            "\n".join(
+                [
+                    "",
+                    "not json at all",
+                    json.dumps(["a", "list"]),
+                    json.dumps(good),
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        count = await service.replace_row_vectors("user1", "doc1", str(path), filename="budget.csv")
+
+        assert count == 1
+        assert memory.items[0]["metadata"]["source"] == "budget.csv"
+
+    @pytest.mark.asyncio
+    async def test_replace_row_vectors_with_no_kept_triples_changes_nothing(self, tmp_path):
+        service, memory = _service()
+        path = tmp_path / "broken.jsonl"
+        path.write_text("not json at all\n\n", encoding="utf-8")
+
+        count = await service.replace_row_vectors("user1", "doc1", str(path))
+
+        assert count == 0
+        assert memory.items == []
+
 
 class TestRAGIntegration:
     @pytest.mark.asyncio
