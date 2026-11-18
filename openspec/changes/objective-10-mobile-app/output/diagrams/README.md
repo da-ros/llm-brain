@@ -1,5 +1,8 @@
 # Frame 10 — Mobile app diagrams
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 Solid arrow: a call or a write. The head is on the callee. `startArrow=none`, `endArrow=classic`.
 
 Dashed arrow: a response. The head is on the caller.

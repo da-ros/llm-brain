@@ -1,5 +1,8 @@
 ## Why
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 The thesis MVP (Objetivo Específico 1) requires an approved technical/functional architecture
 and a working repository foundation before any module is built. Every later module (ETL, RAG,
 MCP agents, simulator, analytics, shield) depends on a shared, model-agnostic service skeleton,

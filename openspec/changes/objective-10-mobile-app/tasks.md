@@ -1,5 +1,8 @@
 ## 1. On-device packs
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 - [x] 1.1 Add `services/finetune/export_on_device.py` with `--fixture`. It writes `models/on-device/base/manifest.json` and a small weight file for `qwen3.5-4b-base-q4` (family `Qwen3.5-4B`, tier `free`, quantization `Q4`, parameters `4.0B`, lowercase `sha256` of the file). A checksum mismatch marks the pack not ready. Document `--real` as the laptop Q4 export of base Qwen3.5-4B, and that it does not write the LLM container weights. (≤2h)
 - [x] 1.2 Extend the same script with `premium --user-id`. Read `ADAPTER_OUTPUT_DIR/{user_id}/adapter`. With `--fixture`, write `models/on-device/users/{user_id}/` for `qwen3.5-4b-finetuned-q4` including `user_id`. No adapter means no premium file and the base pack stays. Do not add a download route on port 8004. (≤2h)
 

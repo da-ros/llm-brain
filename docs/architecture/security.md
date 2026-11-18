@@ -9,7 +9,7 @@
 | **Snyk test** | Vulnerable dependencies |
 | **Snyk code test** | SAST on application code |
 
-Workflow: `.github/workflows/ci.yml` on push/PR to `main` and `develop`.
+`.github/workflows/ci.yml` runs on every branch except `main`: ruff, pytest, and Snyk. The pytest step sets `EMBEDDING_MOCK=true` and mocks the database and the LLM. `.github/workflows/docker.yml` runs on `main` and builds nine images. The LLM process has no image. A green pytest run is not a Precision@3 or latency result.
 
 ## Shift Right (production, future)
 
@@ -18,7 +18,7 @@ and TLS at the edge. Local MVP rate limits belong on the API Router (Frame 1.1).
 
 ## Data protection
 
-- Passwords hashed with bcrypt; JWT never returns hashes.
+- Passwords hashed with PBKDF2-HMAC-SHA256 (200000 iterations, stored as `salt$hash`). The JWT never returns the hash. Earlier specs say bcrypt; the implementation is `services/api-router/accounts.py`.
 - `GET /health` reports `status` and `llm_provider` only.
 - Per-user isolation: document reads filter on `user_id` (404, not 403, so existence is not leaked).
 

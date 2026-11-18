@@ -1,5 +1,8 @@
 ## Context
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 This is the first change in a greenfield repo (empty git repo, Python 3.13). It is
 cross-cutting: it defines the microservices architecture and conventions that all remaining
 thesis modules depend on. The project is a **multi-tenant platform** with two subscription

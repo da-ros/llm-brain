@@ -1,5 +1,8 @@
 ## Context
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 See proposal.md — Why. Frame 4 already serves base Qwen3.5-4B in the
 LLM container and writes a LoRA adapter per user at
 `ADAPTER_OUTPUT_DIR/{user_id}/adapter`. Frame 7 already signs people in

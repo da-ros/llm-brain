@@ -1,5 +1,8 @@
 ## ADDED Requirements
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 ### Requirement: On-device pack metadata
 
 The API Router SHALL expose `GET /api/models/on-device` to an

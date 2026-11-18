@@ -1,5 +1,8 @@
 ## Proposal: LLM Inference (local Qwen3.5-4B) + Fine-Tuning Services
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 ### Context
 
 The platform needs two backend LLM services:

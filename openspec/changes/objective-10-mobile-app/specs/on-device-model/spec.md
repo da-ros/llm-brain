@@ -1,5 +1,8 @@
 ## Purpose
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 The on-device-model capability builds the Q4 packs the iPhone app
 downloads. Free gets base Qwen3.5-4B. Premium gets that user's LoRA
 adapter merged into the same model and quantized the same way. The

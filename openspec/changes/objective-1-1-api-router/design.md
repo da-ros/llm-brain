@@ -1,5 +1,8 @@
 ## Context
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 The API Router is the central entry point for all client requests in the microservices
 architecture. It handles JWT authentication, correlation ID generation, routing to
 microservices, and Kafka integration for async operations.

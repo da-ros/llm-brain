@@ -1,5 +1,7 @@
 ## Why
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`. The phone engine that shipped is `llama.rn`, not ExecuTorch.
+
 The thesis client for Qwen3.5-4B on the iPhone does not exist yet. Frame 4
 serves the **base** model as a host process and writes a LoRA adapter for
 a later on-device build. Frame 7 is the Encefalus web app, where Memory,

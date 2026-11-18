@@ -16,31 +16,34 @@ context: |
        (2048-dim multimodal embeddings via Qwen3-VL-Embedding-2B); LangChain Top-k retrieval.
     4. LLM: single multimodal Qwen3.5-4B — LOCAL host process (LLM_BACKEND=qwen_local|ollama)
       serves **base** model
-       (Premium cloud + RAG). On-device: Free = base quantized; Premium = fine-tuned
-       quantized (React Native / Neural Engine / Metal). Local LoRA fine-tuning feeds
-       Premium on-device only.
+     (web free without RAG; web premium with RAG). On-device: Free = base GGUF Q4;
+     Premium = that user's LoRA GGUF Q4, both through llama.rn (llama.cpp on the
+     GPU via Metal). The Neural Engine is not used. Local LoRA feeds the Premium
+     on-device pack only. The host process stays the base model.
     5. Symbiotic Learning Loop: LangGraph + MCP agents Ingestor / Razonador /
        Evaluador; manual incremental fine-tuning batches. LangChain stays in RAG.
     6. Decision-Support Simulator: deterministic what-if, 3-5 scenarios w/ explicit
        traceable assumptions.
     7. User Interface: Encefalus web app. Analytics is one screen, with two interactive correlations (sleep/productivity, meetings/focus).
     8. Privacy & Scam Shield: phishing/scam detection via heuristics + embedding similarity.
-    9. Alpha validation: pytest, FastAPI+Mongo integration, KPIs (mean latency, RAG Top-3
-       precision), video demo.
+  9. Alpha validation: the evidence round in thesis/evidence. KPIs are Precision@3
+     on the first three retrieved items and complete-response time. pytest is the
+     mocked suite and is not the KPI measurement.
 
   Tech stack (OSS, ~$0 budget; LOCAL-ONLY MVP — AWS is future work, not in scope):
     - Backend: Python 3.13, FastAPI, LangChain (loaders + RAG), LangGraph (agents).
-    - Frontend: React (web); React Native (iPhone) + Neural Engine / Metal
-      (mobile, on-device LLM).
+    - Frontend: TanStack Start / React (web). The analytics scatter is custom React,
+      not Chart.js. React Native (iPhone) runs Qwen3.5-4B GGUF Q4 with llama.rn.
     - Parsers: LangChain document loaders out-of-the-box (any format, incl. OCR/video).
     - Data: MongoDB (local Docker, GridFS for binaries), Chroma (local Docker, 2048-dim).
     - LLM: single multimodal Qwen3.5-4B (text/image/video).
       Cloud = local host process on port 8003 with **base** Qwen3.5-4B (not fine-tuned;
       Premium + RAG). Runtime per machine: qwen_local (torch/Metal) or ollama (Linux/Windows).
-      On-device Free = **base** Qwen3.5-4B quantized (Q4) in React Native on iPhone via
-      Neural Engine / Metal — out of the box, no fine-tuning, no cloud access.
-      On-device Premium = **fine-tuned** Qwen3.5-4B quantized (Q4) in React Native, plus
-      cloud base + RAG + files + web dashboard.
+    On-device Free = **base** Qwen3.5-4B GGUF Q4 in React Native via llama.rn
+    (llama.cpp on the GPU through Metal). It does not call port 8003.
+    On-device Premium = that user's **fine-tuned** Qwen3.5-4B GGUF Q4 on the same
+    runtime, or the host base model with RAG when Digital Brain mode is on.
+    ExecuTorch, Core ML, and the Neural Engine do not run this model.
     - Embeddings: Qwen3-VL-Embedding-2B (2048-dim, multimodal, Matryoshka-truncatable).
     - Infra: Docker Compose, GitHub Actions CI. (AWS ECS Fargate + API Gateway = future.)
     - Fine-tuning: LOCAL LoRA (PEFT / ms-swift / Unsloth) over Qwen3.5-4B — output is the
@@ -49,11 +52,13 @@ context: |
       (Free = base; Premium = fine-tuned).
 
   Subscription profiles (multi-tenant):
-    - Free: Qwen3.5-4B base quantized on-device in React Native (iPhone Neural Engine /
-      Metal); no fine-tuning; no cloud access; no context, no files.
-    - Premium: fine-tuned Qwen3.5-4B on-device + cloud base Qwen3.5-4B (host process, not
-      fine-tuned) + RAG, files, web dashboard.
-    - Each user authenticates (JWT + bcrypt) and has isolated data (user_id).
+    - Free mobile: base Qwen3.5-4B GGUF Q4 on the phone via llama.rn. No fine-tune
+      and no call to port 8003. Free web: the same base model on port 8003, without
+      RAG and without memory.
+    - Premium: fine-tuned Qwen3.5-4B GGUF Q4 on the phone, or the host base model
+      with RAG, plus files and the web dashboard.
+    - Each user authenticates (JWT HS256 + PBKDF2-HMAC-SHA256) and has isolated
+      data (user_id).
 
   Frames ↔ Thesis objectives mapping:
     Each frame covers one or more "Objetivos Específicos" from the thesis plan.
@@ -243,7 +248,7 @@ frames:
   frame-9:
     directory: objective-9-alpha-validation
     title: "Alpha Validation + KPIs + Demo"
-    description: "KPI measurement (latency, RAG Top-3 precision), video demo"
+    description: "Alpha evidence round: corpus split, Precision@3, response times, grounding, and the Nora Vega qwen3.5-4b-lora-v5 adapter. Measured numbers live in thesis/evidence."
     anteproyecto_objectives:
       - "Objetivo Específico 9 (Validation)"
     depends_on: ["frame-1", "frame-2", "frame-3", "frame-4", "frame-5", "frame-6", "frame-7", "frame-8", "frame-10"]
@@ -252,9 +257,9 @@ frames:
   frame-10:
     directory: objective-10-mobile-app
     title: "Mobile App (React Native)"
-    description: "React Native iPhone app with auth, navigation, and on-device Qwen3.5-4B via Neural Engine / Metal — Free uses base (out of the box); Premium uses fine-tuned on-device plus cloud base host process"
+    description: "React Native iPhone app with auth, navigation, and on-device Qwen3.5-4B via llama.rn (llama.cpp on Metal). Free uses the base GGUF. Premium uses the fine-tuned GGUF or the host base process with RAG"
     anteproyecto_objectives:
       - "Objetivo Específico 1 (mobile foundation)"
-      - "Objetivo Específico 4 (Qwen3.5-4B on-device via React Native / Neural Engine / Metal)"
+      - "Objetivo Específico 4 (Qwen3.5-4B on-device via React Native / llama.rn)"
     depends_on: ["frame-4"]
     execution_order: 8

@@ -1,5 +1,8 @@
 ## Why
 
+> **Current runtime.** This file keeps the decision text of this frame. Before citing it as the running system, read `docs/architecture/current-runtime.md`.
+
+
 Frames 2–4 already store personal documents, retrieve them with RAG, and generate
 answers with the local Qwen3.5-4B LLM container, but they do not close the Brain–LLM
 loop: interactions are
